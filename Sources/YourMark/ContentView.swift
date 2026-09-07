@@ -748,10 +748,10 @@ private struct PreviewPicture: View {
                 image = cached
                 return
             }
-            let loaded = await Task.detached(priority: .utility) {
-                PreviewImageCache.thumbnail(url)
+            let data = await Task.detached(priority: .utility) {
+                PreviewImageCache.thumbnailData(url)
             }.value
-            if let loaded {
+            if let data, let loaded = NSImage(data: data) {
                 PreviewImageCache.shared.store(loaded, for: url)
                 image = loaded
             }
@@ -773,7 +773,7 @@ private final class PreviewImageCache: @unchecked Sendable {
         cache.setObject(img, forKey: url as NSURL, cost: Int(img.size.width * img.size.height))
     }
 
-    static func thumbnail(_ url: URL, maxPixel: CGFloat = 900) -> NSImage? {
+    static func thumbnailData(_ url: URL, maxPixel: CGFloat = 900) -> Data? {
         let opts = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let src = CGImageSourceCreateWithURL(url as CFURL, opts) else { return nil }
         let thumb: [CFString: Any] = [
@@ -785,7 +785,20 @@ private final class PreviewImageCache: @unchecked Sendable {
         guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, thumb as CFDictionary) else {
             return nil
         }
-        return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        let destData = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            destData,
+            UTType.jpeg.identifier as CFString,
+            1,
+            nil
+        ) else { return nil }
+        CGImageDestinationAddImage(
+            dest,
+            cg,
+            [kCGImageDestinationLossyCompressionQuality: 0.72] as CFDictionary
+        )
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return destData as Data
     }
 }
 
