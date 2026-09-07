@@ -2,27 +2,31 @@
 # If Apple says it could not verify yourMark — click Done, then this.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+
+# Jump straight to Privacy & Security (Open Anyway).
+open "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension" 2>/dev/null \
+  || open "x-apple.systempreferences:com.apple.preference.security" 2>/dev/null \
+  || open /System/Library/PreferencePanes/Security.prefPane 2>/dev/null \
+  || true
+
 APP=""
 if [[ -d "/Applications/yourMark.app" ]]; then
   APP="/Applications/yourMark.app"
+elif [[ -d "$HERE/../yourMark.app" ]]; then
+  APP="$HERE/../yourMark.app"
 elif [[ -d "$HERE/yourMark.app" ]]; then
   APP="$HERE/yourMark.app"
 fi
-if [[ -z "$APP" ]]; then
-  osascript -e 'display dialog "Could not find yourMark.app. Double-click “Install yourMark” first." buttons {"OK"} default button 1 with title "yourMark"'
-  exit 1
+if [[ -n "$APP" ]]; then
+  xattr -cr "$APP" >/dev/null 2>&1 || true
 fi
-xattr -cr "$APP" >/dev/null 2>&1 || true
-open "$APP"
+
 osascript <<'APPLESCRIPT'
-display dialog "Quarantine flag cleared and yourMark opened.
+display dialog "System Settings → Privacy & Security is open.
 
-Apple has not notarized this build yet, so macOS warns once. That is expected.
+Scroll to Security. After macOS blocked yourMark, click Open Anyway.
 
-If it still will not launch:
-1. Click Done on the warning — not Move to Bin
-2. Right-click yourMark → Open
-3. Or System Settings → Privacy & Security → Open Anyway
+That remembers this copy of the app. Apple does not offer “Always Trust this developer” until the build is signed and notarized.
 
-Then the app installs Microsoft MarkItDown by itself (one download from PyPI)." buttons {"OK"} default button 1 with title "yourMark"
+Click Done on the warning — not Move to Bin." buttons {"OK"} default button 1 with title "yourMark"
 APPLESCRIPT

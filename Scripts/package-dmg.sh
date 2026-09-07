@@ -21,6 +21,8 @@ BG="$ROOT/Resources/dmg-background.png"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/Support"
 cp -R "$APP" "$STAGE/yourMark.app"
+cp "$ROOT/Scripts/Privacy & Security Settings.webloc" "$STAGE/Privacy & Security Settings.webloc"
+cp "$ROOT/Scripts/Open Privacy & Security Settings.command" "$STAGE/Support/Open Privacy & Security Settings.command"
 cp "$ROOT/Scripts/Install yourMark.command" "$STAGE/Support/Install yourMark.command"
 cp "$ROOT/Scripts/If macOS blocks yourMark.command" "$STAGE/Support/If macOS blocks yourMark.command"
 chmod +x "$STAGE/Support/"*.command
@@ -32,7 +34,8 @@ Drag yourMark onto Applications (follow the arrow).
 
 If macOS says it "could not verify" yourMark:
   1. Click Done (not Move to Bin)
-  2. System Settings → Privacy & Security → Open Anyway
+  2. Double-click "Privacy & Security Settings" on this disk
+     (or System Settings → Privacy & Security → Open Anyway)
   or right-click yourMark → Open
   or run "If macOS blocks yourMark" in this Support folder.
 
@@ -62,7 +65,8 @@ if layout_with_create_dmg; then
     --icon-size 128 \
     --icon "yourMark.app" 165 190 \
     --app-drop-link 495 190 \
-    --icon "Support" 330 355 \
+    --icon "Privacy & Security Settings.webloc" 165 355 \
+    --icon "Support" 495 355 \
     --hide-extension "yourMark.app" \
     --no-internet-enable \
     "$DMG" \
@@ -104,7 +108,10 @@ tell application "Finder"
     set position of item "yourMark.app" to {165, 190}
     set position of item "Applications" to {495, 190}
     try
-      set position of item "Support" to {330, 355}
+      set position of item "Privacy & Security Settings.webloc" to {165, 355}
+    end try
+    try
+      set position of item "Support" to {495, 355}
     end try
     close
     open
