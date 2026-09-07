@@ -953,6 +953,10 @@ private struct PreviewPicture: View {
             }
         }
         .task(id: url) {
+            guard FileManager.default.isReadableFile(atPath: url.path) else {
+                image = nil
+                return
+            }
             if let cached = PreviewImageCache.shared.image(for: url) {
                 image = cached
                 return
@@ -960,6 +964,7 @@ private struct PreviewPicture: View {
             let data = await Task.detached(priority: .utility) {
                 PreviewImageCache.thumbnailData(url)
             }.value
+            guard FileManager.default.isReadableFile(atPath: url.path) else { return }
             if let data, let loaded = NSImage(data: data) {
                 PreviewImageCache.shared.store(loaded, for: url)
                 image = loaded
@@ -983,8 +988,10 @@ private final class PreviewImageCache: @unchecked Sendable {
     }
 
     static func thumbnailData(_ url: URL, maxPixel: CGFloat = 900) -> Data? {
+        guard FileManager.default.isReadableFile(atPath: url.path) else { return nil }
+        guard let fileData = try? Data(contentsOf: url), fileData.count > 32 else { return nil }
         let opts = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, opts) else { return nil }
+        guard let src = CGImageSourceCreateWithData(fileData as CFData, opts) else { return nil }
         let thumb: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixel,
@@ -1168,6 +1175,27 @@ struct EnginePanel: View {
                 }
                 Text("Applies to the Markdown pane. Atkins and Atkinson Hyperlegible appear here if they are installed on this Mac (Font Book). Size is the A / slider / A control on the reader.")
                     .foregroundStyle(.secondary)
+            }
+            Section("Edit in MarkEdit") {
+                Text("yourMark is a reader. To change a converted file, press Edit in the library pane. That opens MarkEdit, a free native Mac editor from the same kind of indie project as this one.")
+                    .foregroundStyle(.secondary)
+                if AppModel.markEditAppURL() != nil {
+                    Text("MarkEdit is installed on this Mac.")
+                        .foregroundStyle(.secondary)
+                    Button("Open MarkEdit") {
+                        if let app = AppModel.markEditAppURL() {
+                            NSWorkspace.shared.open(app)
+                        }
+                    }
+                } else {
+                    Button("Get MarkEdit (free)") {
+                        model.openMarkEditDownload()
+                    }
+                    Text("Or in Terminal: brew install --cask markedit")
+                        .font(.caption)
+                        .textSelection(.enabled)
+                        .foregroundStyle(.secondary)
+                }
             }
             if model.settingsFocus == "ocr" {
                 Section {

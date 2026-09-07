@@ -3,71 +3,95 @@ import SwiftUI
 struct HelpView: View {
     @Environment(\.deck) private var deck
 
+    private let cards: [(title: String, body: String)] = [
+        (
+            "Why Markdown",
+            "A PDF is a picture of a page. Markdown is the words, in order. AI can quote a chapter and stay quiet when the file is silent. Keep the original PDF."
+        ),
+        (
+            "Engine",
+            "First launch installs Microsoft MarkItDown from PyPI. Convert stays on this Mac. About once a day we check for their updates. Settings → Install or reinstall does that now."
+        ),
+        (
+            "If Apple blocks the app",
+            "This build is not notarized yet. If macOS says it could not verify: click Done, not Move to Bin. Then right-click yourMark → Open, or Privacy & Security → Open Anyway."
+        ),
+        (
+            "Scanned PDFs",
+            "A scan has no text layer. yourMark uses IBM Docling for layout, tables, and figures. That takes longer the first time. Ordinary digital PDFs still go to MarkItDown."
+        ),
+        (
+            "Tables",
+            "Real tables become Markdown tables. Colours and merged cells flatten. Drawn “tables” that are only lines often become plain rows. Scans keep a picture plus OCR text."
+        ),
+        (
+            "Pictures",
+            "Embedded photos are saved next to the Markdown. We do not insert photographs of whole text pages. Header logos drop when that setting is on. Pictures follow reading order."
+        ),
+        (
+            "Bookmarks",
+            "The PDF’s own outline — the same tree as Preview — becomes Markdown headings. We keep that tree. If there is no outline, we use large-font lines, then AI only if you tick it."
+        ),
+        (
+            "Library cards",
+            "Swipe a card left to delete. Right-click for Open, Show in Finder, and Delete. Drag to rearrange. Edits on disk update the library."
+        ),
+        (
+            "Ask chapter",
+            "Paste a Grok or OpenAI key in Settings, then press Enter. We test it once and lock it on this Mac. Ask uses only the current chapter. If it is silent, Search the web is there."
+        ),
+        (
+            "Reading",
+            "The right pane is a reader. A / slider / A changes size. Settings → Reader picks the font. Rendered vs Plain. Edit opens MarkEdit. Finder shows the file."
+        ),
+        (
+            "MarkEdit",
+            "yourMark does not edit files. MarkEdit is a free native Mac editor. Press Edit in the reader, or get it from Settings. Saves there show up here."
+        ),
+        (
+            "Keep the original",
+            "Converted Markdown is for search and study. Keep the original PDF or Word file."
+        ),
+    ]
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 16) {
                 Text("yourMark")
                     .font(.system(.largeTitle, design: .rounded).bold())
                 Text("PDFs → Markdown, using Microsoft MarkItDown on this Mac.")
                     .foregroundStyle(deck.muted)
+                    .frame(maxWidth: 420, alignment: .leading)
 
-                Group {
-                    Text("Why Markdown").font(.headline)
-                    Text("A PDF is a picture of a page. Markdown is the words, in order, as plain text you can search and edit. That is why it works so well with AI: a model can read a chapter, quote it, and tell you when the file is silent — instead of guessing at columns or a scan. Paste one heading into Grok or ChatGPT, keep notes in Obsidian, or search a whole course. Tables stay tables. Headings stay an outline. Keep the original PDF; Markdown is the working copy.")
-                }
-
-                Group {
-                    Text("Engine").font(.headline)
-                    Text("yourMark does not ship a frozen converter. First launch installs Microsoft’s official `markitdown` package from PyPI (via uv), plus the official markitdown-ocr and RTF plugins. Convert goes through MarkItDown’s Python API (not only the thin CLI): Word styles, keep-data-uris for Office and picture files, EXIF when ExifTool is present, ZIP archives, and — only if you tick it — vision OCR / slide captions with your Ask key. About once a day it checks PyPI. Menu → Settings → Install or reinstall does that immediately. Drop a PDF anywhere on the window.")
-                }
-
-                Group {
-                    Text("If macOS blocks the app").font(.headline)
-                    Text("Apple has not notarized this build yet, so macOS may say it “could not verify” yourMark and offer Move to Bin. Click Done — not Move to Bin. Then: right-click yourMark → Open, or System Settings → Privacy & Security → Open Anyway. The disk image has “If Apple blocks it” — that is a web page, not a program, so Apple will not treat it as malware.")
-                }
-
-                Group {
-                    Text("Scanned PDFs / OCR").font(.headline)
-                    Text("A scan has no text layer, so MarkItDown (pdfminer) cannot see tables, columns, or figures. yourMark detects that and runs IBM Docling instead — layout, TableFormer tables, reading order, pictures. That takes a little longer; the first run may download models. OCRmyPDF and Apple Live Text only read words; they are the fallback if Docling is missing, and we still keep page pictures. Normal PDFs still go to Microsoft MarkItDown. MuPDF is a renderer, not layout OCR.")
-                }
-
-                Group {
-                    Text("Tables").font(.headline)
-                    Text("Yes — when the PDF has a real table, MarkItDown writes a GitHub-flavored Markdown table (columns and cell text). Cell colours, merged headers, and “tables” that are only drawn lines often flatten into plain rows. Scanned tables are kept as page pictures plus OCR text.")
-                }
-
-                Group {
-                    Text("Pictures").font(.headline)
-                    Text("After MarkItDown, yourMark walks every PDF page: it saves embedded photos and, when a page is a vector diagram with no photo, draws that page. Pictures and the Markdown live together in a little folder named after the file. Repeating header logos are dropped when Remove headers and footers is on (Settings, at the top). Word / PowerPoint / Excel / dropped photos use MarkItDown’s own keep-data-uris. Scans use Docling. Pictures will not sit at the original two-column x/y position — they appear in reading order, after that page’s headings. The in-app preview shows a sample so the window stays responsive; open the folder in Finder to see them all.")
-                }
-
-                Group {
-                    Text("Outline / bookmarks").font(.headline)
-                    Text("Microsoft MarkItDown (pdfminer) does not emit PDF bookmarks or headings — only words and tables. yourMark reads the outline Preview.app shows and writes those titles as Markdown headings at the matching pages. That tree is kept; it is not replaced by guessed headings. If the PDF has no outline, large-font lines are used, then AI chapters only if you tick that option.")
-                }
-
-                Group {
-                    Text("Library cards").font(.headline)
-                    Text("Swipe a card left to delete. Right-click for Open, Show in Finder, and Delete. Drag to rearrange. Show in Finder selects the file. If you edit that file, the library updates.")
-                }
-
-                Group {
-                    Text("Ask chapter").font(.headline)
-                    Text("Put your own AI key under Settings (xAI or OpenAI). Paste it, then press Enter. yourMark sends one short test question first; if the model answers, the key is locked in the Keychain. It also switches Provider if the key is for the other service (xai- → Grok, sk- → OpenAI). Ask uses only the current chapter of the converted Markdown. If the chapter is silent, Search the web opens a browser tab with the question and context. A model summary of missing terms is optional and off by default.")
-                }
-
-                Group {
-                    Text("Reading").font(.headline)
-                    Text("The right-hand pane is a reader, not an editor. Use the A / slider / A controls to change text size. Settings → Reader picks the font (any font on this Mac). Rendered shows headings and callouts; Plain shows the raw Markdown. Edit opens the file in MarkEdit (free native Mac editor). First launch offers to install it. Finder shows the file on disk.")
-                }
-
-                Group {
-                    Text("Keep the original").font(.headline)
-                    Text("Converted Markdown is for search and study. Keep the original PDF or Word file.")
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 12),
+                    ],
+                    spacing: 12
+                ) {
+                    ForEach(Array(cards.enumerated()), id: \.offset) { _, card in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(card.title)
+                                .font(.headline)
+                            Text(card.body)
+                                .font(.body)
+                                .foregroundStyle(deck.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(deck.panel)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(deck.line, lineWidth: deck.border)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
                 }
             }
             .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: 720, alignment: .leading)
             .foregroundStyle(deck.ink)
         }
         .background(deck.page)
