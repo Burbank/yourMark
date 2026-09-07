@@ -6,7 +6,7 @@
 
 Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, and Excel to Markdown **on this Mac**.
 
-**[Download yourMark-0.3.9.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.9.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
+**[Download yourMark-0.3.10.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.10.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
 
 ## Why Markdown
 
@@ -69,7 +69,7 @@ This build is not notarized, so macOS often shows **“yourMark.app” Not Opene
   <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Security. Allow applications from: App Store & Known Developers. yourMark.app was blocked to protect your Mac — Open Anyway.">
 </p>
 
-You can also right-click yourMark → **Open**, or double-click **If macOS blocks yourMark** on the disk image.
+You can also right-click yourMark → **Open**, or double-click **Privacy & Security Settings** on the disk image.
 
 ## License
 
