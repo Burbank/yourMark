@@ -933,6 +933,17 @@ struct EnginePanel: View {
 
     var body: some View {
         Form {
+            Section("This document") {
+                Toggle("Remove headers and footers", isOn: Binding(
+                    get: { model.stripChrome },
+                    set: {
+                        model.stripChrome = $0
+                        UserDefaults.standard.set($0, forKey: "stripChrome")
+                    }
+                ))
+                Text("Drops the repeating page title, page number, date, revision line, and header logos. Chapter headings and the real text stay. On by default — manuals look much cleaner.")
+                    .foregroundStyle(.secondary)
+            }
             if model.settingsFocus == "ocr" {
                 Section {
                     Text("Install OCR here — Scanned PDFs, below. IBM Docling handles scans, tables, and figures.")
@@ -1132,6 +1143,9 @@ struct EnginePanel: View {
                     Text("yourMark library folder").tag("library")
                     Text("Choose a folder…").tag("custom")
                 }
+                Text("Each convert makes a little folder (the Markdown plus a figures folder inside) so Finder stays tidy.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 if model.filePlace == "custom", !model.customFolderPath.isEmpty {
                     Text(model.customFolderPath)
                         .font(.caption)

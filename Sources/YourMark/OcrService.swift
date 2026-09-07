@@ -11,8 +11,6 @@ import Vision
 ///   4. Last resort: Apple Live Text + page pictures (empty markdown only).
 /// Digital PDFs with figures go through MarkItDown once, then PdfFigures.
 enum OcrService {
-    static let figureFolderSuffix = PdfFigures.folderSuffix
-
     struct PdfProfile: Equatable, Sendable {
         var needsOCR: Bool
         var looksGraphic: Bool
@@ -230,9 +228,8 @@ dst.write_text(md, encoding="utf-8")
         guard let doc = PDFDocument(url: sourcePDF), doc.pageCount > 0 else { return }
         onStatus("Keeping page pictures so diagrams stay visible…")
 
-        let stem = markdownURL.deletingPathExtension().lastPathComponent
         let figDir = markdownURL.deletingLastPathComponent()
-            .appendingPathComponent(stem + figureFolderSuffix, isDirectory: true)
+            .appendingPathComponent(PdfFigures.folderName, isDirectory: true)
         try? FileManager.default.createDirectory(at: figDir, withIntermediateDirectories: true)
 
         var parts: [String] = [
@@ -249,7 +246,7 @@ dst.write_text(md, encoding="utf-8")
             parts.append("## \(heading)")
             parts.append("")
             if let file = savePageImage(page, index: i, into: figDir) {
-                parts.append("![\(heading)](\(stem + figureFolderSuffix)/\(file))")
+                parts.append("![\(heading)](\(PdfFigures.folderName)/\(file))")
                 parts.append("")
             }
             let text = await liveText(page)

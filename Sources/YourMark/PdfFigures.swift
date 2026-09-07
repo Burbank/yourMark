@@ -9,16 +9,23 @@ import UniformTypeIdentifiers
 /// draw that page so the figure still appears in the Markdown.
 enum PdfFigures {
     static let folderSuffix = "-figures"
+    static let folderName = "figures"
 
     @discardableResult
     static func embed(
         markdownURL: URL,
         sourcePDF: URL,
+        stripChrome: Bool = true,
         onStatus: @escaping @Sendable (String) -> Void
     ) async -> Int {
         await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
-                let n = run(markdownURL: markdownURL, sourcePDF: sourcePDF, onStatus: onStatus)
+                let n = run(
+                    markdownURL: markdownURL,
+                    sourcePDF: sourcePDF,
+                    stripChrome: stripChrome,
+                    onStatus: onStatus
+                )
                 cont.resume(returning: n)
             }
         }
@@ -27,6 +34,7 @@ enum PdfFigures {
     private static func run(
         markdownURL: URL,
         sourcePDF: URL,
+        stripChrome: Bool,
         onStatus: @escaping @Sendable (String) -> Void
     ) -> Int {
         guard sourcePDF.pathExtension.lowercased() == "pdf" else { return 0 }
@@ -44,8 +52,7 @@ enum PdfFigures {
 
         onStatus("Looking for pictures in the PDF…")
 
-        let stem = markdownURL.deletingPathExtension().lastPathComponent
-        let folderName = stem + folderSuffix
+        let folderName = Self.folderName
         let figDir = markdownURL.deletingLastPathComponent()
             .appendingPathComponent(folderName, isDirectory: true)
         try? FileManager.default.removeItem(at: figDir)
@@ -75,9 +82,11 @@ enum PdfFigures {
             var extractedLarge = false
             for (n, img) in sink.images.enumerated() {
                 let seen = fingerprintCount[img.fp, default: 0]
-                // Repeating chrome (header logos) — keep a few, skip the rest.
-                if seen >= 12 { continue }
+                // Repeating chrome (header logos). With "remove headers" on, skip them.
+                let logoCap = stripChrome ? 1 : 12
+                if seen >= logoCap { continue }
                 fingerprintCount[img.fp] = seen + 1
+                if stripChrome, seen >= 1 { continue }
                 if img.wide >= 200 && img.tall >= 200 { extractedLarge = true }
                 let name = String(format: "p%04d-%d.%@", i, n + 1, img.ext)
                 do {
@@ -149,19 +158,30 @@ enum PdfFigures {
         }
 
         var usedDistinct = Set<Int>()
+        var pending: Int?
         for line in lines {
-            out.append(line)
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("<!-- page "), trimmed.hasSuffix("-->") {
+            let isComment = trimmed.hasPrefix("<!-- page ") && trimmed.hasSuffix("-->")
+            let isHeading = PdfSidecar.headingText(line) != nil
+            if let page = pending, !isHeading, !isComment, !trimmed.isEmpty {
+                takePage(page)
+                usedDistinct.insert(page)
+                pending = nil
+            }
+            out.append(line)
+            if isComment {
                 let inner = trimmed
                     .dropFirst("<!-- page ".count)
                     .dropLast(3)
                     .trimmingCharacters(in: .whitespaces)
                 if let n = Int(inner), n > 0 {
-                    takePage(n - 1)
-                    usedDistinct.insert(n - 1)
+                    pending = n - 1
                 }
             }
+        }
+        if let page = pending {
+            takePage(page)
+            usedDistinct.insert(page)
         }
 
         if !remaining.isEmpty {
