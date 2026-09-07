@@ -780,7 +780,7 @@ final class AppModel {
 
     private func finalizeMarkdown(_ url: URL, original: URL, bookmarks: [ManualBookmark]) async -> (URL, [ManualBookmark]) {
         let located = await Task.detached { () -> [ManualBookmark] in
-            guard var text = try? String(contentsOf: url, encoding: .utf8) else { return bookmarks }
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { return bookmarks }
             let stitched = PdfSidecar.stitch(bookmarks: bookmarks, markdown: text, pdf: original)
             try? stitched.text.write(to: url, atomically: true, encoding: .utf8)
             PdfSidecar.writeSidecar(stitched.bookmarks, nextTo: url)
@@ -1122,7 +1122,8 @@ final class AppModel {
                 library[i].bookmarks = side
                 continue
             }
-            if let src = library[i].sourcePath, FileManager.default.fileExists(atPath: src) {
+            let src = library[i].sourcePath
+            if !src.isEmpty, FileManager.default.fileExists(atPath: src) {
                 library[i].bookmarks = PdfSidecar.bookmarks(from: URL(fileURLWithPath: src))
             }
         }
