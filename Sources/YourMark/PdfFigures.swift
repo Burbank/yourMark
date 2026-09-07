@@ -31,11 +31,14 @@ enum PdfFigures {
     ) -> Int {
         guard sourcePDF.pathExtension.lowercased() == "pdf" else { return 0 }
         guard let existing = try? String(contentsOf: markdownURL, encoding: .utf8) else { return 0 }
-        // Docling already inlined pictures as data URIs — do not duplicate.
+        // Docling already inlined many pictures as data URIs — do not duplicate.
+        // A couple of leftover data URIs (a logo, a cover) must not skip the PDF walk.
         if existing.contains("data:image/") {
             let n = existing.components(separatedBy: "data:image/").count - 1
-            onStatus("Pictures already in the Markdown (\(n)).")
-            return n
+            if n >= 6 {
+                onStatus("Pictures already in the Markdown (\(n)).")
+                return n
+            }
         }
         guard let cgDoc = CGPDFDocument(sourcePDF as CFURL), cgDoc.numberOfPages > 0 else { return 0 }
 
@@ -88,11 +91,14 @@ enum PdfFigures {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .count
             let bytes = contentLength(page)
+            // Vector diagrams (Form XObjects) live on text-heavy handbook pages too.
+            // Do not require "few characters" — that dropped almost every QRH drawing.
             let needsPageDraw =
                 !extractedLarge
                 && (
                     sink.hasUndecodedImage
-                    || (sink.hasForm && chars < 2800)
+                    || sink.hasLargeForm
+                    || (sink.hasForm && files.isEmpty && bytes > 3500)
                     || (sink.hasLargeImage && files.isEmpty)
                     || (chars < 500 && bytes > 2500)
                 )
@@ -289,6 +295,7 @@ private struct ExtractedImage {
 private final class XSink {
     var images: [ExtractedImage] = []
     var hasForm = false
+    var hasLargeForm = false
     var hasLargeImage = false
     var hasUndecodedImage = false
     private var walkDepth = 0
@@ -309,7 +316,7 @@ private final class XSink {
 
     private func consume(_ object: CGPDFObjectRef) {
         visits += 1
-        if visits > 2500 { return }
+        if visits > 8000 { return }
         let key = Int(bitPattern: object)
         if seen.contains(key) { return }
         seen.insert(key)
@@ -322,6 +329,7 @@ private final class XSink {
         let kind = String(cString: subtype)
         if kind == "Form" {
             hasForm = true
+            if formBBoxLooksLarge(sdict) { hasLargeForm = true }
             var inner: CGPDFDictionaryRef?
             if CGPDFDictionaryGetDictionary(sdict, "Resources", &inner), let inner {
                 walk(resources: inner, depth: walkDepth + 1)
@@ -354,6 +362,23 @@ private final class XSink {
             return
         }
         hasUndecodedImage = true
+    }
+
+    /// Header/footer Forms are wide and short. Diagrams are both directions.
+    private func formBBoxLooksLarge(_ dict: CGPDFDictionaryRef) -> Bool {
+        var bbox: CGPDFArrayRef?
+        guard CGPDFDictionaryGetArray(dict, "BBox", &bbox), let bbox,
+              CGPDFArrayGetCount(bbox) >= 4
+        else { return true }
+        var n0: CGPDFReal = 0, n1: CGPDFReal = 0, n2: CGPDFReal = 0, n3: CGPDFReal = 0
+        guard CGPDFArrayGetNumber(bbox, 0, &n0),
+              CGPDFArrayGetNumber(bbox, 1, &n1),
+              CGPDFArrayGetNumber(bbox, 2, &n2),
+              CGPDFArrayGetNumber(bbox, 3, &n3)
+        else { return true }
+        let w = abs(n2 - n0)
+        let h = abs(n3 - n1)
+        return w >= 96 && h >= 96
     }
 }
 
