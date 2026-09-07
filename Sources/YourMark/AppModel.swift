@@ -56,6 +56,9 @@ final class AppModel {
     var showInstallSheet = false
     var showOCRSheet = false
     var showMarkEditSheet = false
+    var showCrashSheet = false
+    var pendingCrash: CrashReport?
+    var offerCrashReports = UserDefaults.standard.object(forKey: "offerCrashReports") as? Bool ?? true
     var settingsFocus: String = ""
     var showDoclingPrompt = false
     var pendingGraphics: [URL] = []
@@ -141,6 +144,7 @@ final class AppModel {
         }
         refreshOCRTools()
         Task { await fillMissingBookmarks() }
+        maybeOfferCrashReport()
     }
 
     func acceptFirstRunInstall() async {
@@ -191,9 +195,13 @@ final class AppModel {
     }
 
     func maybeOfferMarkEdit() {
-        if UserDefaults.standard.bool(forKey: "sawMarkEditSheet") { return }
+        if UserDefaults.standard.bool(forKey: "sawMarkEditSheet") {
+            maybeOfferCrashReport()
+            return
+        }
         if Self.markEditAppURL() != nil {
             UserDefaults.standard.set(true, forKey: "sawMarkEditSheet")
+            maybeOfferCrashReport()
             return
         }
         showMarkEditSheet = true
@@ -202,18 +210,67 @@ final class AppModel {
     func skipMarkEditSheet() {
         UserDefaults.standard.set(true, forKey: "sawMarkEditSheet")
         showMarkEditSheet = false
+        maybeOfferCrashReport()
     }
 
     func acceptMarkEditRecommend() {
         UserDefaults.standard.set(true, forKey: "sawMarkEditSheet")
         showMarkEditSheet = false
         openMarkEditDownload()
+        maybeOfferCrashReport()
     }
 
     func openMarkEditDownload() {
         if let url = URL(string: "https://github.com/MarkEdit-app/MarkEdit/releases/latest") {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    func maybeOfferCrashReport() {
+        guard offerCrashReports else { return }
+        if showInstallSheet || showOCRSheet || showMarkEditSheet { return }
+        if showCrashSheet { return }
+        pendingCrash = CrashReports.latestUnsent()
+        showCrashSheet = pendingCrash != nil
+    }
+
+    func sendPendingCrash() {
+        guard let report = pendingCrash else {
+            showCrashSheet = false
+            return
+        }
+        CrashReports.copyLog(report)
+        if let url = CrashReports.githubURL(for: report) {
+            NSWorkspace.shared.open(url)
+        }
+        CrashReports.markSent(report.id)
+        pendingCrash = nil
+        showCrashSheet = false
+    }
+
+    func skipCrashSheet() {
+        if let id = pendingCrash?.id {
+            CrashReports.markSent(id)
+        }
+        pendingCrash = nil
+        showCrashSheet = false
+    }
+
+    func neverOfferCrashes() {
+        offerCrashReports = false
+        UserDefaults.standard.set(false, forKey: "offerCrashReports")
+        skipCrashSheet()
+    }
+
+    func setOfferCrashReports(_ on: Bool) {
+        offerCrashReports = on
+        UserDefaults.standard.set(on, forKey: "offerCrashReports")
+    }
+
+    func sendLastCrash() {
+        guard let report = CrashReports.latestAny() else { return }
+        pendingCrash = report
+        sendPendingCrash()
     }
 
     func setPreviewFont(_ name: String) {

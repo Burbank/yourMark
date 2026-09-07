@@ -58,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        CrashReports.installHandler()
         NSApp.setActivationPolicy(.regular)
         NSWindow.allowsAutomaticWindowTabbing = false
         for window in NSApp.windows {
