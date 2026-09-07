@@ -37,7 +37,10 @@ struct ContentView: View {
         .foregroundStyle(deck.ink)
         .environment(\.deck, deck)
         .preferredColorScheme(model.colorScheme)
-        .background(FileDropCatcher { urls in model.openIncoming(urls) })
+        .background(FileDropCatcher(
+            onHover: { model.draggingFiles = $0 },
+            onURLs: { model.openIncoming($0) }
+        ))
         .onDrop(of: [.fileURL], isTargeted: Binding(
             get: { model.draggingFiles },
             set: { model.draggingFiles = $0 }
@@ -58,6 +61,14 @@ struct ContentView: View {
             set: { if !$0 { Task { await model.skipFirstRunInstall() } } }
         )) {
             FirstRunInstallSheet()
+                .environment(model)
+                .environment(\.deck, deck)
+        }
+        .sheet(isPresented: Binding(
+            get: { model.showDoclingPrompt },
+            set: { if !$0 { model.skipDoclingInstall() } }
+        )) {
+            DoclingPromptSheet()
                 .environment(model)
                 .environment(\.deck, deck)
         }
@@ -122,6 +133,39 @@ struct ContentView: View {
         .padding(.vertical, 10)
         .background(deck.panel)
         .overlay(Rectangle().frame(height: deck.border).foregroundStyle(deck.line), alignment: .top)
+    }
+}
+
+private struct DoclingPromptSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("This PDF has graphics")
+                .font(.title2.weight(.bold))
+            Text("Tables, photos, arrows, and diagrams need IBM Docling (layout OCR). Install it in this app, then conversion starts. Without it, Microsoft MarkItDown only keeps the words.")
+                .foregroundStyle(deck.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(model.pendingGraphics.map(\.lastPathComponent).joined(separator: ", "))
+                .font(.caption)
+                .foregroundStyle(deck.muted)
+            HStack {
+                Button("Convert without Docling") {
+                    model.skipDoclingInstall()
+                }
+                Spacer()
+                Button("Install Docling, then convert") {
+                    Task { await model.acceptDoclingInstall() }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(deck.btn)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(28)
+        .frame(width: 480)
+        .background(deck.page)
     }
 }
 
@@ -785,6 +829,15 @@ struct EnginePanel: View {
                         UserDefaults.standard.set($0, forKey: "askWebFallback")
                     }
                 ))
+                Toggle("Automatically add chapters with AI when the file has no outline", isOn: Binding(
+                    get: { model.aiChaptersEnabled },
+                    set: {
+                        model.aiChaptersEnabled = $0
+                        UserDefaults.standard.set($0, forKey: "aiChaptersEnabled")
+                    }
+                ))
+                Text("Uses your Ask key after conversion. Inserts ## headings where chapters clearly start. Off unless you tick it. Needs a saved key.")
+                    .foregroundStyle(.secondary)
                 HStack {
                     Button("Save key") { model.persistAskSettings() }
                     Button("Clear key", role: .destructive) { model.clearAskKey() }
