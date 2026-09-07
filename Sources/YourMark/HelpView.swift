@@ -52,6 +52,10 @@ struct HelpView: View {
             "Keep the original",
             "Converted Markdown is for search and study. Keep the original PDF or Word file."
         ),
+        (
+            "Crash reports",
+            "If yourMark closes unexpectedly, we can open a GitHub issue with the macOS report. You choose each time. Settings can turn the offer off. Nothing is sent in the background."
+        ),
     ]
 
     var body: some View {

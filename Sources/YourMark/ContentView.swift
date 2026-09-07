@@ -82,6 +82,14 @@ struct ContentView: View {
                 .environment(\.deck, deck)
         }
         .sheet(isPresented: Binding(
+            get: { model.showCrashSheet },
+            set: { if !$0 { model.skipCrashSheet() } }
+        )) {
+            CrashReportSheet()
+                .environment(model)
+                .environment(\.deck, deck)
+        }
+        .sheet(isPresented: Binding(
             get: { model.showDoclingPrompt },
             set: { if !$0 { model.skipDoclingInstall() } }
         )) {
@@ -243,6 +251,39 @@ private struct FirstRunMarkEditSheet: View {
         }
         .padding(28)
         .frame(width: 480)
+        .background(deck.page)
+    }
+}
+
+private struct CrashReportSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("yourMark closed unexpectedly")
+                .font(.title2.weight(.bold))
+            Text("macOS saved a crash report. If you send it to GitHub, we can see the stack and try to fix it. Nothing is uploaded until you press Send. API keys and documents stay on this Mac. The report is copied so you can paste it if the GitHub form is short.")
+                .foregroundStyle(deck.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            if let summary = model.pendingCrash?.summary {
+                Text(summary)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+            }
+            HStack {
+                Button("Don't offer this") { model.neverOfferCrashes() }
+                Spacer()
+                Button("Not now") { model.skipCrashSheet() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Send to GitHub") { model.sendPendingCrash() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(deck.btn)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(28)
+        .frame(width: 520)
         .background(deck.page)
     }
 }
@@ -1195,6 +1236,17 @@ struct EnginePanel: View {
                         .font(.caption)
                         .textSelection(.enabled)
                         .foregroundStyle(.secondary)
+                }
+            }
+            Section("Crash reports") {
+                Toggle("Offer to send crash reports to GitHub", isOn: Binding(
+                    get: { model.offerCrashReports },
+                    set: { model.setOfferCrashReports($0) }
+                ))
+                Text("If yourMark closed unexpectedly, we can open a GitHub issue with the macOS report. Nothing is sent unless you press Send. No API keys or documents are included.")
+                    .foregroundStyle(.secondary)
+                if CrashReports.latestAny() != nil {
+                    Button("Send last crash report") { model.sendLastCrash() }
                 }
             }
             if model.settingsFocus == "ocr" {
