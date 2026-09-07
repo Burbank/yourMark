@@ -43,6 +43,7 @@ struct YourMarkApp: App {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var model: AppModel?
     private var pending: [URL] = []
@@ -52,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let extra = pending
         pending.removeAll()
         if !extra.isEmpty {
-            Task { @MainActor in model.openIncoming(extra) }
+            model.openIncoming(extra)
         }
     }
 
@@ -75,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         if let model {
-            Task { @MainActor in model.openIncoming(urls) }
+            model.openIncoming(urls)
         } else {
             pending.append(contentsOf: urls)
         }
@@ -94,14 +95,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     func upgradeEngine() {
-        Task { @MainActor in await model?.upgradeEngine() }
+        Task { await model?.upgradeEngine() }
     }
 
     func installEngine() {
-        Task { @MainActor in await model?.installEngine() }
+        Task { await model?.installEngine() }
     }
 
     func checkUpdates() {
-        Task { @MainActor in await model?.checkUpdates(force: true) }
+        Task { await model?.checkUpdates(force: true) }
     }
 }
