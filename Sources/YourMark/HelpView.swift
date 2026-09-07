@@ -38,7 +38,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Pictures").font(.headline)
-                    Text("In reading order, not the original page layout. After MarkItDown, yourMark pulls pictures from the PDF into a figures folder next to the Markdown, and pdfplumber (the same library MarkItDown uses) fills in missed tables and page markers. Word / PowerPoint already emit figures as images via --keep-data-uris. Scans use Docling. Pictures will not sit at the original two-column x/y position. MarkItDown itself cannot reconstruct a PDF page as a picture of the page.")
+                    Text("After MarkItDown, yourMark walks every PDF page: it saves embedded photos and, when a page is a vector diagram with no photo, draws that page. Every picture is linked in the Markdown next to its page (a figures folder sits beside the file). Word / PowerPoint already emit figures via --keep-data-uris. Scans use Docling. Pictures will not sit at the original two-column x/y position — they appear in reading order. The in-app preview shows a sample so the window stays responsive; open the Markdown in Finder to see them all.")
                 }
 
                 Group {
