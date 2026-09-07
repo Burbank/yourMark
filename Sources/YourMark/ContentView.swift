@@ -337,10 +337,14 @@ private struct AskStrip: View {
                 .textFieldStyle(.roundedBorder)
                 .disabled(!model.askHasKey)
                 .onSubmit { Task { await model.runAsk() } }
-                Button(model.askBusy ? "Asking…" : "Ask") {
-                    Task { await model.runAsk() }
+                Button(model.askBusy ? "Asking…" : (!model.askAnswer.isEmpty || !model.askError.isEmpty) ? "Clear" : "Ask") {
+                    if !model.askAnswer.isEmpty || !model.askError.isEmpty {
+                        model.clearAsk()
+                    } else {
+                        Task { await model.runAsk() }
+                    }
                 }
-                .disabled(!model.askHasKey || model.askBusy || model.askQuestion.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(!model.askHasKey || model.askBusy || (model.askAnswer.isEmpty && model.askError.isEmpty && model.askQuestion.trimmingCharacters(in: .whitespaces).isEmpty))
                 .buttonStyle(.borderedProminent)
             }
             if !model.askError.isEmpty {

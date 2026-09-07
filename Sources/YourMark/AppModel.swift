@@ -128,6 +128,13 @@ final class AppModel {
         }
     }
 
+    func clearAsk() {
+        askAnswer = ""
+        askOpenAnswer = ""
+        askError = ""
+        askQuestion = ""
+    }
+
     func searchAskOnWeb() {
         let note = askAnswer.split(separator: "\n").first.map(String.init) ?? ""
         let q = AskService.searchQuery(
