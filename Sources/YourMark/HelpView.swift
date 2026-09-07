@@ -30,6 +30,11 @@ struct HelpView: View {
                 }
 
                 Group {
+                    Text("Library cards").font(.headline)
+                    Text("Hold a card to rearrange. Swipe a card past the left edge to delete. After you delete Getting started, an i in the header shows the same guide.")
+                }
+
+                Group {
                     Text("Ask chapter").font(.headline)
                     Text("Put your own AI key under Engine (xAI, OpenAI, or an OpenAI-compatible URL). It is stored in the Keychain. Ask uses only the current chapter of the converted Markdown — it will not invent facts that are not in that excerpt.")
                 }
