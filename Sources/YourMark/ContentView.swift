@@ -65,6 +65,14 @@ struct ContentView: View {
                 .environment(\.deck, deck)
         }
         .sheet(isPresented: Binding(
+            get: { model.showOCRSheet },
+            set: { if !$0 { model.skipOCRSheet() } }
+        )) {
+            FirstRunOCRSheet()
+                .environment(model)
+                .environment(\.deck, deck)
+        }
+        .sheet(isPresented: Binding(
             get: { model.showDoclingPrompt },
             set: { if !$0 { model.skipDoclingInstall() } }
         )) {
@@ -165,6 +173,38 @@ private struct DoclingPromptSheet: View {
         }
         .padding(28)
         .frame(width: 480)
+        .background(deck.page)
+    }
+}
+
+private struct FirstRunOCRSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Install OCR for scans")
+                .font(.title2.weight(.bold))
+            Text("If your PDFs are scans or have tables, photos, and arrows, install the OCR extras now. Open Settings → Scanned PDFs, or install IBM Docling from this window. Ordinary digital PDFs do not need this.")
+                .foregroundStyle(deck.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("This download needs the internet and can take a few minutes.")
+                .font(.caption)
+                .foregroundStyle(deck.muted)
+            HStack {
+                Button("Later") { model.skipOCRSheet() }
+                Button("Open scan settings") { model.openScanSettings() }
+                Spacer()
+                Button("Install OCR now") {
+                    Task { await model.acceptOCRInstall() }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(deck.btn)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(28)
+        .frame(width: 500)
         .background(deck.page)
     }
 }
@@ -512,20 +552,23 @@ struct LibraryPanel: View {
         return fromPdf.isEmpty ? headingBookmarks : fromPdf
     }
 
+    @AppStorage("splitLibrary") private var libFrac = 0.20
+    @AppStorage("splitMarks") private var marksFrac = 0.15
+
     var body: some View {
         GeometryReader { geo in
-            let libraryW = max(180, geo.size.width * 0.20)
-            let marksW = max(140, geo.size.width * 0.15)
-            HSplitView {
+            let w = geo.size.width
+            let libW = max(160, w * libFrac)
+            let marksW = max(120, w * marksFrac)
+            HStack(spacing: 0) {
                 libraryColumn
-                    .frame(minWidth: 160, idealWidth: libraryW, maxWidth: max(280, geo.size.width * 0.36))
-
-                HSplitView {
-                    bookmarksColumn
-                        .frame(minWidth: 120, idealWidth: marksW, maxWidth: max(240, geo.size.width * 0.32))
-                    markdownColumn
-                        .frame(minWidth: 280)
-                }
+                    .frame(width: libW)
+                SplitDrag(fraction: $libFrac, min: 0.14, max: 0.36, total: w, color: deck.line)
+                bookmarksColumn
+                    .frame(width: marksW)
+                SplitDrag(fraction: $marksFrac, min: 0.10, max: 0.32, total: w, color: deck.line)
+                markdownColumn
+                    .frame(maxWidth: .infinity)
             }
         }
         .background(deck.page)
@@ -533,6 +576,36 @@ struct LibraryPanel: View {
             AskStrip()
         }
     }
+
+    private struct SplitDrag: View {
+    @Binding var fraction: Double
+    var min: Double
+    var max: Double
+    var total: CGFloat
+    var color: Color
+    @State private var origin: Double?
+
+    var body: some View {
+        Rectangle()
+            .fill(color)
+            .frame(width: 1)
+            .overlay {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 8)
+                    .contentShape(Rectangle())
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        if origin == nil { origin = fraction }
+                        let next = (origin ?? fraction) + Double(value.translation.width / total)
+                        fraction = Swift.min(max, Swift.max(min, next))
+                    }
+                    .onEnded { _ in origin = nil }
+            )
+    }
+}
 
     private var libraryColumn: some View {
         List {
@@ -768,6 +841,12 @@ struct EnginePanel: View {
 
     var body: some View {
         Form {
+            if model.settingsFocus == "ocr" {
+                Section {
+                    Text("Install OCR here — Scanned PDFs, below. IBM Docling handles scans, tables, and figures.")
+                        .foregroundStyle(.secondary)
+                }
+            }
             Section("Microsoft MarkItDown") {
                 LabeledContent("Version", value: model.engineVersion)
                 LabeledContent("Path") {
@@ -778,6 +857,9 @@ struct EnginePanel: View {
                     .foregroundStyle(.secondary)
                 Button("Install or reinstall") { Task { await model.installEngine() } }
                     .disabled(model.installingEngine)
+                Text("Installs Microsoft MarkItDown, the converter for ordinary PDFs and Office files.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Ask AI") {
                 Picker("Provider", selection: Binding(
@@ -861,6 +943,9 @@ struct EnginePanel: View {
                     Task { await model.installDocling() }
                 }
                 .disabled(model.installingEngine)
+                Text("OCR for scans and graphic PDFs. Install from this app, not Terminal.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 LabeledContent("OCRmyPDF fallback") {
                     Text(OcrService.ocrmypdfPath() ?? "Not installed — Apple Live Text")
                         .textSelection(.enabled)
@@ -891,9 +976,29 @@ struct EnginePanel: View {
                 }
             }
             Section("Actions") {
-                Button("Recheck converter") { Task { await model.bootstrap() } }
-                Button("Upgrade engine") { Task { await model.upgradeEngine() } }
+                VStack(alignment: .leading, spacing: 4) {
+                    Button("Check for update of the main app") {
+                        Task { await model.checkUpdates(force: true) }
+                    }
+                    Text("Looks on GitHub for a newer yourMark and offers the download.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Button("Check for update of the processing engine") {
+                        Task { await model.upgradeEngine() }
+                    }
                     .disabled(model.isBusy)
+                    Text("Pulls the latest Microsoft MarkItDown from PyPI. Does not change the yourMark app itself.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Button("Recheck converter") { Task { await model.bootstrap() } }
+                    Text("Confirms MarkItDown is on this Mac after an install or a failed launch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             if !model.lastUpgradeLog.isEmpty {
                 Section("Last upgrade") {

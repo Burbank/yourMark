@@ -44,6 +44,8 @@ final class AppModel {
     var draggingFiles = false
     var ocrEnabled = UserDefaults.standard.object(forKey: "ocrEnabled") as? Bool ?? true
     var showInstallSheet = false
+    var showOCRSheet = false
+    var settingsFocus: String = ""
     var showDoclingPrompt = false
     var pendingGraphics: [URL] = []
     var aiChaptersEnabled = UserDefaults.standard.object(forKey: "aiChaptersEnabled") as? Bool ?? false
@@ -100,6 +102,9 @@ final class AppModel {
             }
             return
         }
+        if !UserDefaults.standard.bool(forKey: "sawOCRSheet") {
+            showOCRSheet = true
+        }
         if status.path == nil, !installingEngine {
             statusText = "Installing Microsoft MarkItDown…"
             await installEngine()
@@ -113,7 +118,9 @@ final class AppModel {
         UserDefaults.standard.set(true, forKey: "sawInstallSheet")
         showInstallSheet = false
         await installEngine()
-        await installDocling()
+        if !UserDefaults.standard.bool(forKey: "sawOCRSheet") {
+            showOCRSheet = true
+        }
         Task { await checkUpdates(force: false) }
     }
 
@@ -121,11 +128,35 @@ final class AppModel {
         showInstallSheet = false
         let first = !UserDefaults.standard.bool(forKey: "sawInstallSheet")
         UserDefaults.standard.set(true, forKey: "sawInstallSheet")
-        guard first else { return }
-        if enginePath == nil {
+        if first, enginePath == nil {
             await installEngine()
         }
+        if !UserDefaults.standard.bool(forKey: "sawOCRSheet") {
+            showOCRSheet = true
+        }
         Task { await checkUpdates(force: false) }
+    }
+
+    func openScanSettings() {
+        UserDefaults.standard.set(true, forKey: "sawOCRSheet")
+        showOCRSheet = false
+        showHelp = false
+        showSettings = true
+        settingsFocus = "ocr"
+    }
+
+    func skipOCRSheet() {
+        UserDefaults.standard.set(true, forKey: "sawOCRSheet")
+        showOCRSheet = false
+    }
+
+    func acceptOCRInstall() async {
+        UserDefaults.standard.set(true, forKey: "sawOCRSheet")
+        showOCRSheet = false
+        await installDocling()
+        UserDefaults.standard.set(true, forKey: "doclingReady")
+        showSettings = true
+        settingsFocus = "ocr"
     }
 
     func installEngine() async {
