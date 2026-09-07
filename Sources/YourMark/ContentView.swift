@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -678,13 +679,7 @@ struct LibraryPanel: View {
     private func markdownLine(_ line: String) -> some View {
         if let img = markdownImage(line, base: model.previewBaseURL) {
             VStack(alignment: .leading, spacing: 4) {
-                if let ns = NSImage(contentsOf: img.url), ns.size.width > 1 {
-                    Image(nsImage: ns)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxHeight: 420)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
+                PreviewPicture(url: img.url)
                 if !img.alt.isEmpty {
                     Text(img.alt)
                         .font(.caption)
@@ -728,6 +723,70 @@ private func markdownImage(_ line: String, base: URL?) -> (alt: String, url: URL
         ? URL(fileURLWithPath: path)
         : base.appendingPathComponent(path)
     return (alt, url)
+}
+
+/// Decode off the main thread and cache a small thumbnail. Loading full JPEGs
+/// in the view body is what froze the window after a large convert finished.
+private struct PreviewPicture: View {
+    let url: URL
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 280)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            } else {
+                Color.clear.frame(height: 8)
+            }
+        }
+        .task(id: url) {
+            if let cached = PreviewImageCache.shared.image(for: url) {
+                image = cached
+                return
+            }
+            let loaded = await Task.detached(priority: .utility) {
+                PreviewImageCache.thumbnail(url)
+            }.value
+            if let loaded {
+                PreviewImageCache.shared.store(loaded, for: url)
+                image = loaded
+            }
+        }
+    }
+}
+
+private final class PreviewImageCache: @unchecked Sendable {
+    static let shared = PreviewImageCache()
+    private let cache = NSCache<NSURL, NSImage>()
+    private init() {
+        cache.countLimit = 40
+        cache.totalCostLimit = 40 * 1024 * 1024
+    }
+
+    func image(for url: URL) -> NSImage? { cache.object(forKey: url as NSURL) }
+
+    func store(_ img: NSImage, for url: URL) {
+        cache.setObject(img, forKey: url as NSURL, cost: Int(img.size.width * img.size.height))
+    }
+
+    static func thumbnail(_ url: URL, maxPixel: CGFloat = 900) -> NSImage? {
+        let opts = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, opts) else { return nil }
+        let thumb: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, thumb as CFDictionary) else {
+            return nil
+        }
+        return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+    }
 }
 
 private struct LibraryCard: View {

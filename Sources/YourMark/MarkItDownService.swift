@@ -64,12 +64,13 @@ actor MarkItDownService {
         var lastError: Error = YourMarkError.outputMissing(output.path)
         for args in attempts {
             do {
-                let result = try await run(executable: exe, arguments: args, captureStdout: true)
+                // Do not capture stdout — MarkItDown already writes -o. Buffering
+                // a huge dump here used to deadlock the pipe after the file existed.
+                _ = try await run(executable: exe, arguments: args, captureStdout: false)
                 if FileManager.default.fileExists(atPath: output.path) {
                     return output
                 }
-                let detail = result.stderr.isEmpty ? result.stdout : result.stderr
-                lastError = YourMarkError.outputMissing(detail.isEmpty ? output.path : detail)
+                lastError = YourMarkError.outputMissing(output.path)
             } catch {
                 lastError = error
             }
@@ -178,74 +179,36 @@ actor MarkItDownService {
         arguments: [String],
         captureStdout: Bool = false
     ) async throws -> (stdout: String, stderr: String) {
-        let process = Process()
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        process.standardOutput = outPipe
-        process.standardError = errPipe
-
-        var env = ProcessInfo.processInfo.environment
-        let extra = [
-            "\(FileManager.default.homeDirectoryForCurrentUser.path)/.local/bin",
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-        ]
-        let path = env["PATH"] ?? ""
-        env["PATH"] = extra.joined(separator: ":") + ":" + path
-        process.environment = env
-
-        try process.run()
-
-        return try await withCheckedThrowingContinuation { continuation in
-            process.terminationHandler = { proc in
-                let stdout = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                let stderr = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                if proc.terminationStatus == 0 {
-                    continuation.resume(returning: (stdout, stderr))
-                } else {
-                    let detail = stderr.isEmpty ? stdout : stderr
-                    continuation.resume(throwing: YourMarkError.processFailed(
-                        detail.isEmpty
-                            ? "markitdown exited \(proc.terminationStatus)"
-                            : detail
-                    ))
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let result = try ProcessRun.run(
+                        executable: executable,
+                        arguments: arguments,
+                        captureStdout: captureStdout
+                    )
+                    if result.status == 0 {
+                        continuation.resume(returning: (result.stdout, result.stderr))
+                    } else {
+                        let detail = result.stderr.isEmpty ? result.stdout : result.stderr
+                        continuation.resume(throwing: YourMarkError.processFailed(
+                            detail.isEmpty
+                                ? "markitdown exited \(result.status)"
+                                : detail
+                        ))
+                    }
+                } catch {
+                    continuation.resume(throwing: error)
                 }
             }
         }
     }
 
     func runShell(_ command: String) async throws -> (stdout: String, stderr: String) {
-        let process = Process()
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        process.arguments = ["-lc", command]
-        var env = ProcessInfo.processInfo.environment
-        let extra = [
-            "\(FileManager.default.homeDirectoryForCurrentUser.path)/.local/bin",
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-        ]
-        env["PATH"] = extra.joined(separator: ":") + ":" + (env["PATH"] ?? "")
-        process.environment = env
-        process.standardOutput = outPipe
-        process.standardError = errPipe
-        try process.run()
-
-        return try await withCheckedThrowingContinuation { continuation in
-            process.terminationHandler = { proc in
-                let stdout = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                let stderr = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                if proc.terminationStatus == 0 {
-                    continuation.resume(returning: (stdout, stderr))
-                } else {
-                    continuation.resume(throwing: YourMarkError.processFailed(
-                        stderr.isEmpty ? stdout : stderr
-                    ))
-                }
-            }
-        }
+        try await run(
+            executable: "/bin/zsh",
+            arguments: ["-lc", command],
+            captureStdout: true
+        )
     }
 }
