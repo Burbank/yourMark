@@ -86,31 +86,50 @@ actor MarkItDownService {
         ]
         var uv = uvPaths.first { FileManager.default.isExecutableFile(atPath: $0) }
         if uv == nil {
-            log.append("Installing uv…")
-            let result = try await runShell("curl -LsSf https://astral.sh/uv/install.sh | sh")
-            log.append(result.stdout)
-            log.append(result.stderr)
-            uv = "\(home)/.local/bin/uv"
-        }
-        guard let uv, FileManager.default.isExecutableFile(atPath: uv) else {
-            throw YourMarkError.processFailed("Could not install uv. Open Terminal and run:\ncurl -LsSf https://astral.sh/uv/install.sh | sh")
-        }
-        log.append("Installing Microsoft MarkItDown…")
-        do {
-            let installed = try await run(
-                executable: uv,
-                arguments: ["tool", "install", "markitdown[all]"],
+            log.append("Installing uv (the installer Microsoft’s docs recommend)…")
+            let script = "\(NSTemporaryDirectory())uv-install.sh"
+            let downloaded = try await run(
+                executable: "/usr/bin/curl",
+                arguments: ["-LsSf", "https://astral.sh/uv/install.sh", "-o", script],
                 captureStdout: true
             )
-            log.append(installed.stdout)
-            log.append(installed.stderr)
-        } catch {
-            let upgraded = try await runShell("uv tool upgrade markitdown")
-            log.append(upgraded.stdout)
-            log.append(upgraded.stderr)
+            log.append(downloaded.stdout)
+            log.append(downloaded.stderr)
+            let result = try await run(executable: "/bin/zsh", arguments: [script], captureStdout: true)
+            log.append(result.stdout)
+            log.append(result.stderr)
+            uv = uvPaths.first { FileManager.default.isExecutableFile(atPath: $0) }
+        }
+        guard let uv, FileManager.default.isExecutableFile(atPath: uv) else {
+            throw YourMarkError.processFailed("Could not install uv. Connect to the internet and try Install converter again.")
+        }
+        log.append("Installing Microsoft MarkItDown from PyPI…")
+        let attempts: [[String]] = [
+            ["tool", "install", "--force", "markitdown[all]"],
+            ["tool", "upgrade", "markitdown"],
+        ]
+        var last = ""
+        for args in attempts {
+            do {
+                let installed = try await run(executable: uv, arguments: args, captureStdout: true)
+                log.append(installed.stdout)
+                log.append(installed.stderr)
+                last = ""
+                break
+            } catch {
+                last = error.localizedDescription
+                log.append(last)
+            }
         }
         enginePath = nil
-        _ = try await resolveEngine()
+        do {
+            _ = try await resolveEngine()
+        } catch {
+            if !last.isEmpty {
+                throw YourMarkError.processFailed(last)
+            }
+            throw error
+        }
         log.append("Ready · \(versionString)")
         return log.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.joined(separator: "\n")
     }

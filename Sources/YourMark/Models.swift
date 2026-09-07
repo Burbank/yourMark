@@ -3,25 +3,8 @@ import Foundation
 enum AppTool: String, CaseIterable, Identifiable {
     case library = "Library"
     case convert = "Convert"
-    case settings = "Settings"
 
     var id: String { rawValue }
-
-    var systemImage: String {
-        switch self {
-        case .convert: return "square.and.arrow.down"
-        case .library: return "books.vertical"
-        case .settings: return "gearshape"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .convert: return "Drop PDFs, Word, and slides — Microsoft MarkItDown writes Markdown"
-        case .library: return "Converted files — Bookmarks jump like a PDF outline"
-        case .settings: return "Converter, file location, and Ask"
-        }
-    }
 }
 
 struct ConvertJob: Identifiable, Hashable {
@@ -94,7 +77,7 @@ enum YourMarkError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .engineNotFound:
-            return "markitdown was not found. Install with:\n\nuv tool install 'markitdown[all]'\n\nthen yourMark → Engine → Recheck."
+            return "Microsoft MarkItDown is not installed yet. yourMark installs it from PyPI on first launch — use Install converter if it did not finish."
         case .invalidInput(let message):
             return message
         case .processFailed(let message):

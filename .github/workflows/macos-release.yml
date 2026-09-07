@@ -37,5 +37,5 @@ jobs:
           else
             gh release create "${{ github.ref_name }}" dist/yourMark.dmg \
               --title "yourMark ${{ github.ref_name }}" \
-              --notes "Drag yourMark into Applications. First launch: System Settings → Privacy & Security → Open Anyway if macOS asks. Converter: double-click Install Engine on the disk image, or \`uv tool install 'markitdown[all]'\`."
+              --notes "Double-click **Install yourMark** on the disk image. If macOS says it could not verify the app, click Done (not Move to Bin), then **If macOS blocks yourMark**. First launch installs Microsoft MarkItDown from PyPI."
           fi

@@ -4,6 +4,9 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var scheme
+
+    private var deck: DeckTheme { DeckTheme.resolve(model.appearance, scheme) }
 
     var body: some View {
         @Bindable var model = model
@@ -11,42 +14,25 @@ struct ContentView: View {
         VStack(spacing: 0) {
             TopBar()
             if model.installingEngine || model.enginePath == nil {
-                SetupPane()
-            } else {
-                Group {
-                    switch model.selectedTool {
-                    case .convert:
-                        ConvertPanel()
-                    case .library:
-                        LibraryPanel()
-                    case .settings:
-                        EnginePanel()
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                EngineBanner()
             }
-            HStack {
-                Text(model.statusText)
-                    .foregroundStyle(DeckTheme.muted)
-                    .lineLimit(1)
-                Spacer()
-                if model.isBusy || model.installingEngine {
-                    ProgressView().controlSize(.small).padding(.trailing, 8)
-                }
-                if model.selectedTool == .convert, model.enginePath != nil {
-                    Button("Convert") {
-                        Task { await model.convertQueued() }
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(model.isBusy || model.jobs.isEmpty)
-                    .buttonStyle(.borderedProminent)
-                    .tint(DeckTheme.navy)
+            Group {
+                if model.showSettings {
+                    EnginePanel()
+                } else if model.showHelp {
+                    HelpView()
+                } else if model.selectedTool == .convert {
+                    ConvertPanel()
+                } else {
+                    LibraryPanel()
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            statusBar
         }
-        .background(DeckTheme.page)
+        .background(deck.page)
+        .foregroundStyle(deck.ink)
+        .environment(\.deck, deck)
         .preferredColorScheme(model.colorScheme)
         .task { await model.bootstrap() }
         .alert("Something went wrong", isPresented: Binding(
@@ -58,35 +44,108 @@ struct ContentView: View {
             Text(model.errorMessage ?? "")
         }
     }
+
+    private var statusBar: some View {
+        HStack {
+            Text(model.statusText)
+                .foregroundStyle(deck.muted)
+                .lineLimit(1)
+            Spacer()
+            if model.isBusy || model.installingEngine {
+                ProgressView().controlSize(.small).padding(.trailing, 8)
+            }
+            if model.selectedTool == .convert, model.enginePath != nil, !model.showSettings, !model.showHelp {
+                Button("Convert") {
+                    Task { await model.convertQueued() }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(model.isBusy || model.jobs.isEmpty)
+                .buttonStyle(.borderedProminent)
+                .tint(deck.btn)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(deck.panel)
+        .overlay(Rectangle().frame(height: deck.border).foregroundStyle(deck.line), alignment: .top)
+    }
+}
+
+private struct EngineBanner: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            if model.installingEngine {
+                ProgressView()
+                    .controlSize(.small)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Installing Microsoft MarkItDown")
+                        .font(.body.weight(.bold))
+                    Text("Official package from PyPI — not a copy inside the app, so their updates still reach you.")
+                        .font(.caption)
+                        .foregroundStyle(deck.muted)
+                }
+            } else {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(deck.cyan)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Converter not installed yet")
+                        .font(.body.weight(.bold))
+                    Text(model.installLog.isEmpty
+                         ? "yourMark will download Microsoft MarkItDown. Needs a network connection."
+                         : model.installLog)
+                        .font(.caption)
+                        .foregroundStyle(deck.muted)
+                        .lineLimit(3)
+                }
+                Spacer()
+                Button("Install converter") {
+                    Task { await model.installEngine() }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(deck.btn)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(deck.field)
+        .overlay(Rectangle().frame(height: deck.border).foregroundStyle(deck.line), alignment: .bottom)
+    }
 }
 
 private struct TopBar: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
 
     var body: some View {
         HStack(spacing: 12) {
             icon
             VStack(alignment: .leading, spacing: 0) {
                 Text("yourMark")
-                    .font(.title3.weight(.bold))
+                    .font(.system(.title3, design: .rounded).weight(.bold))
                 Text("PDFs → Markdown")
                     .font(.caption)
-                    .foregroundStyle(DeckTheme.muted)
+                    .foregroundStyle(deck.muted)
             }
             Spacer()
             ForEach(AppTool.allCases) { tool in
-                Button(tool.rawValue) { model.selectedTool = tool }
+                Button(tool.rawValue) { model.selectTool(tool) }
                     .buttonStyle(.plain)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(model.selectedTool == tool ? DeckTheme.navy : DeckTheme.panel)
+                            .fill(model.selectedTool == tool && !model.showSettings && !model.showHelp
+                                  ? deck.btn : deck.panel)
                     )
-                    .foregroundStyle(model.selectedTool == tool ? Color.white : DeckTheme.ink)
+                    .foregroundStyle(model.selectedTool == tool && !model.showSettings && !model.showHelp
+                                     ? deck.btnText : deck.ink)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(DeckTheme.line, lineWidth: model.selectedTool == tool ? 0 : 2)
+                            .stroke(deck.line, lineWidth: model.selectedTool == tool ? 0 : deck.border)
                     )
                     .font(.body.weight(.bold))
             }
@@ -97,17 +156,43 @@ private struct TopBar: View {
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)
-                        .background(model.appearance == mode ? DeckTheme.navy : DeckTheme.panel)
-                        .foregroundStyle(model.appearance == mode ? Color.white : DeckTheme.muted)
+                        .background(model.appearance == mode ? deck.btn : deck.panel)
+                        .foregroundStyle(model.appearance == mode ? deck.btnText : deck.muted)
                 }
             }
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(DeckTheme.line, lineWidth: 2))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: deck.border))
             .clipShape(RoundedRectangle(cornerRadius: 8))
+            Button {
+                model.toggleSettings()
+            } label: {
+                Label("Settings", systemImage: "gearshape")
+                    .font(.body.weight(.bold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(model.showSettings ? deck.btn : deck.panel))
+                    .foregroundStyle(model.showSettings ? deck.btnText : deck.ink)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: model.showSettings ? 0 : deck.border))
+            }
+            .buttonStyle(.plain)
+            if model.showInfoButton {
+                Button {
+                    model.toggleHelp()
+                } label: {
+                    Text("i")
+                        .font(.body.weight(.bold))
+                        .frame(width: 36, height: 36)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(model.showHelp ? deck.btn : deck.panel))
+                        .foregroundStyle(model.showHelp ? deck.btnText : deck.ink)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: model.showHelp ? 0 : deck.border))
+                }
+                .buttonStyle(.plain)
+                .help("Guide")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(DeckTheme.panel)
-        .overlay(Rectangle().frame(height: 2).foregroundStyle(DeckTheme.line), alignment: .bottom)
+        .background(deck.panel)
+        .overlay(Rectangle().frame(height: deck.border).foregroundStyle(deck.line), alignment: .bottom)
     }
 
     @ViewBuilder
@@ -120,60 +205,32 @@ private struct TopBar: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         } else {
             RoundedRectangle(cornerRadius: 8)
-                .fill(DeckTheme.navy)
+                .fill(deck.navy)
                 .frame(width: 32, height: 32)
                 .overlay(Text("M").font(.headline.bold()).foregroundStyle(.white))
         }
     }
 }
 
-private struct SetupPane: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("INSTALL CONVERTER")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(DeckTheme.cyan)
-            Text("Microsoft MarkItDown")
-                .font(.title.bold())
-            Text("yourMark is the window. The converter is Microsoft’s official package, installed on this Mac from PyPI — not a copy bundled in the app. That way you get their updates.")
-                .foregroundStyle(DeckTheme.muted)
-                .frame(maxWidth: 520, alignment: .leading)
-            if model.installingEngine {
-                ProgressView("Installing…")
-                Text(model.installLog)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(DeckTheme.muted)
-                    .textSelection(.enabled)
-            } else {
-                Button("Install Microsoft MarkItDown") {
-                    Task { await model.installEngine() }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(DeckTheme.navy)
-                .controlSize(.large)
-                if !model.installLog.isEmpty {
-                    Text(model.installLog)
-                        .font(.caption.monospaced())
-                        .textSelection(.enabled)
-                }
-            }
-        }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-}
-
 struct ConvertPanel: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                Text("CONVERT")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(deck.cyan)
+                Text("Drop a PDF")
+                    .font(.system(.title, design: .rounded).weight(.bold))
+                Text("Lecture notes, papers, slides, handouts. Microsoft MarkItDown writes Markdown on this Mac. Keep the original file.")
+                    .foregroundStyle(deck.muted)
+                    .frame(maxWidth: 520, alignment: .leading)
+
                 DropZone(
-                    title: "Drop PDFs, papers, lecture notes, slides",
-                    subtitle: "PDF, DOCX, PPTX, XLSX, HTML, EPUB — Microsoft MarkItDown writes Markdown beside the original"
+                    title: "Drop PDFs, Word, PowerPoint, Excel",
+                    subtitle: "Or choose files. Markdown is saved next to the original unless you pick another folder in Settings."
                 ) {
                     model.pickFiles()
                 } onDrop: { urls in
@@ -191,7 +248,7 @@ struct ConvertPanel: View {
                                         .font(.body.weight(.bold))
                                     Text(job.detail)
                                         .font(.caption)
-                                        .foregroundStyle(DeckTheme.muted)
+                                        .foregroundStyle(deck.muted)
                                         .lineLimit(2)
                                 }
                                 Spacer()
@@ -202,21 +259,18 @@ struct ConvertPanel: View {
                             }
                             .padding(12)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(DeckTheme.panel)
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(DeckTheme.line, lineWidth: 2))
+                            .background(deck.panel)
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(deck.line, lineWidth: deck.border))
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                     }
                 }
-
-                Text("Keep the original file. Markdown is for search and asking a chapter.")
-                    .font(.caption)
-                    .foregroundStyle(DeckTheme.muted)
             }
             .padding(24)
             .frame(maxWidth: 760, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .background(deck.page)
     }
 
     private func icon(for status: ConvertJob.Status) -> String {
@@ -230,16 +284,17 @@ struct ConvertPanel: View {
 
     private func color(for status: ConvertJob.Status) -> Color {
         switch status {
-        case .queued: return DeckTheme.muted
-        case .running: return DeckTheme.cyan
-        case .done: return Color(red: 0.23, green: 0.41, blue: 0.25)
-        case .failed: return Color(red: 0.54, green: 0.23, blue: 0.17)
+        case .queued: return deck.muted
+        case .running: return deck.cyan
+        case .done: return Color(hex: "3a6840")
+        case .failed: return Color(hex: "8a3a2c")
         }
     }
 }
 
 struct LibraryPanel: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
 
     private var selected: LibraryItem? {
         model.library.first(where: { $0.id == model.selectedLibraryID })
@@ -273,67 +328,44 @@ struct LibraryPanel: View {
 
     var body: some View {
         HSplitView {
-            ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(model.library) { item in
-                        Button {
-                            model.selectLibrary(item)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("MARKDOWN")
-                                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                                        .foregroundStyle(DeckTheme.cyan)
-                                    Text(item.title)
-                                        .font(.body.weight(.bold))
-                                        .foregroundStyle(DeckTheme.ink)
-                                    Text(item.sourceName)
-                                        .font(.caption)
-                                        .foregroundStyle(DeckTheme.muted)
-                                }
-                                Spacer(minLength: 8)
-                                Image(systemName: "folder")
-                                    .foregroundStyle(DeckTheme.muted)
-                                    .onTapGesture { model.revealLibrary(item) }
+            List {
+                ForEach(model.library) { item in
+                    LibraryCard(item: item)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                model.removeLibrary(item)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
                             }
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(DeckTheme.panel)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(
-                                        model.selectedLibraryID == item.id ? DeckTheme.cyan : DeckTheme.line,
-                                        lineWidth: 2
-                                    )
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
-                        .buttonStyle(.plain)
                         .contextMenu {
+                            Button("Open") { model.selectLibrary(item) }
                             Button("Show in Finder") { model.revealLibrary(item) }
-                            if !item.sourcePath.isEmpty {
-                                Button("Show original") {
-                                    model.reveal(URL(fileURLWithPath: item.sourcePath))
-                                }
-                            }
+                            Divider()
+                            Button("Delete", role: .destructive) { model.removeLibrary(item) }
                         }
-                    }
                 }
-                .padding(12)
+                .onMove { model.moveLibrary(from: $0, to: $1) }
             }
-            .frame(minWidth: 220)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(deck.page)
+            .frame(minWidth: 240, idealWidth: 280)
 
             HSplitView {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Bookmarks")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(DeckTheme.cyan)
+                        .foregroundStyle(deck.cyan)
                         .padding(.horizontal, 12)
                         .padding(.top, 10)
                     if outline.isEmpty {
                         Text("No outline. Scanned PDFs need OCR first, or the source had no bookmarks/headings.")
                             .font(.caption)
-                            .foregroundStyle(DeckTheme.muted)
+                            .foregroundStyle(deck.muted)
                             .padding(12)
                     }
                     List(outline) { item in
@@ -347,11 +379,12 @@ struct LibraryPanel: View {
                         }
                         .buttonStyle(.plain)
                         .listRowBackground(Color.clear)
+                        .foregroundStyle(deck.ink)
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                 }
-                .background(DeckTheme.panel)
+                .background(deck.panel)
                 .frame(minWidth: 180, idealWidth: 220)
 
                 ScrollViewReader { proxy in
@@ -370,55 +403,104 @@ struct LibraryPanel: View {
                         }
                         .padding(20)
                     }
-                    .background(DeckTheme.field)
+                    .background(deck.field)
                     .onChange(of: model.scrollToLine) { _, line in
                         if let line {
-                            withAnimation {
-                                proxy.scrollTo(line, anchor: .top)
-                            }
+                            withAnimation { proxy.scrollTo(line, anchor: .top) }
                         }
                     }
                 }
             }
         }
+        .background(deck.page)
         .safeAreaInset(edge: .bottom) {
             AskStrip()
         }
     }
 }
 
+private struct LibraryCard: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
+    let item: LibraryItem
+
+    var body: some View {
+        Button {
+            model.selectLibrary(item)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.id == AppModel.guideID ? "GUIDE" : "MARKDOWN")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(deck.cyan)
+                    Text(item.title)
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(deck.ink)
+                        .multilineTextAlignment(.leading)
+                    Text(item.sourceName)
+                        .font(.caption)
+                        .foregroundStyle(deck.muted)
+                }
+                Spacer(minLength: 8)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(deck.panel)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(
+                        model.selectedLibraryID == item.id ? deck.cyan : deck.line,
+                        lineWidth: deck.border
+                    )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct AskStrip: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
+
+    private var hasResult: Bool { !model.askAnswer.isEmpty || !model.askError.isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(model.askHasKey ? "Your model · \(model.askModel)" : "Ask this chapter · from the file")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(DeckTheme.cyan)
+                    .foregroundStyle(deck.cyan)
                 Spacer()
-                Text(model.askChapter)
-                    .font(.caption)
-                    .foregroundStyle(DeckTheme.muted)
-                    .lineLimit(1)
+                Picker("Chapter", selection: Binding(
+                    get: { model.askChapter },
+                    set: { model.askChapter = $0 }
+                )) {
+                    Text("Entire file").tag("Entire file")
+                }
+                .labelsHidden()
+                .frame(maxWidth: 180)
             }
             HStack(spacing: 8) {
                 TextField("What does this chapter say about…", text: Binding(
                     get: { model.askQuestion },
                     set: { model.askQuestion = $0 }
                 ))
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .padding(8)
+                .background(deck.panel)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: deck.border))
                 .onSubmit { Task { await model.runAsk() } }
-                Button(model.askBusy ? "Asking…" : (!model.askAnswer.isEmpty || !model.askError.isEmpty) ? "Clear" : "Ask") {
-                    if !model.askAnswer.isEmpty || !model.askError.isEmpty {
+                Button(model.askBusy ? "Asking…" : hasResult ? "Clear" : "Ask") {
+                    if hasResult {
                         model.clearAsk()
                     } else {
                         Task { await model.runAsk() }
                     }
                 }
-                .disabled(model.askBusy || (model.askAnswer.isEmpty && model.askError.isEmpty && model.askQuestion.trimmingCharacters(in: .whitespaces).isEmpty))
+                .disabled(model.askBusy || (!hasResult && model.askQuestion.trimmingCharacters(in: .whitespaces).isEmpty))
                 .buttonStyle(.borderedProminent)
-                .tint(DeckTheme.navy)
+                .tint(deck.btn)
             }
             if !model.askError.isEmpty {
                 Text(model.askError).font(.caption).foregroundStyle(.orange)
@@ -437,7 +519,7 @@ private struct AskStrip: View {
                 if !model.askOpenAnswer.isEmpty {
                     Text("From the model — not in this file")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(DeckTheme.muted)
+                        .foregroundStyle(deck.muted)
                     ScrollView {
                         Text(model.askOpenAnswer)
                             .font(.body)
@@ -449,13 +531,14 @@ private struct AskStrip: View {
             }
         }
         .padding(12)
-        .background(DeckTheme.field)
-        .overlay(Rectangle().frame(height: 2).foregroundStyle(DeckTheme.line), alignment: .top)
+        .background(deck.field)
+        .overlay(Rectangle().frame(height: deck.border).foregroundStyle(deck.line), alignment: .top)
     }
 }
 
 struct EnginePanel: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
 
     var body: some View {
         Form {
@@ -546,7 +629,7 @@ struct EnginePanel: View {
                 }
             }
             Section("Actions") {
-                Button("Recheck") { Task { await model.bootstrap() } }
+                Button("Recheck converter") { Task { await model.bootstrap() } }
                 Button("Upgrade engine") { Task { await model.upgradeEngine() } }
                     .disabled(model.isBusy)
             }
@@ -561,11 +644,13 @@ struct EnginePanel: View {
         .formStyle(.grouped)
         .padding()
         .scrollContentBackground(.hidden)
-        .background(DeckTheme.page)
+        .background(deck.page)
+        .foregroundStyle(deck.ink)
     }
 }
 
 struct DropZone: View {
+    @Environment(\.deck) private var deck
     let title: String
     let subtitle: String
     var onClick: () -> Void
@@ -577,24 +662,24 @@ struct DropZone: View {
         VStack(spacing: 8) {
             Image(systemName: "doc.badge.arrow.up")
                 .font(.system(size: 36, weight: .medium))
-                .foregroundStyle(DeckTheme.cyan)
+                .foregroundStyle(deck.cyan)
             Text(title).font(.headline)
             Text(subtitle)
                 .font(.subheadline)
-                .foregroundStyle(DeckTheme.muted)
+                .foregroundStyle(deck.muted)
                 .multilineTextAlignment(.center)
             Button("Choose files", action: onClick)
                 .buttonStyle(.borderedProminent)
-                .tint(DeckTheme.navy)
+                .tint(deck.btn)
                 .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .padding(32)
-        .background(DeckTheme.panel)
+        .background(deck.panel)
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
-                .foregroundStyle(hovering ? DeckTheme.cyan : DeckTheme.line)
+                .foregroundStyle(hovering ? deck.cyan : deck.line)
         )
         .onDrop(of: [.fileURL], isTargeted: $hovering) { providers in
             let lock = NSLock()
@@ -624,17 +709,4 @@ struct DropZone: View {
             return true
         }
     }
-}
-
-enum DeckTheme {
-    static let navy = Color(red: 0.12, green: 0.29, blue: 0.45)
-    static let cyan = Color(red: 0, green: 0.63, blue: 0.89)
-    static let ink = Color(red: 0.17, green: 0.15, blue: 0.11)
-    static let muted = Color(red: 0.37, green: 0.34, blue: 0.29)
-    static let line = Color(red: 0.76, green: 0.68, blue: 0.57)
-    static let panel = Color(red: 0.90, green: 0.85, blue: 0.77)
-    static let field = Color(red: 0.93, green: 0.89, blue: 0.81)
-    static let page = Color(red: 0.84, green: 0.78, blue: 0.69)
-    static let accent = cyan
-    static let bg = page
 }

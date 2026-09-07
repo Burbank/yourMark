@@ -18,9 +18,9 @@ Keep the original PDF. Markdown is the working copy.
 
 The GUI never vendors the converter. It finds `markitdown` on this Mac; **Upgrade Engine** pulls the current PyPI release.
 
-**Requires:** macOS 14+. First launch installs Microsoft MarkItDown from PyPI if it is missing. Building from source needs Xcode.
+**Requires:** macOS 14+. Double-click **Install yourMark** on the disk image. First launch installs Microsoft MarkItDown from PyPI if it is missing. Building from source needs Xcode.
 
-If macOS blocks the download: right-click → Open, or run **If macOS blocks yourMark** on the disk image. The warning is Gatekeeper (not notarized yet) — not malware.
+If macOS says it could not verify the app: click **Done** (not Move to Bin), then double-click **If macOS blocks yourMark**, or right-click → Open. That warning is Gatekeeper (not notarized yet) — not malware.
 
 ---
 

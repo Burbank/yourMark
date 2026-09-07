@@ -1,17 +1,24 @@
 # Install yourMark
 
-## No Terminal (recommended)
+## Double-click (recommended)
 
 1. Download [yourMark.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.dmg).
-2. Drag **yourMark** into Applications.
-3. If macOS says it cannot verify the app, **do not Move to Bin**. Double-click **If macOS blocks yourMark** on the disk image. Or: right-click yourMark → **Open**. Or: System Settings → Privacy & Security → **Open Anyway**.
-4. Open yourMark. It installs **Microsoft MarkItDown** itself the first time (official PyPI package — not a copy inside the app).
+2. Open the disk image and **double-click Install yourMark**. That copies the app to Applications, clears the macOS quarantine flag, and launches it.
 
-macOS 14 or newer. The warning is Gatekeeper: this build is not notarized yet.
+### If macOS says it “could not verify” the app
+
+That dialog is Gatekeeper. This build is not notarized yet, so Apple cannot vouch for it. It is expected.
+
+1. Click **Done** — not **Move to Bin**.
+2. Double-click **If macOS blocks yourMark** on the disk image.
+3. Or: right-click yourMark → **Open**.
+4. Or: System Settings → Privacy & Security → **Open Anyway**.
+
+Then open yourMark. The first launch **installs Microsoft MarkItDown itself** (official PyPI package — not a copy inside the app). Needs the internet once.
+
+macOS 14 or newer.
 
 ## Homebrew (optional)
-
-Homebrew is not required. Use it if you already have brew:
 
 ```sh
 brew tap Burbank/yourMark
@@ -23,12 +30,17 @@ First launch still installs MarkItDown if it is missing.
 ## Terminal
 
 ```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv tool install 'markitdown[all]'
 git clone https://github.com/Burbank/yourMark.git
 cd yourMark
 chmod +x Scripts/Install.command
 ./Scripts/Install.command
+```
+
+The app installs MarkItDown on first launch. To do that step yourself:
+
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv tool install 'markitdown[all]'
 ```
 
 ## Uninstall
@@ -41,4 +53,4 @@ uv tool uninstall markitdown   # optional — only if you do not need MarkItDown
 
 ## Site
 
-[burbank.github.io/yourMark](https://burbank.github.io/yourMark/)
+Use the same program in the browser: [burbank.github.io/yourMark](https://burbank.github.io/yourMark/)

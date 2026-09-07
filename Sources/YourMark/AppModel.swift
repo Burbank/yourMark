@@ -17,6 +17,7 @@ final class AppModel {
     var appearance: String = UserDefaults.standard.string(forKey: "appearance") ?? "system"
     var errorMessage: String?
     var showHelp = false
+    var showSettings = false
     var jobs: [ConvertJob] = []
     var library: [LibraryItem] = []
     var selectedLibraryID: UUID?
@@ -56,6 +57,7 @@ final class AppModel {
         convertedDir = dir.appendingPathComponent("Converted", isDirectory: true)
         try? FileManager.default.createDirectory(at: convertedDir, withIntermediateDirectories: true)
         loadLibrary()
+        seedGuideIfNeeded()
         let stored = AskSecrets.load()
         askHasKey = !stored.isEmpty
         askKeyDraft = stored
@@ -82,9 +84,11 @@ final class AppModel {
         let status = await service.refreshStatus()
         enginePath = status.path
         engineVersion = status.version
-        statusText = status.path == nil ? "Engine not found" : "MarkItDown \(status.version)"
         if status.path == nil, !installingEngine {
+            statusText = "Installing Microsoft MarkItDown…"
             await installEngine()
+        } else if status.path != nil {
+            statusText = "MarkItDown \(status.version)"
         }
     }
 
@@ -99,8 +103,7 @@ final class AppModel {
             statusText = "MarkItDown \(engineVersion)"
         } catch {
             installLog = error.localizedDescription
-            errorMessage = "Could not install MarkItDown automatically.\n\n\(error.localizedDescription)"
-            statusText = "Engine missing"
+            statusText = "Converter not installed"
         }
     }
 
@@ -111,6 +114,132 @@ final class AppModel {
     }
 
     func clearError() { errorMessage = nil }
+
+    func selectTool(_ tool: AppTool) {
+        selectedTool = tool
+        showSettings = false
+        showHelp = false
+    }
+
+    func toggleSettings() {
+        showHelp = false
+        showSettings.toggle()
+    }
+
+    func toggleHelp() {
+        showSettings = false
+        showHelp.toggle()
+    }
+
+    static let guideID = UUID(uuidString: "00000000-0000-4000-8000-000000000001")!
+
+    var showInfoButton: Bool {
+        !library.contains(where: { $0.id == Self.guideID })
+    }
+
+    func removeLibrary(_ item: LibraryItem) {
+        if item.id == Self.guideID {
+            UserDefaults.standard.set(true, forKey: "dismissedGuide")
+            try? FileManager.default.removeItem(atPath: item.markdownPath)
+        }
+        library.removeAll { $0.id == item.id }
+        if selectedLibraryID == item.id {
+            if let next = library.first {
+                selectLibrary(next)
+            } else {
+                selectedLibraryID = nil
+                previewMarkdown = ""
+            }
+        }
+        saveLibrary()
+        startWatching()
+    }
+
+    func moveLibrary(from: IndexSet, to: Int) {
+        library.move(fromOffsets: from, toOffset: to)
+        saveLibrary()
+    }
+
+    private func seedGuideIfNeeded() {
+        if UserDefaults.standard.bool(forKey: "dismissedGuide") { return }
+        if library.contains(where: { $0.id == Self.guideID }) { return }
+        let url = convertedDir.appendingPathComponent("Getting started with yourMark.md")
+        try? Self.guideMarkdown.write(to: url, atomically: true, encoding: .utf8)
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+        let item = LibraryItem(
+            id: Self.guideID,
+            title: "Getting started with yourMark",
+            sourceName: "Guide",
+            markdownPath: url.path,
+            addedAt: Date.distantPast,
+            byteCount: Int64(values?.fileSize ?? 0),
+            bookmarks: [],
+            sourcePath: ""
+        )
+        library.insert(item, at: 0)
+        saveLibrary()
+        if selectedLibraryID == nil {
+            selectLibrary(item)
+        }
+    }
+
+    static let guideMarkdown = """
+    # Getting started with yourMark
+
+    Turn PDFs, Word, and slides into Markdown you can search, bookmark, and ask.
+
+    Swipe this card **to the left** when you are done — an **i** in the header keeps this same guide. Right-click a card for Open, Show in Finder, and Delete.
+
+    ## Why Markdown
+
+    A PDF is a picture of a page. Markdown is the words, in order, as plain text you can search and edit.
+
+    That is why it works so well with AI. A model can read a chapter, quote it, and tell you when the file is silent — instead of guessing at columns or a scan. You can paste one heading into Grok or ChatGPT, keep notes in Obsidian, or search a whole course. Tables stay tables. Headings stay an outline.
+
+    Keep the original PDF. Markdown is the working copy.
+
+    ## Convert
+
+    Open **Convert** and drop a PDF, Word, PowerPoint, or Excel file. yourMark asks Microsoft MarkItDown (the official PyPI package) to write Markdown. The first launch installs that converter for you — it is not frozen inside the app, so Microsoft’s updates still reach you.
+
+    ## Bookmarks
+
+    The Bookmarks pane is the PDF outline when the file has one, otherwise headings. Click to jump, like Preview.
+
+    ## Tables and figures
+
+    Real tables become Markdown tables. Pictures sit in reading order, not the original page x/y. Scans need OCR extras.
+
+    ## Library cards
+
+    Swipe a card left to delete, or right-click for Open, Show in Finder, and Delete. **Show in Finder** selects the file. If you change that file, the library updates. Drag to rearrange.
+
+    ## Ask chapter
+
+    Open a file, pick a heading, and ask. The answer comes only from that chapter. With your own key (Settings) you can also ask the entire file.
+
+    If the chapter does not provide an answer, **Search the web** opens a browser tab with the question, the chapter, and that sentence.
+
+    ## Settings
+
+    Pick the model, paste your API key, and choose where converted files go:
+
+    - **Next to the original PDF**
+    - **yourMark library folder**
+    - **Choose a folder** — opens Finder
+
+    The key stays on this Mac, in the Keychain.
+
+    Optionally (off by default): if the chapter does not provide an answer, also show a **model summary** below, labelled as not from the file.
+
+    ## Themes
+
+    **SYSTEM** follows the computer. **BRIGHT** is indoor paper. **DIM** is the dark deck.
+
+    ## After this file
+
+    Swipe this card left to delete it. The **i** in the header shows this guide whenever you need it.
+    """
 
     func persistAskSettings() {
         UserDefaults.standard.set(askProvider, forKey: "askProvider")

@@ -21,11 +21,13 @@ struct YourMarkApp: App {
                     .keyboardShortcut("o", modifiers: .command)
             }
             CommandMenu("Settings") {
+                Button("Settings") { model.toggleSettings() }
+                    .keyboardShortcut(",", modifiers: .command)
                 Button("Upgrade MarkItDown") {
                     Task { await model.upgradeEngine() }
                 }
-                Button("Recheck Engine") {
-                    Task { await model.bootstrap() }
+                Button("Install converter") {
+                    Task { await model.installEngine() }
                 }
             }
             CommandGroup(replacing: .help) {
@@ -36,11 +38,10 @@ struct YourMarkApp: App {
 
         Window("yourMark Help", id: "help") {
             HelpView()
+                .environment(model)
+                .frame(minWidth: 480, minHeight: 400)
         }
         .defaultSize(width: 560, height: 620)
-        .onChange(of: model.showHelp) { _, show in
-            if show { model.showHelp = false }
-        }
     }
 }
 

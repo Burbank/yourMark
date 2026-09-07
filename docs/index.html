@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>yourMark — a Mac window for Microsoft MarkItDown</title>
   <meta name="description" content="yourMark is a Mac app that sits in front of Microsoft MarkItDown. Drop a PDF, get Markdown with bookmarks, tables, and Ask a chapter. Conversion stays on this Mac." />
-  <link rel="icon" href="favicon.svg" />
+  <link rel="icon" type="image/png" href="favicon-32.png" />
   <meta property="og:title" content="yourMark" />
   <meta property="og:description" content="A Mac window for Microsoft MarkItDown — PDFs to Markdown, locally." />
   <meta property="og:image" content="og.jpg" />
@@ -43,11 +43,12 @@
       margin: .45rem 0 0;
     }
     .mark {
-      display: grid; place-items: center;
       width: 2.4rem; height: 2.4rem;
       border-radius: 8px;
-      background: var(--navy); color: #fff; font-weight: 700;
+      overflow: hidden;
+      background: #fff;
     }
+    .mark img { width: 100%; height: 100%; display: block; }
     h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); letter-spacing: -0.03em; margin: 0; }
     .lede { font-size: 1.12rem; color: var(--muted); max-width: 40rem; margin: .85rem 0 0; }
     .row { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.35rem 0 1.8rem; }
@@ -113,7 +114,7 @@
   <div class="wrap">
     <div class="kicker">Mac app · local files</div>
     <div class="brand">
-      <span class="mark" aria-hidden="true">y</span>
+      <span class="mark" aria-hidden="true"><img src="icon.png" alt="" /></span>
       <h1>yourMark</h1>
     </div>
     <p class="lede">
@@ -167,9 +168,9 @@
       <h2>Install (no Terminal)</h2>
       <ol>
         <li>Download the disk image.</li>
-        <li>Drag <strong>yourMark</strong> into Applications.</li>
-        <li>On that same disk, double-click <strong>Install Engine</strong> — that installs Microsoft MarkItDown once.</li>
-        <li>Open yourMark. If macOS warns: System Settings → Privacy & Security → Open Anyway.</li>
+        <li>Double-click <strong>Install yourMark</strong> — copies the app to Applications and opens it.</li>
+        <li>If macOS says it could not verify the app, click <strong>Done</strong> (not Move to Bin), then double-click <strong>If macOS blocks yourMark</strong>, or System Settings → Privacy & Security → Open Anyway.</li>
+        <li>First launch installs Microsoft MarkItDown itself (needs the internet once).</li>
       </ol>
     </section>
 
