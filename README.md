@@ -8,6 +8,8 @@ The GUI never vendors the converter: it discovers `markitdown` on PATH / uv and 
 
 Keep your original files. Converted Markdown is for search, bookmarks, and asking a chapter.
 
+**Ask:** paste your own xAI / OpenAI / OpenAI-compatible API key under Engine. It lives in the Mac Keychain and is sent only to that provider when you ask.
+
 ---
 
 ## What conversion actually keeps

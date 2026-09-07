@@ -19,8 +19,19 @@ final class AppModel {
     var previewMarkdown: String = ""
     var lastUpgradeLog: String = ""
     var scrollToLine: Int?
+    var askProvider: String = UserDefaults.standard.string(forKey: "askProvider") ?? "xai"
+    var askModel: String = UserDefaults.standard.string(forKey: "askModel") ?? "grok-4.5"
+    var askBaseURL: String = UserDefaults.standard.string(forKey: "askBaseURL") ?? "https://api.x.ai/v1"
+    var askKeyDraft: String = ""
+    var askHasKey = false
+    var askQuestion = ""
+    var askChapter = "Entire file"
+    var askAnswer = ""
+    var askBusy = false
+    var askError = ""
 
     let service = MarkItDownService()
+    private let askService = AskService()
     private let libraryURL: URL
 
     init() {
@@ -30,6 +41,9 @@ final class AppModel {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         libraryURL = dir.appendingPathComponent("library.json")
         loadLibrary()
+        let stored = AskSecrets.load()
+        askHasKey = !stored.isEmpty
+        askKeyDraft = stored
     }
 
     func bootstrap() async {
@@ -40,6 +54,50 @@ final class AppModel {
     }
 
     func clearError() { errorMessage = nil }
+
+    func persistAskSettings() {
+        UserDefaults.standard.set(askProvider, forKey: "askProvider")
+        UserDefaults.standard.set(askModel, forKey: "askModel")
+        UserDefaults.standard.set(askBaseURL, forKey: "askBaseURL")
+        AskSecrets.save(askKeyDraft)
+        askHasKey = !AskSecrets.load().isEmpty
+        statusText = askHasKey ? "Ask key saved in Keychain" : "Ask key cleared"
+    }
+
+    func clearAskKey() {
+        askKeyDraft = ""
+        AskSecrets.delete()
+        askHasKey = false
+        statusText = "Ask key cleared"
+    }
+
+    func runAsk() async {
+        let q = askQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+        askBusy = true
+        askError = ""
+        askAnswer = ""
+        defer { askBusy = false }
+        do {
+            let excerpt = AskService.excerpt(
+                markdown: previewMarkdown,
+                heading: askChapter
+            )
+            askAnswer = try await askService.ask(
+                question: q,
+                title: library.first(where: { $0.id == selectedLibraryID })?.title ?? "Document",
+                excerpt: excerpt,
+                settings: .init(
+                    provider: askProvider,
+                    model: askModel,
+                    baseURL: askBaseURL,
+                    apiKey: AskSecrets.load()
+                )
+            )
+        } catch {
+            askError = error.localizedDescription
+        }
+    }
 
     func openIncoming(_ urls: [URL]) {
         let allowed = urls.filter { Self.isConvertible($0) }
@@ -151,6 +209,7 @@ final class AppModel {
     }
 
     func jumpToBookmark(_ bookmark: ManualBookmark) {
+        askChapter = bookmark.title
         let lines = previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false)
         let needle = bookmark.title.trimmingCharacters(in: .whitespaces)
         if let idx = lines.firstIndex(where: {

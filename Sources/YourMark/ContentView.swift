@@ -266,7 +266,7 @@ struct LibraryPanel: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 2) {
                             let lines = model.previewMarkdown.isEmpty
-                                ? ["Select a converted manual."]
+                                ? ["Select a converted file."]
                                 : model.previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
                             ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                                 Text(line.isEmpty ? " " : line)
@@ -288,6 +288,58 @@ struct LibraryPanel: View {
                 }
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            AskStrip()
+        }
+    }
+}
+
+private struct AskStrip: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(model.askHasKey ? "Ask this chapter" : "Ask needs an API key (Engine)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(DeckTheme.accent)
+                Spacer()
+                if model.askHasKey {
+                    Text(model.askChapter)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            HStack(spacing: 8) {
+                TextField("What does this chapter say about…", text: Binding(
+                    get: { model.askQuestion },
+                    set: { model.askQuestion = $0 }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .disabled(!model.askHasKey)
+                .onSubmit { Task { await model.runAsk() } }
+                Button(model.askBusy ? "Asking…" : "Ask") {
+                    Task { await model.runAsk() }
+                }
+                .disabled(!model.askHasKey || model.askBusy || model.askQuestion.trimmingCharacters(in: .whitespaces).isEmpty)
+                .buttonStyle(.borderedProminent)
+            }
+            if !model.askError.isEmpty {
+                Text(model.askError).font(.caption).foregroundStyle(.orange)
+            }
+            if !model.askAnswer.isEmpty {
+                ScrollView {
+                    Text(model.askAnswer)
+                        .font(.body)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 160)
+            }
+        }
+        .padding(12)
+        .background(.bar)
     }
 }
 
@@ -304,6 +356,45 @@ struct EnginePanel: View {
                 }
                 Text("The GUI does not pin or vendor the converter. Upgrade pulls the current package from PyPI.")
                     .foregroundStyle(.secondary)
+            }
+            Section("Ask AI") {
+                Picker("Provider", selection: Binding(
+                    get: { model.askProvider },
+                    set: {
+                        model.askProvider = $0
+                        if $0 == "xai" {
+                            model.askBaseURL = "https://api.x.ai/v1"
+                            if model.askModel.isEmpty { model.askModel = "grok-4.5" }
+                        } else if $0 == "openai" {
+                            model.askBaseURL = "https://api.openai.com/v1"
+                            if model.askModel == "grok-4.5" { model.askModel = "gpt-4o" }
+                        }
+                    }
+                )) {
+                    Text("xAI (Grok)").tag("xai")
+                    Text("OpenAI").tag("openai")
+                    Text("Custom").tag("custom")
+                }
+                TextField("Model", text: Binding(
+                    get: { model.askModel },
+                    set: { model.askModel = $0 }
+                ))
+                if model.askProvider == "custom" {
+                    TextField("Base URL", text: Binding(
+                        get: { model.askBaseURL },
+                        set: { model.askBaseURL = $0 }
+                    ))
+                }
+                SecureField("API key", text: Binding(
+                    get: { model.askKeyDraft },
+                    set: { model.askKeyDraft = $0 }
+                ))
+                Text("Stored in the Keychain on this Mac. Sent only to the provider you pick when you Ask.")
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Save key") { model.persistAskSettings() }
+                    Button("Clear key", role: .destructive) { model.clearAskKey() }
+                }
             }
             Section("What you get") {
                 LabeledContent("Tables") {

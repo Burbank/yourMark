@@ -30,6 +30,11 @@ struct HelpView: View {
                 }
 
                 Group {
+                    Text("Ask chapter").font(.headline)
+                    Text("Put your own AI key under Engine (xAI, OpenAI, or an OpenAI-compatible URL). It is stored in the Keychain. Ask uses only the current chapter of the converted Markdown — it will not invent facts that are not in that excerpt.")
+                }
+
+                Group {
                     Text("Install the engine").font(.headline)
                     Text("uv tool install 'markitdown[all]'\nmarkitdown --version")
                         .font(.body.monospaced())
