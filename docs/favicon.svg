@@ -1,6 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="7" fill="#f4f6f8"/>
-  <path fill="#0b4aa2" d="M5.5 25V8.5l9.2 11.2V25z"/>
-  <path fill="#1a8cff" d="M5.5 8.5 16.2 5l6.6 9.2-8.1 5.5z"/>
-  <path fill="#052e63" d="M21.8 6.2h4.7V25h-8.2v-8.4z"/>
+  <rect width="32" height="32" rx="7" fill="#ffffff"/>
+  <!-- right stem -->
+  <path fill="#071f45" d="M20.8 6.2h5.6v19.4h-7.2v-8.6c2.2-2.4 3.2-6.6 1.6-10.8z"/>
+  <!-- left ribbon -->
+  <path fill="#0a3f8f" d="M5.6 25.4V8.6L16.2 5.2l2 3.2-8.4 10.6v6.4H5.6z"/>
+  <!-- bright fold -->
+  <path fill="#1a86ff" d="M5.6 8.6 16.2 5.2l7.4 10-9.2 6.4z"/>
+  <!-- fold shadow -->
+  <path fill="#0b4aa8" d="M5.6 8.6l8.6 12.6.8-.6L5.6 8.6z"/>
 </svg>

@@ -1,7 +1,7 @@
 # yourMark
 
 <p align="center">
-  <img src="Resources/AppIcon.png" width="128" height="128" alt="yourMark">
+  <img src="docs/icon.png" width="112" height="112" alt="yourMark">
 </p>
 
 Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, and Excel to Markdown **on this Mac**.
