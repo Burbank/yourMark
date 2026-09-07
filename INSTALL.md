@@ -20,6 +20,8 @@ That dialog is Gatekeeper. This build is not notarized yet, so Apple cannot vouc
 5. Click **Open Anyway** next to *“yourMark.app” was blocked…*
 6. Confirm **Open Anyway**.
 
+The disk image also has a **Privacy & Security Settings** link that opens this same pane.
+
 <p align="center">
   <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Security → Open Anyway">
 </p>
