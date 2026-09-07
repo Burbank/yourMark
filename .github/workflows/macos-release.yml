@@ -2,15 +2,12 @@ name: Mac app
 
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
   contents: write
-
-concurrency:
-  group: dmg-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   dmg:
@@ -30,26 +27,23 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: yourMark-dmg
-          path: dist/yourMark*.dmg
+          path: |
+            dist/yourMark-*.dmg
+            dist/yourMark.dmg
       - name: Attach to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
-          TAG="${{ github.ref_name }}"
-          NOTES="$(cat <<'EOF'
-Drag **yourMark** onto **Applications** (follow the arrow).
-
-If macOS blocks it: click **Done** (not Move to Bin), then **Privacy & Security Settings** on the disk → **Open Anyway**.
-
-First launch installs Microsoft MarkItDown from PyPI.
-EOF
-)"
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            echo "Not a tag; skipping release upload"
+            exit 0
+          fi
+          NOTES="Drag yourMark onto Applications (follow the arrow). If macOS blocks it: Done, then Privacy and Security Settings on the disk, then Open Anyway. First launch installs Microsoft MarkItDown from PyPI."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/yourMark-*.dmg dist/yourMark.dmg --clobber
           else
-            gh release create "$TAG" dist/yourMark-*.dmg dist/yourMark.dmg \
-              --title "yourMark $TAG" \
-              --notes "$NOTES" \
-              --latest
+            gh release create "$TAG" dist/yourMark-*.dmg dist/yourMark.dmg --title "yourMark $TAG" --notes "$NOTES"
           fi
+          gh release edit "$TAG" --latest
