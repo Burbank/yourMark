@@ -317,9 +317,9 @@ struct ConvertPanel: View {
                             .controlSize(.small)
                             .padding(.top, 2)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("OCR first — this takes a little longer")
+                            Text("Layout OCR first — this takes a little longer")
                                 .font(.body.weight(.bold))
-                            Text("This PDF is a scan (a picture of a page, no text layer). yourMark writes the words first, then Microsoft MarkItDown converts. Page pictures are kept so tables, arrows, and diagrams still show.")
+                            Text("This PDF is a scan. yourMark uses IBM Docling to recover tables, columns, and figures (not just the words). First time it may download models. Microsoft MarkItDown still handles normal PDFs.")
                                 .font(.caption)
                                 .foregroundStyle(deck.muted)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -720,17 +720,25 @@ struct EnginePanel: View {
                 }
             }
             Section("Scanned PDFs") {
-                Toggle("OCR scans before MarkItDown", isOn: Binding(
+                Toggle("Layout OCR for scans", isOn: Binding(
                     get: { model.ocrEnabled },
                     set: {
                         model.ocrEnabled = $0
                         UserDefaults.standard.set($0, forKey: "ocrEnabled")
                     }
                 ))
-                Text("Microsoft MarkItDown only reads a text layer. A scan is a picture of a page, so tables, arrows, and photos would vanish. OCR writes the words first — that takes a little longer — then MarkItDown runs. Page pictures are kept so diagrams still show.")
+                Text("A scan is a picture of a page. OCRmyPDF and Apple Live Text only read words — they do not rebuild tables or columns. For scans, yourMark uses IBM Docling (layout, TableFormer, figures). That takes a little longer. Normal PDFs still go to Microsoft MarkItDown. If Docling is missing, we fall back to OCRmyPDF / Live Text and keep page pictures.")
                     .foregroundStyle(.secondary)
-                LabeledContent("OCRmyPDF") {
-                    Text(OcrService.ocrmypdfPath() ?? "Not installed — using Apple Live Text")
+                LabeledContent("Docling") {
+                    Text(OcrService.doclingPath() ?? "Installed on first scan via uv")
+                        .textSelection(.enabled)
+                }
+                Button("Install Docling (layout models)") {
+                    Task { await model.installDocling() }
+                }
+                .disabled(model.installingEngine)
+                LabeledContent("OCRmyPDF fallback") {
+                    Text(OcrService.ocrmypdfPath() ?? "Not installed — Apple Live Text")
                         .textSelection(.enabled)
                 }
                 Button("Install OCRmyPDF via Homebrew") {

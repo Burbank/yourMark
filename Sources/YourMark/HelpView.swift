@@ -28,7 +28,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Scanned PDFs / OCR").font(.headline)
-                    Text("MarkItDown uses pdfminer: it only reads words that are already in the file. A scan has none, so conversion used to come back empty. yourMark now detects that and OCRs first — you will see “OCR first — this takes a little longer.” If OCRmyPDF (Tesseract) is installed it writes a searchable PDF and MarkItDown reads that — original pixels stay. If not, Apple Live Text does the same job. Page pictures are saved next to the Markdown so tables, arrows, and diagrams still show as images, with the OCR text underneath. MuPDF/PyMuPDF is a PDF renderer, not an OCR engine; we do not use it for this step.")
+                    Text("A scan has no text layer, so MarkItDown (pdfminer) cannot see tables, columns, or figures. yourMark detects that and runs IBM Docling instead — layout, TableFormer tables, reading order, pictures. That takes a little longer; the first run may download models. OCRmyPDF and Apple Live Text only read words; they are the fallback if Docling is missing, and we still keep page pictures. Normal PDFs still go to Microsoft MarkItDown. MuPDF is a renderer, not layout OCR.")
                 }
 
                 Group {

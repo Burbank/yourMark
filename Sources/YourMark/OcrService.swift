@@ -3,13 +3,12 @@ import Foundation
 import PDFKit
 import Vision
 
-/// Pre-step before Microsoft MarkItDown.
-/// MarkItDown (pdfminer) only reads a text layer. Scans have none, so tables,
-/// arrows, and pictures vanish. This:
-///   1. Detects a scan (almost no text on the first pages).
-///   2. Prefers OCRmyPDF (Tesseract) → searchable PDF, original pixels kept.
-///   3. Falls back to Apple Live Text (Vision) — already on the Mac.
-///   4. Writes page pictures next to the Markdown so diagrams still show.
+/// Scans have no text layer, so Microsoft MarkItDown (pdfminer) cannot see
+/// tables, columns, or figures.
+///   1. Detect a scan (almost no text on the first pages).
+///   2. Prefer IBM Docling: layout, TableFormer tables, pictures.
+///   3. Fall back to OCRmyPDF (words only) then MarkItDown.
+///   4. Last resort: Apple Live Text + page pictures.
 enum OcrService {
     static let figureFolderSuffix = "-figures"
 
@@ -35,6 +34,116 @@ enum OcrService {
         ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
+
+    static func doclingPath() -> String? {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let candidates = [
+            "\(home)/.local/bin/docling",
+            "/opt/homebrew/bin/docling",
+            "/usr/local/bin/docling",
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    static func uvPath() -> String? {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return [
+            "\(home)/.local/bin/uv",
+            "/opt/homebrew/bin/uv",
+            "/usr/local/bin/uv",
+        ].first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    /// Layout-aware convert for scans. Docling (IBM, MIT) does tables, columns,
+    /// reading order, and figures. MarkItDown cannot — it only reads a text layer.
+    static func layoutMarkdown(
+        from pdf: URL,
+        to markdown: URL,
+        onStatus: @escaping @Sendable (String) -> Void
+    ) async -> Bool {
+        onStatus("Layout OCR with Docling — tables and columns. This takes a little longer.")
+        let script = writeScanScript()
+        guard let pythonCmd = layoutPython() else {
+            onStatus("Docling is not installed yet")
+            return false
+        }
+        do {
+            _ = try await run(pythonCmd.exe, pythonCmd.args + [script.path, pdf.path, markdown.path])
+            return FileManager.default.fileExists(atPath: markdown.path)
+                && !markdownLooksEmpty(markdown)
+        } catch {
+            onStatus("Docling failed — falling back. \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    static func installDocling() async throws -> String {
+        guard let uv = uvPath() else {
+            throw NSError(
+                domain: "OcrService",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "uv is not installed. Convert a normal PDF first so yourMark can install it, then try again."]
+            )
+        }
+        return try await run(uv, ["tool", "install", "--force", "docling"])
+    }
+
+    private static func layoutPython() -> (exe: String, args: [String])? {
+        if let uv = uvPath() {
+            return (uv, ["run", "--with", "docling", "python3"])
+        }
+        return nil
+    }
+
+    private static func writeScanScript() -> URL {
+        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("yourMark/scan_layout.py")
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? scanLayoutPy.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    private static let scanLayoutPy = #"""
+import sys
+from pathlib import Path
+
+src, dst = Path(sys.argv[1]), Path(sys.argv[2])
+
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+
+opts = PdfPipelineOptions()
+opts.do_ocr = True
+opts.do_table_structure = True
+try:
+    opts.table_structure_options.do_cell_matching = True
+except Exception:
+    pass
+opts.generate_picture_images = True
+try:
+    opts.images_scale = 1.4
+except Exception:
+    pass
+
+try:
+    from docling.datamodel.pipeline_options import OcrMacOptions
+    opts.ocr_options = OcrMacOptions()
+except Exception:
+    pass
+
+conv = DocumentConverter(
+    format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}
+)
+result = conv.convert(str(src))
+dst.parent.mkdir(parents=True, exist_ok=True)
+try:
+    from docling_core.types.doc import ImageRefMode
+    md = result.document.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+except Exception:
+    md = result.document.export_to_markdown()
+dst.write_text(md, encoding="utf-8")
+"""#
 
     /// Returns a PDF MarkItDown can read. Original file is never overwritten.
     static func searchablePDF(
