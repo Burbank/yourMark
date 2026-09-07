@@ -108,7 +108,7 @@ enum PdfSidecar {
     }
 
     static func insertPageComments(_ markdown: String, pdf: URL?) -> String {
-        var text = promotePageBreaks(markdown)
+        let text = promotePageBreaks(markdown)
         let existing = pageCommentMap(
             text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         )
@@ -157,7 +157,7 @@ enum PdfSidecar {
         markdown: String,
         pdf: URL?
     ) -> (text: String, bookmarks: [ManualBookmark]) {
-        var text = insertPageComments(markdown, pdf: pdf)
+        let text = insertPageComments(markdown, pdf: pdf)
         guard !bookmarks.isEmpty else {
             return (text, bookmarks)
         }
