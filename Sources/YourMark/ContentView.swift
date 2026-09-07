@@ -542,6 +542,8 @@ struct LibraryPanel: View {
 
     @AppStorage("splitLibrary") private var libFrac = 0.20
     @AppStorage("splitMarks") private var marksFrac = 0.15
+    @AppStorage("previewPointSize") private var previewPointSize = 16.0
+    @AppStorage("previewRendered") private var previewRendered = true
 
     var body: some View {
         GeometryReader { geo in
@@ -656,47 +658,168 @@ struct LibraryPanel: View {
     }
 
     private var markdownColumn: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(markdownSections) { section in
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(Array(section.lines.enumerated()), id: \.offset) { _, line in
-                                markdownLine(line)
+        VStack(spacing: 0) {
+            markdownHeader
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: previewRendered ? 6 : 2) {
+                        ForEach(markdownSections) { section in
+                            VStack(alignment: .leading, spacing: previewRendered ? 4 : 2) {
+                                ForEach(Array(section.lines.enumerated()), id: \.offset) { _, line in
+                                    markdownLine(line)
+                                }
                             }
+                            .id(section.id)
                         }
-                        .id(section.id)
                     }
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(20)
-            }
-            .background(deck.field)
-            .onChange(of: model.scrollToLine) { _, line in
-                guard let line else { return }
-                let target = markdownSections.last(where: { $0.id <= line })?.id ?? line
-                withAnimation { proxy.scrollTo(target, anchor: .top) }
+                .background(deck.field)
+                .onChange(of: model.scrollToLine) { _, line in
+                    guard let line else { return }
+                    let target = markdownSections.last(where: { $0.id <= line })?.id ?? line
+                    withAnimation { proxy.scrollTo(target, anchor: .top) }
+                }
             }
         }
     }
 
+    private var markdownHeader: some View {
+        HStack(spacing: 10) {
+            Text(selected?.title ?? "Markdown")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(deck.cyan)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Button {
+                previewPointSize = max(12, previewPointSize - 1)
+            } label: {
+                Text("A").font(.system(size: 10, weight: .bold))
+            }
+            .buttonStyle(.plain)
+            .help("Smaller text")
+            Slider(value: $previewPointSize, in: 12...26, step: 1)
+                .frame(width: 88)
+                .controlSize(.mini)
+                .help("Text size")
+            Button {
+                previewPointSize = min(26, previewPointSize + 1)
+            } label: {
+                Text("A").font(.system(size: 16, weight: .bold))
+            }
+            .buttonStyle(.plain)
+            .help("Larger text")
+            Button(previewRendered ? "Rendered" : "Plain") {
+                previewRendered.toggle()
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(RoundedRectangle(cornerRadius: 6).fill(previewRendered ? deck.btn : deck.field))
+            .foregroundStyle(previewRendered ? deck.btnText : deck.ink)
+            .help("Rendered shows headings. Plain shows the raw Markdown.")
+            if let item = selected {
+                Button("Finder") {
+                    model.revealLibrary(item)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .help("Show this file in Finder")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(deck.panel)
+        .overlay(Rectangle().frame(height: deck.border).foregroundStyle(deck.line), alignment: .bottom)
+    }
+
     @ViewBuilder
     private func markdownLine(_ line: String) -> some View {
+        let size = CGFloat(previewPointSize)
         if let img = markdownImage(line, base: model.previewBaseURL) {
             VStack(alignment: .leading, spacing: 4) {
                 PreviewPicture(url: img.url)
-                if !img.alt.isEmpty {
+                if !img.alt.isEmpty, previewRendered {
                     Text(img.alt)
-                        .font(.caption)
+                        .font(.system(size: max(10, size - 4)))
                         .foregroundStyle(deck.muted)
                 }
             }
             .padding(.vertical, 6)
-        } else {
+        } else if !previewRendered {
             Text(line.isEmpty ? " " : line)
-                .font(.body)
+                .font(.system(size: size, design: .monospaced))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else if let page = pageMark(line) {
+            HStack(spacing: 8) {
+                Rectangle().fill(deck.line).frame(height: 1)
+                Text("Page \(page)")
+                    .font(.system(size: max(10, size - 4), weight: .semibold, design: .monospaced))
+                    .foregroundStyle(deck.muted)
+                Rectangle().fill(deck.line).frame(height: 1)
+            }
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+        } else if line.trimmingCharacters(in: .whitespaces).hasPrefix("<!--") {
+            EmptyView()
+        } else if let heading = atxHeading(line) {
+            Text(heading.text)
+                .font(.system(size: headingSize(heading.level, base: size), weight: heading.level <= 2 ? .bold : .semibold, design: .rounded))
+                .foregroundStyle(deck.ink)
+                .textSelection(.enabled)
+                .padding(.top, heading.level <= 2 ? 14 : 8)
+                .padding(.bottom, 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else if let callout = wholeLineBold(line) {
+            Text(callout)
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(deck.ink)
+                .textSelection(.enabled)
+                .padding(.top, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            inlineMarkdown(line, size: size)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func headingSize(_ level: Int, base: CGFloat) -> CGFloat {
+        switch level {
+        case 1: return base + 10
+        case 2: return base + 7
+        case 3: return base + 4
+        case 4: return base + 2
+        default: return base + 1
+        }
+    }
+
+    private func inlineMarkdown(_ line: String, size: CGFloat) -> Text {
+        if line.isEmpty { return Text(" ").font(.system(size: size)) }
+        var text = Text("")
+        var rest = line
+        while let start = rest.range(of: "**") {
+            let before = String(rest[rest.startIndex..<start.lowerBound])
+            if !before.isEmpty {
+                text = text + Text(before).font(.system(size: size))
+            }
+            let afterStart = start.upperBound
+            if let end = rest.range(of: "**", range: afterStart..<rest.endIndex) {
+                let bold = String(rest[afterStart..<end.lowerBound])
+                text = text + Text(bold).font(.system(size: size, weight: .semibold))
+                rest = String(rest[end.upperBound...])
+            } else {
+                text = text + Text("**" + String(rest[afterStart...])).font(.system(size: size))
+                rest = ""
+            }
+        }
+        if !rest.isEmpty {
+            text = text + Text(rest).font(.system(size: size))
+        }
+        return text.foregroundStyle(deck.ink)
     }
 
     private var markdownSections: [PreviewSection] {
@@ -705,6 +828,36 @@ struct LibraryPanel: View {
         }
         return model.previewSections
     }
+}
+
+private func atxHeading(_ line: String) -> (level: Int, text: String)? {
+    let t = line.trimmingCharacters(in: .whitespaces)
+    guard t.hasPrefix("#") else { return nil }
+    var n = 0
+    var i = t.startIndex
+    while i < t.endIndex, t[i] == "#", n < 6 {
+        n += 1
+        i = t.index(after: i)
+    }
+    guard n > 0, i < t.endIndex, t[i].isWhitespace else { return nil }
+    let text = t[i...].trimmingCharacters(in: .whitespaces)
+    guard !text.isEmpty else { return nil }
+    return (n, text)
+}
+
+private func wholeLineBold(_ line: String) -> String? {
+    let t = line.trimmingCharacters(in: .whitespaces)
+    guard t.hasPrefix("**"), t.hasSuffix("**"), t.count > 4 else { return nil }
+    let inner = String(t.dropFirst(2).dropLast(2))
+    if inner.contains("**") { return nil }
+    return inner
+}
+
+private func pageMark(_ line: String) -> String? {
+    let t = line.trimmingCharacters(in: .whitespaces)
+    guard t.hasPrefix("<!-- page "), t.hasSuffix("-->") else { return nil }
+    let inner = t.dropFirst(10).dropLast(3).trimmingCharacters(in: .whitespaces)
+    return inner.isEmpty ? nil : inner
 }
 
 private func markdownImage(_ line: String, base: URL?) -> (alt: String, url: URL)? {
