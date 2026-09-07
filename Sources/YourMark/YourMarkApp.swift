@@ -63,6 +63,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for window in NSApp.windows {
             window.tabbingMode = .disallowed
         }
+        if MoveToApplications.relocateIfNeeded(opening: pending) {
+            return
+        }
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }

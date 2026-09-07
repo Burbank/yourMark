@@ -6,7 +6,7 @@
 
 Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, Excel, pictures, and ZIP archives to Markdown **on this Mac**.
 
-**[Download yourMark-0.3.28.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.28.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
+**[Download yourMark-0.3.29.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.29.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
 
 ## Why Markdown
 
@@ -57,7 +57,7 @@ yourMark is a Mac window, not a terminal. Three rooms, three looks. If this alre
 
 The GUI never vendors the converter. It finds `markitdown` on this Mac; **Upgrade Engine** pulls the current PyPI release.
 
-**Requires:** macOS 14+. Open the disk image and **drag yourMark onto Applications** (follow the arrow). First launch installs Microsoft MarkItDown from PyPI if it is missing. Building from source needs Xcode.
+**Requires:** macOS 14+. Open the disk image and **drag yourMark onto Applications** (follow the arrow). Do not keep working from the disk — if you do, yourMark will offer to copy itself into Applications so ejecting the disk is safe. First launch installs Microsoft MarkItDown from PyPI if it is missing. Building from source needs Xcode.
 
 If macOS says it could not verify the app: click **Done** (not Move to Bin), then open **If Apple blocks it** on the disk (a help page in Safari, not a program), or right-click yourMark → Open. That warning is Gatekeeper (not notarized yet) — not malware.
 
