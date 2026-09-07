@@ -116,7 +116,7 @@ enum PdfSidecar {
         guard let pdf, pdf.pathExtension.lowercased() == "pdf",
               let doc = PDFDocument(url: pdf), doc.pageCount > 0 else { return text }
         var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        let deadline = Date().addingTimeInterval(10)
+        let deadline = Date().addingTimeInterval(20)
         var cursor = 0
         var inserts: [(Int, Int)] = []
         for i in 0..<doc.pageCount {
@@ -130,10 +130,10 @@ enum PdfSidecar {
                     return a.contains(needle) || needle.contains(a) && a.count >= 16
                 }
             }
-            if found == nil, i > 0, let last = inserts.last {
+            if found == nil {
                 let remainPages = max(1, doc.pageCount - i)
-                let remainLines = max(1, lines.count - last.1)
-                found = min(lines.count - 1, last.1 + max(1, remainLines / remainPages))
+                let remainLines = max(1, lines.count - cursor)
+                found = min(lines.count, cursor + max(0, remainLines / remainPages))
             }
             if let at = found {
                 inserts.append((i + 1, at))

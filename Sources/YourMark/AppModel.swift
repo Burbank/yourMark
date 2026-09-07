@@ -706,16 +706,16 @@ final class AppModel {
                         onStatus: onOCR
                     ) {
                         UserDefaults.standard.set(true, forKey: "doclingReady")
-                        let pictures = await PdfFigures.embed(
-                            markdownURL: output,
-                            sourcePDF: original,
-                            onStatus: onOCR
-                        )
                         if let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py") {
                             await service.enrichPDF(markdown: output, pdf: original, script: script)
                         }
                         let bookmarks = await loadBookmarks(original)
                         let (url, located) = await finalizeMarkdown(output, original: original, bookmarks: bookmarks)
+                        let pictures = await PdfFigures.embed(
+                            markdownURL: url,
+                            sourcePDF: original,
+                            onStatus: onOCR
+                        )
                         await finishJob(jobID: jobID, markdown: url, original: original, usedOCR: true, pictures: pictures, bookmarks: located)
                         continue
                     }
@@ -738,13 +738,24 @@ final class AppModel {
                             }
                         }
                     }
-                    pictures = await PdfFigures.embed(markdownURL: url, sourcePDF: original, onStatus: onFig)
-                    if pictures == 0, usedOCR, OcrService.markdownLooksEmpty(url) {
+                    if usedOCR, OcrService.markdownLooksEmpty(url) {
                         await OcrService.enrichMarkdown(markdownURL: url, sourcePDF: original, onStatus: onFig)
                     }
                     let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py")
                     statusText = "Restoring the PDF outline and tables…"
                     await service.enrichPDF(markdown: url, pdf: original, script: script)
+                    let bookmarks = await loadBookmarks(original)
+                    let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
+                    pictures = await PdfFigures.embed(markdownURL: final, sourcePDF: original, onStatus: onFig)
+                    await finishJob(
+                        jobID: jobID,
+                        markdown: final,
+                        original: original,
+                        usedOCR: usedOCR,
+                        pictures: pictures,
+                        bookmarks: located
+                    )
+                    continue
                 }
                 let bookmarks = await loadBookmarks(original)
                 let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)

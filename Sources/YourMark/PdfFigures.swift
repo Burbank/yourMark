@@ -4,12 +4,12 @@ import ImageIO
 import PDFKit
 import UniformTypeIdentifiers
 
-/// MarkItDown/pdfminer keeps words, not pictures. One pass after convert:
-/// pull embedded images, and rasterize only pages that actually look like figures.
+/// MarkItDown/pdfminer keeps words, not pictures. After convert, pull every
+/// embedded raster and, where the page is a vector diagram with no photo,
+/// draw that page so the figure still appears in the Markdown.
 enum PdfFigures {
     static let folderSuffix = "-figures"
 
-    /// Returns how many picture files were written. 0 = nothing to add.
     @discardableResult
     static func embed(
         markdownURL: URL,
@@ -31,8 +31,11 @@ enum PdfFigures {
     ) -> Int {
         guard sourcePDF.pathExtension.lowercased() == "pdf" else { return 0 }
         guard let existing = try? String(contentsOf: markdownURL, encoding: .utf8) else { return 0 }
-        if existing.contains("data:image/") || existing.contains(folderSuffix + "/") {
-            return 0
+        // Docling already inlined pictures as data URIs — do not duplicate.
+        if existing.contains("data:image/") {
+            let n = existing.components(separatedBy: "data:image/").count - 1
+            onStatus("Pictures already in the Markdown (\(n)).")
+            return n
         }
         guard let cgDoc = CGPDFDocument(sourcePDF as CFURL), cgDoc.numberOfPages > 0 else { return 0 }
 
@@ -42,24 +45,19 @@ enum PdfFigures {
         let folderName = stem + folderSuffix
         let figDir = markdownURL.deletingLastPathComponent()
             .appendingPathComponent(folderName, isDirectory: true)
+        try? FileManager.default.removeItem(at: figDir)
         try? FileManager.default.createDirectory(at: figDir, withIntermediateDirectories: true)
 
         let pdfDoc = PDFDocument(url: sourcePDF)
         let pageCount = cgDoc.numberOfPages
         var pageFiles: [Int: [String]] = [:]
         var fingerprintCount: [Int: Int] = [:]
+        var extracted = 0
         var rasters = 0
-        let rasterCap = pageCount > 80 ? 24 : 40
-        let deadline = Date().addingTimeInterval(28)
-        let allowRaster = pageCount <= 180
 
         for i in 1...pageCount {
-            if Date() > deadline {
-                onStatus("Saved the pictures found so far. The rest stay in the PDF.")
-                break
-            }
-            if i == 1 || i % 12 == 0 {
-                onStatus("Looking for pictures (page \(i) of \(pageCount))…")
+            if i == 1 || i % 8 == 0 || i == pageCount {
+                onStatus("Pictures — page \(i) of \(pageCount) (\(extracted + rasters) saved)…")
             }
             guard let page = cgDoc.page(at: i) else { continue }
             let sink = XSink()
@@ -71,31 +69,36 @@ enum PdfFigures {
             }
 
             var files: [String] = []
+            var extractedLarge = false
             for (n, img) in sink.images.enumerated() {
                 let seen = fingerprintCount[img.fp, default: 0]
-                if seen >= 6 { continue }
+                // Repeating chrome (header logos) — keep a few, skip the rest.
+                if seen >= 12 { continue }
                 fingerprintCount[img.fp] = seen + 1
-                let name = String(format: "p%03d-%d.%@", i, n + 1, img.ext)
+                if img.wide >= 200 && img.tall >= 200 { extractedLarge = true }
+                let name = String(format: "p%04d-%d.%@", i, n + 1, img.ext)
                 do {
                     try img.data.write(to: figDir.appendingPathComponent(name), options: .atomic)
                     files.append(name)
+                    extracted += 1
                 } catch { continue }
             }
 
-            if files.isEmpty, allowRaster, rasters < rasterCap {
-                let chars = (pdfDoc?.page(at: i - 1)?.string ?? "")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                    .count
-                let bytes = contentLength(page)
-                let illustrated =
-                    (sink.hasLargeImage && sink.images.isEmpty)
-                    || (sink.hasForm && chars < 1500 && bytes > 3000)
-                    || (chars < 800 && bytes > 4000)
-                if illustrated,
-                   let name = rasterize(page, index: i, into: figDir) {
-                    files.append(name)
-                    rasters += 1
-                }
+            let chars = (pdfDoc?.page(at: i - 1)?.string ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .count
+            let bytes = contentLength(page)
+            let needsPageDraw =
+                !extractedLarge
+                && (
+                    sink.hasUndecodedImage
+                    || (sink.hasForm && chars < 2800)
+                    || (sink.hasLargeImage && files.isEmpty)
+                    || (chars < 500 && bytes > 2500)
+                )
+            if needsPageDraw, let name = rasterize(page, index: i, into: figDir) {
+                files.append(name)
+                rasters += 1
             }
 
             if !files.isEmpty {
@@ -106,12 +109,14 @@ enum PdfFigures {
         let total = pageFiles.values.reduce(0) { $0 + $1.count }
         if total == 0 {
             try? FileManager.default.removeItem(at: figDir)
+            onStatus("No pictures found in this PDF.")
             return 0
         }
 
         onStatus("Placing \(total) pictures in the Markdown…")
         let next = splice(text: existing, pageFiles: pageFiles, folder: folderName, pdfDoc: pdfDoc)
         try? next.write(to: markdownURL, atomically: true, encoding: .utf8)
+        onStatus("\(total) pictures in the Markdown (\(extracted) from the PDF, \(rasters) page drawings).")
         return total
     }
 
@@ -121,46 +126,70 @@ enum PdfFigures {
         folder: String,
         pdfDoc: PDFDocument?
     ) -> String {
-        func block(_ files: [String]) -> String {
-            files.map { "![](\(folder)/\($0))" }.joined(separator: "\n\n")
+        func block(_ page: Int, _ files: [String]) -> [String] {
+            files.map { "![Figure, page \(page + 1)](\(folder)/\($0))" }
         }
 
-        if text.contains("\u{0c}") {
-            var parts = text.components(separatedBy: "\u{0c}")
-            let pageCount = pdfDoc?.pageCount ?? (pageFiles.keys.max() ?? 0) + 1
-            let leadingBlank = parts.first?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true
-            for (page, files) in pageFiles.sorted(by: { $0.key < $1.key }) {
-                var idx = page
-                if parts.count == pageCount + 1, leadingBlank { idx = page + 1 }
-                guard parts.indices.contains(idx) else { continue }
-                let trimmed = parts[idx].trimmingCharacters(in: .whitespacesAndNewlines)
-                parts[idx] = trimmed + "\n\n" + block(files) + "\n"
-            }
-            return parts.joined(separator: "\u{0c}")
+        var remaining = pageFiles
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var out: [String] = []
+        out.reserveCapacity(lines.count + remaining.count * 3)
+
+        func takePage(_ page: Int) {
+            guard let files = remaining.removeValue(forKey: page) else { return }
+            out.append("")
+            out.append(contentsOf: block(page, files))
+            out.append("")
         }
 
-        var result = text
-        var unmatched: [(Int, [String])] = []
-        for (page, files) in pageFiles.sorted(by: { $0.key < $1.key }) {
-            let sample = distinctive(pdfDoc?.page(at: page)?.string)
-            if let sample, let range = result.range(of: sample) {
-                var insertAt = range.upperBound
-                if let nl = result[insertAt...].firstIndex(of: "\n") {
-                    insertAt = result.index(after: nl)
+        var usedDistinct = Set<Int>()
+        for line in lines {
+            out.append(line)
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("<!-- page "), trimmed.hasSuffix("-->") {
+                let inner = trimmed
+                    .dropFirst("<!-- page ".count)
+                    .dropLast(3)
+                    .trimmingCharacters(in: .whitespaces)
+                if let n = Int(inner), n > 0 {
+                    takePage(n - 1)
+                    usedDistinct.insert(n - 1)
                 }
-                result.replaceSubrange(insertAt..<insertAt, with: "\n" + block(files) + "\n")
-            } else {
-                unmatched.append((page, files))
             }
         }
-        if !unmatched.isEmpty {
-            var extra = "\n\n## Figures\n\nPictures taken from the PDF, in page order.\n\n"
-            for (page, files) in unmatched {
-                extra += "### Page \(page + 1)\n\n" + block(files) + "\n\n"
+
+        if !remaining.isEmpty {
+            var rebuilt = out.joined(separator: "\n")
+            for (page, files) in remaining.sorted(by: { $0.key < $1.key }) {
+                if usedDistinct.contains(page) { continue }
+                if let sample = distinctive(pdfDoc?.page(at: page)?.string),
+                   let range = rebuilt.range(of: sample) {
+                    var insertAt = range.upperBound
+                    if let nl = rebuilt[insertAt...].firstIndex(of: "\n") {
+                        insertAt = rebuilt.index(after: nl)
+                    }
+                    let chunk = "\n" + block(page, files).joined(separator: "\n") + "\n"
+                    rebuilt.replaceSubrange(insertAt..<insertAt, with: chunk)
+                    remaining.removeValue(forKey: page)
+                }
             }
-            result += extra
+            out = rebuilt.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         }
-        return result
+
+        if !remaining.isEmpty {
+            out.append("")
+            out.append("## Figures")
+            out.append("")
+            out.append("Pictures from the PDF that could not be placed next to their page text, in page order.")
+            out.append("")
+            for (page, files) in remaining.sorted(by: { $0.key < $1.key }) {
+                out.append("### Page \(page + 1)")
+                out.append("")
+                out.append(contentsOf: block(page, files))
+                out.append("")
+            }
+        }
+        return out.joined(separator: "\n")
     }
 
     private static func distinctive(_ raw: String?) -> String? {
@@ -202,7 +231,7 @@ enum PdfFigures {
     private static func rasterize(_ page: CGPDFPage, index: Int, into dir: URL) -> String? {
         let box = page.getBoxRect(.mediaBox)
         let long = max(box.width, box.height)
-        let scale = min(1.5, 1400 / max(long, 1))
+        let scale = min(1.6, 1600 / max(long, 1))
         let width = max(1, Int((box.width * scale).rounded()))
         let height = max(1, Int((box.height * scale).rounded()))
         let cs = CGColorSpaceCreateDeviceRGB()
@@ -221,8 +250,8 @@ enum PdfFigures {
         ctx.scaleBy(x: scale, y: -scale)
         ctx.translateBy(x: -box.origin.x, y: -box.origin.y)
         ctx.drawPDFPage(page)
-        guard let image = ctx.makeImage(), let data = jpeg(image) else { return nil }
-        let name = String(format: "page-%03d.jpg", index)
+        guard let image = ctx.makeImage(), let data = jpeg(image, quality: 0.78) else { return nil }
+        let name = String(format: "page-%04d.jpg", index)
         do {
             try data.write(to: dir.appendingPathComponent(name), options: .atomic)
             return name
@@ -231,7 +260,7 @@ enum PdfFigures {
         }
     }
 
-    fileprivate static func jpeg(_ image: CGImage, quality: CGFloat = 0.72) -> Data? {
+    fileprivate static func jpeg(_ image: CGImage, quality: CGFloat = 0.78) -> Data? {
         let destData = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(
             destData,
@@ -253,17 +282,21 @@ private struct ExtractedImage {
     var data: Data
     var ext: String
     var fp: Int
+    var wide: Int
+    var tall: Int
 }
 
 private final class XSink {
     var images: [ExtractedImage] = []
     var hasForm = false
     var hasLargeImage = false
+    var hasUndecodedImage = false
     private var walkDepth = 0
     private var visits = 0
+    private var seen = Set<Int>()
 
     func walk(resources: CGPDFDictionaryRef, depth: Int) {
-        guard depth < 4 else { return }
+        guard depth < 8 else { return }
         walkDepth = depth
         var xobject: CGPDFDictionaryRef?
         guard CGPDFDictionaryGetDictionary(resources, "XObject", &xobject), let xobject else { return }
@@ -276,7 +309,11 @@ private final class XSink {
 
     private func consume(_ object: CGPDFObjectRef) {
         visits += 1
-        if visits > 400 { return }
+        if visits > 2500 { return }
+        let key = Int(bitPattern: object)
+        if seen.contains(key) { return }
+        seen.insert(key)
+
         var stream: CGPDFStreamRef?
         guard CGPDFObjectGetValue(object, .stream, &stream), let stream else { return }
         guard let sdict = CGPDFStreamGetDictionary(stream) else { return }
@@ -296,25 +333,27 @@ private final class XSink {
         var height: CGPDFInteger = 0
         CGPDFDictionaryGetInteger(sdict, "Width", &width)
         CGPDFDictionaryGetInteger(sdict, "Height", &height)
-        if width < 80 || height < 80 { return }
+        if width < 48 || height < 48 { return }
         hasLargeImage = true
 
         var format = CGPDFDataFormat.raw
         guard let cfData = CGPDFStreamCopyData(stream, &format) else { return }
         let data = cfData as Data
-        guard data.count > 80 else { return }
+        guard data.count > 60 else { return }
 
-        switch format {
-        case .jpegEncoded:
-            images.append(ExtractedImage(data: data, ext: "jpg", fp: fingerprint(data)))
-        default:
-            // JPEG2000 Swift case name differs by SDK; 2 is kCGPDFDataFormatJPEG2000Encoded.
-            if format.rawValue == 2 {
-                images.append(ExtractedImage(data: data, ext: "jp2", fp: fingerprint(data)))
-            } else if let jpeg = rawBitmapJPEG(data: data, width: Int(width), height: Int(height), dict: sdict) {
-                images.append(ExtractedImage(data: jpeg, ext: "jpg", fp: fingerprint(jpeg)))
-            }
+        if format == .jpegEncoded {
+            images.append(ExtractedImage(data: data, ext: "jpg", fp: fingerprint(data), wide: Int(width), tall: Int(height)))
+            return
         }
+        if format.rawValue == 2 { // JPEG2000
+            images.append(ExtractedImage(data: data, ext: "jp2", fp: fingerprint(data), wide: Int(width), tall: Int(height)))
+            return
+        }
+        if let jpeg = imageIOJPEG(data) ?? rawBitmapJPEG(data: data, width: Int(width), height: Int(height), dict: sdict) {
+            images.append(ExtractedImage(data: jpeg, ext: "jpg", fp: fingerprint(jpeg), wide: Int(width), tall: Int(height)))
+            return
+        }
+        hasUndecodedImage = true
     }
 }
 
@@ -331,6 +370,14 @@ private func fingerprint(_ data: Data) -> Int {
     return h
 }
 
+private func imageIOJPEG(_ data: Data) -> Data? {
+    guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+          CGImageSourceGetCount(src) > 0,
+          let image = CGImageSourceCreateImageAtIndex(src, 0, nil)
+    else { return nil }
+    return PdfFigures.jpeg(image)
+}
+
 private func rawBitmapJPEG(data: Data, width: Int, height: Int, dict: CGPDFDictionaryRef) -> Data? {
     var bpc: CGPDFInteger = 8
     CGPDFDictionaryGetInteger(dict, "BitsPerComponent", &bpc)
@@ -341,14 +388,20 @@ private func rawBitmapJPEG(data: Data, width: Int, height: Int, dict: CGPDFDicti
         switch String(cString: csName) {
         case "DeviceGray": components = 1
         case "DeviceRGB": components = 3
+        case "DeviceCMYK": components = 4
         default: return nil
         }
+    } else {
+        return nil
     }
     let expected = width * height * components
     guard data.count >= expected else { return nil }
-    let space: CGColorSpace = components == 1
-        ? CGColorSpaceCreateDeviceGray()
-        : CGColorSpaceCreateDeviceRGB()
+    let space: CGColorSpace
+    switch components {
+    case 1: space = CGColorSpaceCreateDeviceGray()
+    case 4: space = CGColorSpaceCreateDeviceCMYK()
+    default: space = CGColorSpaceCreateDeviceRGB()
+    }
     guard let provider = CGDataProvider(data: data as CFData),
           let image = CGImage(
             width: width,
