@@ -53,6 +53,14 @@ struct ContentView: View {
             }
         }
         .task { await model.bootstrap() }
+        .sheet(isPresented: Binding(
+            get: { model.showInstallSheet },
+            set: { if !$0 { Task { await model.skipFirstRunInstall() } } }
+        )) {
+            FirstRunInstallSheet()
+                .environment(model)
+                .environment(\.deck, deck)
+        }
         .alert("Something went wrong", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.clearError() } }
@@ -114,6 +122,45 @@ struct ContentView: View {
         .padding(.vertical, 10)
         .background(deck.panel)
         .overlay(Rectangle().frame(height: deck.border).foregroundStyle(deck.line), alignment: .top)
+    }
+}
+
+private struct FirstRunInstallSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Install converters in this app")
+                .font(.title2.weight(.bold))
+            Text("We recommend installing everything from this window — not from Terminal or Homebrew by hand. That keeps paths and updates in one place.")
+                .foregroundStyle(deck.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Microsoft MarkItDown — ordinary PDFs, Word, PowerPoint", systemImage: "doc.richtext")
+                Label("IBM Docling — scans and PDFs with graphics (tables, figures, OCR)", systemImage: "photo.on.rectangle")
+            }
+            .font(.callout)
+            Text("First download needs the internet and can take a few minutes. You can also do this later in Settings.")
+                .font(.caption)
+                .foregroundStyle(deck.muted)
+            HStack {
+                Button("Not now") {
+                    Task { await model.skipFirstRunInstall() }
+                }
+                .keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Install in this app") {
+                    Task { await model.acceptFirstRunInstall() }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(deck.btn)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(28)
+        .frame(width: 480)
+        .background(deck.page)
     }
 }
 
