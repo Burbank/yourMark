@@ -18,6 +18,8 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/yourMark.app"
 ln -s /Applications "$STAGE/Applications"
+cp "$ROOT/Scripts/If macOS blocks yourMark.command" "$STAGE/If macOS blocks yourMark.command"
+chmod +x "$STAGE/If macOS blocks yourMark.command"
 cp "$ROOT/Scripts/Install Engine.command" "$STAGE/Install Engine.command" 2>/dev/null || true
 chmod +x "$STAGE/Install Engine.command" 2>/dev/null || true
 

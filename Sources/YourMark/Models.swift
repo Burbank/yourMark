@@ -1,17 +1,17 @@
 import Foundation
 
 enum AppTool: String, CaseIterable, Identifiable {
-    case convert = "Convert"
     case library = "Library"
-    case engine = "Engine"
+    case convert = "Convert"
+    case settings = "Settings"
 
     var id: String { rawValue }
 
     var systemImage: String {
         switch self {
-        case .convert: return "arrow.triangle.2.circlepath.doc.on.clipboard"
+        case .convert: return "square.and.arrow.down"
         case .library: return "books.vertical"
-        case .engine: return "gearshape"
+        case .settings: return "gearshape"
         }
     }
 
@@ -19,7 +19,7 @@ enum AppTool: String, CaseIterable, Identifiable {
         switch self {
         case .convert: return "Drop PDFs, Word, and slides — Microsoft MarkItDown writes Markdown"
         case .library: return "Converted files — Bookmarks jump like a PDF outline"
-        case .engine: return "Discover, inspect, and upgrade the PyPI engine"
+        case .settings: return "Converter, file location, and Ask"
         }
     }
 }

@@ -74,6 +74,47 @@ actor MarkItDownService {
         throw lastError
     }
 
+    /// Install Microsoft’s official MarkItDown from PyPI (uv). Not vendored.
+    func installEngine() async throws -> String {
+        enginePath = nil
+        var log: [String] = []
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let uvPaths = [
+            "\(home)/.local/bin/uv",
+            "/opt/homebrew/bin/uv",
+            "/usr/local/bin/uv",
+        ]
+        var uv = uvPaths.first { FileManager.default.isExecutableFile(atPath: $0) }
+        if uv == nil {
+            log.append("Installing uv…")
+            let result = try await runShell("curl -LsSf https://astral.sh/uv/install.sh | sh")
+            log.append(result.stdout)
+            log.append(result.stderr)
+            uv = "\(home)/.local/bin/uv"
+        }
+        guard let uv, FileManager.default.isExecutableFile(atPath: uv) else {
+            throw YourMarkError.processFailed("Could not install uv. Open Terminal and run:\ncurl -LsSf https://astral.sh/uv/install.sh | sh")
+        }
+        log.append("Installing Microsoft MarkItDown…")
+        do {
+            let installed = try await run(
+                executable: uv,
+                arguments: ["tool", "install", "markitdown[all]"],
+                captureStdout: true
+            )
+            log.append(installed.stdout)
+            log.append(installed.stderr)
+        } catch {
+            let upgraded = try await runShell("uv tool upgrade markitdown")
+            log.append(upgraded.stdout)
+            log.append(upgraded.stderr)
+        }
+        enginePath = nil
+        _ = try await resolveEngine()
+        log.append("Ready · \(versionString)")
+        return log.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.joined(separator: "\n")
+    }
+
     /// Upgrade the PyPI package — this is how Microsoft updates reach the GUI.
     func upgradeEngine() async throws -> String {
         let commands = [

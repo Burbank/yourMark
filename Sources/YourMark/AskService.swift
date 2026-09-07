@@ -10,8 +10,8 @@ struct AskService {
 
     func ask(question: String, title: String, excerpt: String, settings: Settings, openKnowledge: Bool = false) async throws -> String {
         let key = settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else {
-            throw YourMarkError.invalidInput("Add an Ask API key under Engine.")
+        if key.isEmpty {
+            return Self.localAsk(question: question, excerpt: excerpt)
         }
         let base = settings.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -67,6 +67,7 @@ struct AskService {
         let needles = [
             "excerpt does not", "excerpt is silent", "not in the excerpt",
             "not in this chapter", "not in this file", "does not define",
+            "does not provide an answer",
             "does not mention", "not mentioned", "not defined in",
         ]
         return needles.contains { t.contains($0) }
@@ -98,5 +99,30 @@ struct AskService {
             if collected.joined(separator: "\n").count > max { break }
         }
         return String(collected.joined(separator: "\n").prefix(max))
+    }
+
+    static func localAsk(question: String, excerpt: String) -> String {
+        let stop: Set<String> = [
+            "the", "and", "for", "that", "this", "with", "from", "what", "when",
+            "where", "which", "about", "does", "into", "have", "been",
+        ]
+        let words = question.lowercased()
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+            .filter { $0.count > 2 && !stop.contains($0) }
+        let paras = excerpt
+            .components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.count > 40 && !$0.hasPrefix(">") }
+        let scored = paras.map { p -> (String, Int) in
+            let low = p.lowercased()
+            return (p, words.reduce(0) { $0 + (low.contains($1) ? 1 : 0) })
+        }
+        .filter { $0.1 > 0 }
+        .sorted { $0.1 > $1.1 }
+        if scored.isEmpty {
+            return "The chapter does not provide an answer to this. Nothing in this excerpt matches the question closely enough."
+        }
+        return scored.prefix(3).map { $0.0 }.joined(separator: "\n\n")
     }
 }

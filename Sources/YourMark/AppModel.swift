@@ -1,16 +1,20 @@
 import AppKit
 import Foundation
 import Observation
+import SwiftUI
 import UniformTypeIdentifiers
 
 @Observable
 @MainActor
 final class AppModel {
-    var selectedTool: AppTool = .convert
+    var selectedTool: AppTool = .library
     var enginePath: String?
     var engineVersion: String = "checking…"
     var isBusy = false
+    var installingEngine = false
+    var installLog = ""
     var statusText = "Ready"
+    var appearance: String = UserDefaults.standard.string(forKey: "appearance") ?? "system"
     var errorMessage: String?
     var showHelp = false
     var jobs: [ConvertJob] = []
@@ -61,11 +65,49 @@ final class AppModel {
         startWatching()
     }
 
+    var colorScheme: ColorScheme? {
+        switch appearance {
+        case "bright": return .light
+        case "dim": return .dark
+        default: return nil
+        }
+    }
+
+    func setAppearance(_ value: String) {
+        appearance = value
+        UserDefaults.standard.set(value, forKey: "appearance")
+    }
+
     func bootstrap() async {
         let status = await service.refreshStatus()
         enginePath = status.path
         engineVersion = status.version
         statusText = status.path == nil ? "Engine not found" : "MarkItDown \(status.version)"
+        if status.path == nil, !installingEngine {
+            await installEngine()
+        }
+    }
+
+    func installEngine() async {
+        installingEngine = true
+        installLog = "Getting Microsoft MarkItDown…"
+        statusText = "Installing converter…"
+        defer { installingEngine = false }
+        do {
+            installLog = try await service.installEngine()
+            await bootstrapQuiet()
+            statusText = "MarkItDown \(engineVersion)"
+        } catch {
+            installLog = error.localizedDescription
+            errorMessage = "Could not install MarkItDown automatically.\n\n\(error.localizedDescription)"
+            statusText = "Engine missing"
+        }
+    }
+
+    private func bootstrapQuiet() async {
+        let status = await service.refreshStatus()
+        enginePath = status.path
+        engineVersion = status.version
     }
 
     func clearError() { errorMessage = nil }
@@ -239,7 +281,7 @@ final class AppModel {
         defer { isBusy = false }
         do {
             lastUpgradeLog = try await service.upgradeEngine()
-            await bootstrap()
+            await bootstrapQuiet()
             statusText = "Engine \(engineVersion)"
         } catch {
             errorMessage = error.localizedDescription

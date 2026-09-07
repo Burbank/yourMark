@@ -1,5 +1,9 @@
 # yourMark
 
+<p align="center">
+  <img src="Resources/AppIcon.png" width="128" height="128" alt="yourMark">
+</p>
+
 Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, and Excel to Markdown **on this Mac**.
 
 **[Download for Mac](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.dmg)** · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
@@ -14,7 +18,9 @@ Keep the original PDF. Markdown is the working copy.
 
 The GUI never vendors the converter. It finds `markitdown` on this Mac; **Upgrade Engine** pulls the current PyPI release.
 
-**Requires:** macOS 14+. The DMG is for everyone. Building from source needs Xcode.
+**Requires:** macOS 14+. First launch installs Microsoft MarkItDown from PyPI if it is missing. Building from source needs Xcode.
+
+If macOS blocks the download: right-click → Open, or run **If macOS blocks yourMark** on the disk image. The warning is Gatekeeper (not notarized yet) — not malware.
 
 ---
 

@@ -4,10 +4,10 @@
 
 1. Download [yourMark.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.dmg).
 2. Drag **yourMark** into Applications.
-3. Double-click **Install Engine** on the disk image (Microsoft MarkItDown, once).
-4. Open yourMark. If macOS blocks it: System Settings → Privacy & Security → **Open Anyway**.
+3. If macOS says it cannot verify the app, **do not Move to Bin**. Double-click **If macOS blocks yourMark** on the disk image. Or: right-click yourMark → **Open**. Or: System Settings → Privacy & Security → **Open Anyway**.
+4. Open yourMark. It installs **Microsoft MarkItDown** itself the first time (official PyPI package — not a copy inside the app).
 
-macOS 14 or newer.
+macOS 14 or newer. The warning is Gatekeeper: this build is not notarized yet.
 
 ## Homebrew (optional)
 
@@ -16,8 +16,9 @@ Homebrew is not required. Use it if you already have brew:
 ```sh
 brew tap Burbank/yourMark
 brew install --cask yourmark
-uv tool install 'markitdown[all]'
 ```
+
+First launch still installs MarkItDown if it is missing.
 
 ## Terminal
 
@@ -29,8 +30,6 @@ cd yourMark
 chmod +x Scripts/Install.command
 ./Scripts/Install.command
 ```
-
-`Install.command` is also double-clickable in Finder.
 
 ## Uninstall
 

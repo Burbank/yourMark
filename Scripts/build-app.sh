@@ -32,9 +32,22 @@ if [[ -f "$ROOT/Resources/Help.html" ]]; then
   cp "$ROOT/Resources/Help.html" "$RESOURCES/Help.html"
 fi
 
+if [[ -f "$ROOT/Resources/AppIcon.png" ]]; then
+  cp "$ROOT/Resources/AppIcon.png" "$RESOURCES/AppIcon.png"
+fi
 ICON_PLIST=""
 if [[ -f "$ROOT/Resources/AppIcon.icns" ]]; then
   cp "$ROOT/Resources/AppIcon.icns" "$RESOURCES/AppIcon.icns"
+  ICON_PLIST=$'\n\t<key>CFBundleIconFile</key>\n\t<string>AppIcon</string>'
+elif [[ -f "$RESOURCES/AppIcon.png" ]] && command -v sips >/dev/null && command -v iconutil >/dev/null; then
+  ICONSET="$ROOT/dist/AppIcon.iconset"
+  rm -rf "$ICONSET"
+  mkdir -p "$ICONSET"
+  for s in 16 32 128 256 512; do
+    sips -z $s $s "$RESOURCES/AppIcon.png" --out "$ICONSET/icon_${s}x${s}.png" >/dev/null
+    sips -z $((s*2)) $((s*2)) "$RESOURCES/AppIcon.png" --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+  done
+  iconutil -c icns "$ICONSET" -o "$RESOURCES/AppIcon.icns"
   ICON_PLIST=$'\n\t<key>CFBundleIconFile</key>\n\t<string>AppIcon</string>'
 fi
 
@@ -58,7 +71,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>0.1.1</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>${ICON_PLIST}
 	<key>LSMinimumSystemVersion</key>

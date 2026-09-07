@@ -10,16 +10,17 @@ struct YourMarkApp: App {
         WindowGroup {
             ContentView()
                 .environment(model)
-                .frame(minWidth: 900, minHeight: 580)
+                .frame(minWidth: 960, minHeight: 620)
                 .onAppear { appDelegate.model = model }
         }
         .windowResizability(.contentMinSize)
+        .defaultSize(width: 1180, height: 740)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Open Files…") { model.pickFiles() }
                     .keyboardShortcut("o", modifiers: .command)
             }
-            CommandMenu("Engine") {
+            CommandMenu("Settings") {
                 Button("Upgrade MarkItDown") {
                     Task { await model.upgradeEngine() }
                 }
