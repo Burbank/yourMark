@@ -6,7 +6,7 @@
 
 Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, and Excel to Markdown **on this Mac**.
 
-**[Download yourMark-0.3.20.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.20.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
+**[Download yourMark-0.3.21.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.21.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
 
 ## Why Markdown
 
@@ -30,7 +30,7 @@ If macOS says it could not verify the app: click **Done** (not Move to Bin), the
 |-----------|----------------|
 | **Tables** | Yes when the PDF has a real table (GFM). Colours / merged cells flatten. |
 | **Pictures** | Pulled from the PDF into a `*-figures` folder and linked in page order. Word/PPTX use MarkItDown’s own images. Not the original x/y layout. |
-| **Outline** | PDF bookmarks + Markdown headings. Click to jump. |
+| **Outline** | The PDF’s own bookmarks (same tree as Preview.app) are written in as Markdown headings. MarkItDown does not emit them. Guessed headings are only used if the PDF has no outline. |
 
 ---
 
