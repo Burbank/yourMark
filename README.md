@@ -6,7 +6,7 @@
 
 Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, Excel, pictures, and ZIP archives to Markdown **on this Mac**.
 
-**[Download yourMark-0.3.24.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.24.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
+**[Download yourMark-0.3.25.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.25.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
 
 ## Why Markdown
 
@@ -15,6 +15,47 @@ A PDF is a picture of a page. Markdown is the words, in order, as plain text you
 That is why it works so well with AI. A model can read a chapter, quote it, and tell you when the file is silent — instead of guessing at columns or a scan. Paste one heading into Grok or ChatGPT, keep notes in Obsidian, or search a whole course. Tables stay tables. Headings stay an outline.
 
 Keep the original PDF. Markdown is the working copy.
+
+## A look around — pick your rooms and your look
+
+yourMark is a Mac window, not a terminal. Three rooms, three looks. If this already feels like something you would open, it is probably for you.
+
+**Rooms**
+
+- **Convert** — drop a PDF, Word, slides, or Excel. Microsoft MarkItDown writes the words on this computer.
+- **Library** — file on the left, bookmarks in the middle, Markdown on the right. Ask a chapter at the bottom with your own key.
+- **Settings** — lock a Grok or OpenAI key once. Extra tools for scans (Docling) are optional.
+
+**Looks** — **Bright** (paper), **Dim** (a night desk), or **System** (follow macOS). Switch any time in the header.
+
+<table>
+<tr>
+<td width="50%">
+<img src="docs/shots/convert-bright.jpg" alt="Convert in Bright: drop a PDF, Word, PowerPoint, or Excel" />
+<p><strong>Convert · Bright</strong> — drop a file. This 787 handbook kept <em>595 bookmarks from the PDF itself</em>, the same tree as Preview.</p>
+</td>
+<td width="50%">
+<img src="docs/shots/convert-dim.jpg" alt="Convert in Dim, night desk look" />
+<p><strong>Convert · Dim</strong> — same window at night. Conversion stays on this Mac, not in the cloud.</p>
+</td>
+</tr>
+<tr>
+<td width="50%">
+<img src="docs/shots/library-bright.jpg" alt="Library in Bright: files, bookmarks, and Markdown" />
+<p><strong>Library · Bright</strong> — the built-in guide uses the same three-column layout you get after a convert. Ask a chapter underneath.</p>
+</td>
+<td width="50%">
+<img src="docs/shots/library-dim.jpg" alt="Library following macOS System / Dim" />
+<p><strong>Library · System / Dim</strong> — follow the Mac, or stay dark. Bookmarks jump like Preview.</p>
+</td>
+</tr>
+</table>
+
+<p align="center">
+  <img src="docs/shots/settings-dim.jpg" alt="Settings: Ask key locked in, Docling installed for scans" width="860" />
+</p>
+
+<p align="center"><strong>Settings</strong> — paste your key, press Enter, and it is tested and locked on this Mac. You do not paste it again. Docling is only for scans; ordinary PDFs still go to Microsoft MarkItDown.</p>
 
 The GUI never vendors the converter. It finds `markitdown` on this Mac; **Upgrade Engine** pulls the current PyPI release.
 

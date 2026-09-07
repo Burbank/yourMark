@@ -100,6 +100,9 @@
     @media (min-width: 720px) {
       .grid2 { grid-template-columns: 1fr 1fr; }
     }
+    .opt-list { margin: .4rem 0 1rem; padding-left: 1.15rem; }
+    .opt-list li + li { margin-top: .35rem; }
+    .looks { color: var(--muted); margin: 0 0 1rem; }
     footer {
       margin-top: 1.5rem;
       padding-top: 1.2rem;
@@ -124,14 +127,56 @@
       bookmark, and ask — on this computer, not in the cloud.
     </p>
     <div class="row">
-      <a class="btn primary" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.24.dmg">Download yourMark-0.3.24.dmg</a>
+      <a class="btn primary" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.25.dmg">Download yourMark-0.3.25.dmg</a>
       <a class="btn ghost" href="https://github.com/microsoft/markitdown">MarkItDown (Microsoft)</a>
     </div>
     <p class="lede" style="margin-top:0">Open the disk and <strong>drag yourMark onto Applications</strong> (follow the arrow). If macOS says the app is not opened: click Done, then open <strong>If Apple blocks it</strong> on the disk (a web page, not a program) → Open Anyway.</p>
 
+    <section class="card">
+      <h2>Why Markdown</h2>
+      <p>
+        A PDF is a picture of a page. Markdown is the words, in order, as plain text you can search and edit.
+        That is why it works so well with AI. A model can read a chapter, quote it, and tell you when the file is silent.
+        Keep the original PDF. Markdown is the working copy.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>A look around — rooms and looks</h2>
+      <p>
+        yourMark is a Mac window, not a terminal. Three rooms, three looks.
+        If this already feels like something you would open, it is probably for you.
+      </p>
+      <ul class="opt-list">
+        <li><strong>Convert</strong> — drop a PDF, Word, slides, or Excel. Microsoft MarkItDown writes the words on this computer.</li>
+        <li><strong>Library</strong> — file on the left, bookmarks in the middle, Markdown on the right. Ask a chapter at the bottom with your own key.</li>
+        <li><strong>Settings</strong> — lock a Grok or OpenAI key once. Extra tools for scans (Docling) are optional.</li>
+      </ul>
+      <p class="looks"><strong>Looks:</strong> Bright (paper), Dim (a night desk), or System (follow macOS). Switch any time in the header.</p>
+    </section>
+
+    <div class="grid2">
+      <figure>
+        <img src="shots/convert-bright.jpg" alt="Convert in Bright: drop a PDF, Word, PowerPoint, or Excel" width="1482" height="1075" />
+        <figcaption>Convert · Bright — drop a file. This 787 handbook kept 595 bookmarks from the PDF itself, the same tree as Preview.</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/convert-dim.jpg" alt="Convert in Dim, night desk look" width="1479" height="1073" loading="lazy" />
+        <figcaption>Convert · Dim — same window at night. Conversion stays on this Mac, not in the cloud.</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/library-bright.jpg" alt="Library in Bright: files, bookmarks, and Markdown" width="1477" height="1068" loading="lazy" />
+        <figcaption>Library · Bright — the built-in guide uses the same three-column layout you get after a convert. Ask a chapter underneath.</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/library-dim.jpg" alt="Library following macOS System / Dim" width="1483" height="1078" loading="lazy" />
+        <figcaption>Library · System / Dim — follow the Mac, or stay dark. Bookmarks jump like Preview.</figcaption>
+      </figure>
+    </div>
+
     <figure>
-      <img src="shots/library.jpg" alt="yourMark library: files on the left, bookmarks in the middle, Markdown on the right" width="1280" height="800" />
-      <figcaption>Library — pick a file, jump a bookmark, read the Markdown. Your originals stay put.</figcaption>
+      <img src="shots/settings-dim.jpg" alt="Settings: Ask key locked in, Docling installed for scans" width="1478" height="1070" loading="lazy" />
+      <figcaption>Settings — paste your key, press Enter, and it is tested and locked on this Mac. Docling is only for scans; ordinary PDFs still go to Microsoft MarkItDown.</figcaption>
     </figure>
 
     <section class="card">
@@ -148,17 +193,6 @@
         reading order, and Ask a chapter.
       </p>
     </section>
-
-    <div class="grid2">
-      <figure>
-        <img src="shots/convert.jpg" alt="Convert screen with a dashed drop zone for PDFs and Office files" width="1280" height="800" loading="lazy" />
-        <figcaption>Convert — drop a PDF here. On the Mac app, Word, PowerPoint, and Excel go through MarkItDown too.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/reader.jpg" alt="Reader showing a document outline and chapter text" width="1280" height="800" loading="lazy" />
-        <figcaption>Bookmarks — the PDF’s own outline when it has one, otherwise headings. Click to jump, like Preview.</figcaption>
-      </figure>
-    </div>
 
     <figure>
       <img src="shots/ask.jpg" alt="Ask strip under a chapter, with a question field and Ask button" width="1280" height="800" loading="lazy" />
