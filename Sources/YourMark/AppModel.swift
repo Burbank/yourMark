@@ -708,7 +708,7 @@ final class AppModel {
         guard aiChaptersEnabled, askHasKey, !hasOutline else { return markdownURL }
         let size = (try? markdownURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
         guard size > 0, size < 80_000 else { return markdownURL }
-        guard var text = try? String(contentsOf: markdownURL, encoding: .utf8) else { return markdownURL }
+        guard let text = try? String(contentsOf: markdownURL, encoding: .utf8) else { return markdownURL }
         let headings = text.split(separator: "\n", omittingEmptySubsequences: false).compactMap {
             PdfSidecar.headingText(String($0))
         }.filter { $0.caseInsensitiveCompare("Outline") != .orderedSame }
