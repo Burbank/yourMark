@@ -14,6 +14,7 @@ enum ConvertibleKind {
 
 /// Full-window file drop. Stays above SwiftUI so a PDF dropped on Library,
 /// Bookmarks, Settings, or the header still converts.
+@MainActor
 struct FileDropCatcher: NSViewRepresentable {
     var onHover: (Bool) -> Void
     var onURLs: ([URL]) -> Void
@@ -31,14 +32,17 @@ struct FileDropCatcher: NSViewRepresentable {
         context.coordinator.onURLs = onURLs
     }
 
+    @MainActor
     final class Coordinator {
         var onHover: (Bool) -> Void
         var onURLs: ([URL]) -> Void
-        let probe = ProbeView()
+        let probe: ProbeView
 
         init(onHover: @escaping (Bool) -> Void, onURLs: @escaping ([URL]) -> Void) {
             self.onHover = onHover
             self.onURLs = onURLs
+            let probe = ProbeView()
+            self.probe = probe
             probe.owner = self
         }
     }
