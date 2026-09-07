@@ -73,7 +73,7 @@ final class AppModel {
         seedGuideIfNeeded()
         let stored = AskSecrets.load()
         askHasKey = !stored.isEmpty
-        askKeyDraft = stored
+        askKeyDraft = ""
         watcher.onChange = { [weak self] path in
             Task { @MainActor in self?.fileDidChange(path) }
         }
@@ -320,6 +320,33 @@ final class AppModel {
     """
 
     func persistAskSettings() {
+        persistAskPrefs()
+        let key = askKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if key.count >= 8 {
+            AskSecrets.save(key)
+            askKeyDraft = ""
+            askHasKey = true
+            statusText = "Ask key locked in"
+        } else {
+            askHasKey = !AskSecrets.load().isEmpty
+            statusText = askHasKey ? "Ask settings saved" : "Ask settings saved — no key yet"
+        }
+    }
+
+    func lockAskKey() {
+        let key = askKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard key.count >= 8 else {
+            statusText = "Paste your API key, then press Enter"
+            return
+        }
+        persistAskPrefs()
+        AskSecrets.save(key)
+        askKeyDraft = ""
+        askHasKey = true
+        statusText = "Ask key locked in"
+    }
+
+    private func persistAskPrefs() {
         UserDefaults.standard.set(askProvider, forKey: "askProvider")
         UserDefaults.standard.set(askModel, forKey: "askModel")
         UserDefaults.standard.set(askBaseURL, forKey: "askBaseURL")
@@ -328,9 +355,6 @@ final class AppModel {
         UserDefaults.standard.set(customFolderPath, forKey: "customFolder")
         UserDefaults.standard.set(ocrEnabled, forKey: "ocrEnabled")
         UserDefaults.standard.set(aiChaptersEnabled, forKey: "aiChaptersEnabled")
-        AskSecrets.save(askKeyDraft)
-        askHasKey = !AskSecrets.load().isEmpty
-        statusText = askHasKey ? "Ask key saved in Keychain" : "Ask key cleared"
     }
 
     func clearAskKey() {

@@ -873,6 +873,7 @@ struct EnginePanel: View {
                             model.askBaseURL = "https://api.openai.com/v1"
                             model.askModel = AskModels.defaultID(for: "openai")
                         }
+                        model.persistAskSettings()
                     }
                 )) {
                     Text("xAI (Grok)").tag("xai")
@@ -891,18 +892,38 @@ struct EnginePanel: View {
                 } else {
                     Picker("Model", selection: Binding(
                         get: { model.askModel },
-                        set: { model.askModel = $0 }
+                        set: {
+                            model.askModel = $0
+                            model.persistAskSettings()
+                        }
                     )) {
                         ForEach(AskModels.list(for: model.askProvider), id: \.id) { m in
                             Text("\(m.label)    \(m.note)").tag(m.id)
                         }
                     }
                 }
-                SecureField("API key", text: Binding(
-                    get: { model.askKeyDraft },
-                    set: { model.askKeyDraft = $0 }
-                ))
-                Text("Stored in the Keychain on this Mac. Sent only to the provider you pick when you Ask.")
+                SecureField(
+                    model.askHasKey ? "Key locked in — paste a new one to replace" : "Paste API key",
+                    text: Binding(
+                        get: { model.askKeyDraft },
+                        set: { model.askKeyDraft = $0 }
+                    )
+                )
+                .onSubmit { model.lockAskKey() }
+                HStack {
+                    Button("Enter") { model.lockAskKey() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.askKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).count < 8)
+                    if model.askHasKey {
+                        Label("Key locked in", systemImage: "lock.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Clear key", role: .destructive) { model.clearAskKey() }
+                }
+                Text(model.askHasKey
+                     ? "Your key is locked in on this Mac. Ask will use it. Paste a new key and press Enter only if you want to replace it."
+                     : "Paste your API key, then press Enter. It stays on this Mac (Keychain) and is only sent when you Ask.")
                     .foregroundStyle(.secondary)
                 Toggle("If the chapter does not provide an answer, also show a model summary", isOn: Binding(
                     get: { model.askWebFallback },
@@ -920,10 +941,6 @@ struct EnginePanel: View {
                 ))
                 Text("Uses your Ask key after conversion. Inserts ## headings where chapters clearly start. Off unless you tick it. Needs a saved key.")
                     .foregroundStyle(.secondary)
-                HStack {
-                    Button("Save key") { model.persistAskSettings() }
-                    Button("Clear key", role: .destructive) { model.clearAskKey() }
-                }
             }
             Section("Scanned PDFs") {
                 Toggle("Layout OCR for scans", isOn: Binding(
