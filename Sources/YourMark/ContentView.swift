@@ -430,12 +430,12 @@ struct ConvertPanel: View {
                     .foregroundStyle(deck.cyan)
                 Text("Drop a PDF")
                     .font(.system(.title, design: .rounded).weight(.bold))
-                Text("Drop a PDF anywhere on this window — Library, Bookmarks, the header. yourMark switches here and starts. Microsoft MarkItDown writes the words; pictures from the PDF are added in one extra pass. Keep the original file.")
+                Text("Drop a PDF anywhere on this window — Library, Bookmarks, the header. yourMark switches here and starts. Microsoft MarkItDown writes the words; pictures from the PDF are added in one extra pass. Word, PowerPoint, Excel, HTML, EPUB, CSV, and Outlook mail work too. Keep the original file.")
                     .foregroundStyle(deck.muted)
                     .frame(maxWidth: 520, alignment: .leading)
 
                 DropZone(
-                    title: "Drop PDFs, Word, PowerPoint, Excel",
+                    title: "Drop PDFs, Word, PowerPoint, Excel, HTML…",
                     subtitle: "Or choose files. Markdown is saved next to the original unless you pick another folder in Settings."
                 ) {
                     model.pickFiles()
@@ -1061,6 +1061,15 @@ struct EnginePanel: View {
                     }
                 ))
                 Text("Uses your Ask key after conversion. Inserts ## headings where chapters clearly start. Off unless you tick it. Needs a saved key.")
+                    .foregroundStyle(.secondary)
+                Toggle("Read text inside pictures with your Ask key", isOn: Binding(
+                    get: { model.askReadPictures },
+                    set: {
+                        model.askReadPictures = $0
+                        UserDefaults.standard.set($0, forKey: "askReadPictures")
+                    }
+                ))
+                Text("Microsoft’s markitdown-ocr plugin sends pictures to your AI so it can read labels on diagrams. Off unless you tick it. A large PDF can mean many requests and a bill. Needs a saved key. Pictures themselves are always saved locally, with or without this.")
                     .foregroundStyle(.secondary)
             }
             Section("Scanned PDFs") {

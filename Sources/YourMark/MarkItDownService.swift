@@ -50,28 +50,50 @@ actor MarkItDownService {
         throw YourMarkError.engineNotFound
     }
 
-    func convert(input: URL, output: URL) async throws -> URL {
+    func convert(
+        input: URL,
+        output: URL,
+        script: URL? = nil,
+        llmKey: String = "",
+        llmBase: String = "",
+        llmModel: String = ""
+    ) async throws -> URL {
         let exe = try await resolveEngine()
-        // keep-data-uris embeds figures from Word/PPTX. PDFs ignore it, so skip
-        // the extra attempt — that was a wasted second pass on huge manuals.
         let ext = input.pathExtension.lowercased()
-        let office = ["docx", "pptx", "xlsx", "ppt", "xls"].contains(ext)
-        // --keep-data-uris is a real MarkItDown CLI flag (images in PPTX/DOCX).
-        // Harmless on PDFs; pdfminer still emits no pictures.
+        let office = ["docx", "pptx", "xlsx", "ppt", "xls", "html", "htm"].contains(ext)
+
+        if let script, FileManager.default.isReadableFile(atPath: script.path),
+           let py = await pythonForEngine() {
+            var extra: [String: String] = [:]
+            if !llmKey.isEmpty {
+                extra["YOURMARK_LLM_KEY"] = llmKey
+                extra["YOURMARK_LLM_BASE"] = llmBase
+                extra["YOURMARK_LLM_MODEL"] = llmModel
+            }
+            do {
+                _ = try await run(
+                    executable: py,
+                    arguments: [script.path, input.path, output.path],
+                    captureStdout: false,
+                    extraEnv: extra
+                )
+                if FileManager.default.fileExists(atPath: output.path) {
+                    return output
+                }
+            } catch {
+                // Fall through to the CLI.
+            }
+        }
+
         var attempts: [[String]] = [
-            [input.path, "-o", output.path, "--keep-data-uris"],
             [input.path, "-o", output.path],
         ]
-        if !office {
-            attempts = [
-                [input.path, "-o", output.path],
-            ]
+        if office {
+            attempts.insert([input.path, "-o", output.path, "--keep-data-uris"], at: 0)
         }
         var lastError: Error = YourMarkError.outputMissing(output.path)
         for args in attempts {
             do {
-                // Do not capture stdout — MarkItDown already writes -o. Buffering
-                // a huge dump here used to deadlock the pipe after the file existed.
                 _ = try await run(executable: exe, arguments: args, captureStdout: false)
                 if FileManager.default.fileExists(atPath: output.path) {
                     return output
@@ -188,6 +210,16 @@ actor MarkItDownService {
             }
             throw error
         }
+        if let py = await pythonForEngine() {
+            log.append("Installing Microsoft’s markitdown-ocr plugin (used only if you tick Read text in pictures)…")
+            if let uv {
+                _ = try? await run(
+                    executable: uv,
+                    arguments: ["pip", "install", "--python", py, "-U", "markitdown-ocr"],
+                    captureStdout: true
+                )
+            }
+        }
         log.append("Ready · \(versionString)")
         return log.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.joined(separator: "\n")
     }
@@ -231,7 +263,8 @@ actor MarkItDownService {
     private func run(
         executable: String,
         arguments: [String],
-        captureStdout: Bool = false
+        captureStdout: Bool = false,
+        extraEnv: [String: String] = [:]
     ) async throws -> (stdout: String, stderr: String) {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -239,6 +272,7 @@ actor MarkItDownService {
                     let result = try ProcessRun.run(
                         executable: executable,
                         arguments: arguments,
+                        extraEnv: extraEnv,
                         captureStdout: captureStdout
                     )
                     if result.status == 0 {

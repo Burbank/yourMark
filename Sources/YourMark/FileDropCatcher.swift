@@ -4,7 +4,8 @@ import UniformTypeIdentifiers
 
 enum ConvertibleKind {
     static let extensions: Set<String> = [
-        "pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "md", "txt", "epub",
+        "pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "md", "txt",
+        "epub", "csv", "json", "xml", "msg",
     ]
 
     static func allows(_ url: URL) -> Bool {

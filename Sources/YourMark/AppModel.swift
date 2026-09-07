@@ -59,6 +59,7 @@ final class AppModel {
     var showDoclingPrompt = false
     var pendingGraphics: [URL] = []
     var aiChaptersEnabled = UserDefaults.standard.object(forKey: "aiChaptersEnabled") as? Bool ?? false
+    var askReadPictures = UserDefaults.standard.object(forKey: "askReadPictures") as? Bool ?? false
     var doclingPath: String? = OcrService.doclingPath()
     var ocrmypdfPath: String? = OcrService.ocrmypdfPath()
     private var convertWanted = false
@@ -460,6 +461,7 @@ final class AppModel {
         UserDefaults.standard.set(customFolderPath, forKey: "customFolder")
         UserDefaults.standard.set(ocrEnabled, forKey: "ocrEnabled")
         UserDefaults.standard.set(aiChaptersEnabled, forKey: "aiChaptersEnabled")
+        UserDefaults.standard.set(askReadPictures, forKey: "askReadPictures")
     }
 
     func clearAskKey() {
@@ -603,6 +605,11 @@ final class AppModel {
             UTType(filenameExtension: "pptx") ?? .data,
             UTType(filenameExtension: "xlsx") ?? .data,
             UTType(filenameExtension: "html") ?? .html,
+            UTType(filenameExtension: "epub") ?? .data,
+            UTType(filenameExtension: "csv") ?? .commaSeparatedText,
+            UTType(filenameExtension: "json") ?? .json,
+            UTType(filenameExtension: "xml") ?? .xml,
+            UTType(filenameExtension: "msg") ?? .data,
         ]
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
@@ -727,7 +734,14 @@ final class AppModel {
                     }
                     statusText = "OCR done — converting \(original.lastPathComponent)…"
                 }
-                let url = try await service.convert(input: input, output: output)
+                let url = try await service.convert(
+                    input: input,
+                    output: output,
+                    script: Bundle.main.url(forResource: "markitdown_convert", withExtension: "py"),
+                    llmKey: (askReadPictures && askHasKey) ? AskSecrets.load() : "",
+                    llmBase: askBaseURL,
+                    llmModel: askModel
+                )
                 var pictures = 0
                 if isPDF {
                     let onFig: @Sendable (String) -> Void = { msg in
