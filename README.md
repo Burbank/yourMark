@@ -36,6 +36,20 @@ If macOS says it could not verify the app: click **Done** (not Move to Bin), the
 
 ## Install
 
+**Everyone:** download the DMG, drag **yourMark** onto **Applications** (follow the arrow), then open it. First launch installs Microsoft MarkItDown.
+
+**Homebrew (optional):**
+
+```sh
+brew tap Burbank/yourMark
+brew install --cask yourmark
+uv tool install 'markitdown[all]'
+```
+
+**From source:** `./Scripts/Install.command` or `./Scripts/build-app.sh`
+
+---
+
 ### If Apple blocks the app
 
 This build is not notarized, so macOS often shows **“yourMark.app” Not Opened** and offers **Move to Bin**. That is Gatekeeper, not malware.
@@ -56,18 +70,6 @@ This build is not notarized, so macOS often shows **“yourMark.app” Not Opene
 </p>
 
 You can also right-click yourMark → **Open**, or double-click **If macOS blocks yourMark** on the disk image.
-
-**Everyone:** download the DMG, drag **yourMark** onto **Applications** (follow the arrow), then open it. First launch installs Microsoft MarkItDown.
-
-**Homebrew (optional):**
-
-```sh
-brew tap Burbank/yourMark
-brew install --cask yourmark
-uv tool install 'markitdown[all]'
-```
-
-**From source:** `./Scripts/Install.command` or `./Scripts/build-app.sh`
 
 ## License
 
