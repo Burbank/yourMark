@@ -531,6 +531,10 @@ struct LibraryPanel: View {
         model.previewHeadings
     }
 
+    private var outlineFromPdf: Bool {
+        !(selected?.bookmarks ?? []).isEmpty
+    }
+
     private var outline: [ManualBookmark] {
         let fromPdf = selected?.bookmarks ?? []
         return fromPdf.isEmpty ? headingBookmarks : fromPdf
@@ -621,7 +625,7 @@ struct LibraryPanel: View {
 
     private var bookmarksColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Bookmarks")
+            Text(outlineFromPdf ? "Bookmarks · from the PDF" : "Bookmarks")
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
                 .foregroundStyle(deck.cyan)
                 .padding(.horizontal, 12)

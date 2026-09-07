@@ -38,12 +38,12 @@ struct HelpView: View {
 
                 Group {
                     Text("Pictures").font(.headline)
-                    Text("In reading order, not the original page layout. After MarkItDown, yourMark pulls pictures from the PDF into a figures folder next to the Markdown. Word / PowerPoint already emit figures as images. Scans use Docling. Pictures will not sit at the original two-column x/y position.")
+                    Text("In reading order, not the original page layout. After MarkItDown, yourMark pulls pictures from the PDF into a figures folder next to the Markdown, and pdfplumber (the same library MarkItDown uses) fills in missed tables and page markers. Word / PowerPoint already emit figures as images via --keep-data-uris. Scans use Docling. Pictures will not sit at the original two-column x/y position. MarkItDown itself cannot reconstruct a PDF page as a picture of the page.")
                 }
 
                 Group {
                     Text("Outline / bookmarks").font(.headline)
-                    Text("Yes, usable like a PDF sidebar. yourMark reads the PDF outline and also builds bookmarks from Markdown headings. Click a bookmark to jump. If a PDF has no outline and no headings (a scan), there is nothing to jump to until OCR.")
+                    Text("Microsoft MarkItDown (pdfminer) does not emit PDF bookmarks or headings — only words and tables. yourMark reads the outline Preview.app shows and writes those titles as Markdown headings at the matching pages. That tree is kept; it is not replaced by guessed headings. If the PDF has no outline, large-font lines are used, then AI chapters only if you tick that option.")
                 }
 
                 Group {

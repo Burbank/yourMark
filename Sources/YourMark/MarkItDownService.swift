@@ -56,11 +56,17 @@ actor MarkItDownService {
         // the extra attempt — that was a wasted second pass on huge manuals.
         let ext = input.pathExtension.lowercased()
         let office = ["docx", "pptx", "xlsx", "ppt", "xls"].contains(ext)
-        var attempts: [[String]] = []
-        if office {
-            attempts.append([input.path, "-o", output.path, "--keep-data-uris"])
+        // --keep-data-uris is a real MarkItDown CLI flag (images in PPTX/DOCX).
+        // Harmless on PDFs; pdfminer still emits no pictures.
+        var attempts: [[String]] = [
+            [input.path, "-o", output.path, "--keep-data-uris"],
+            [input.path, "-o", output.path],
+        ]
+        if !office {
+            attempts = [
+                [input.path, "-o", output.path],
+            ]
         }
-        attempts.append([input.path, "-o", output.path])
         var lastError: Error = YourMarkError.outputMissing(output.path)
         for args in attempts {
             do {
@@ -76,6 +82,54 @@ actor MarkItDownService {
             }
         }
         throw lastError
+    }
+
+    /// pdfplumber lives in the same uv tool env as markitdown. Best-effort.
+    func enrichPDF(markdown: URL, pdf: URL, script: URL?) async {
+        guard pdf.pathExtension.lowercased() == "pdf" else { return }
+        guard let script, FileManager.default.isReadableFile(atPath: script.path) else { return }
+        guard let py = await pythonForEngine() else { return }
+        _ = try? await run(
+            executable: py,
+            arguments: [script.path, pdf.path, markdown.path],
+            captureStdout: false
+        )
+    }
+
+    private func pythonForEngine() async -> String? {
+        let exe = (try? await resolveEngine()) ?? enginePath
+        guard let exe else { return nil }
+        if let data = FileManager.default.contents(atPath: exe),
+           let head = String(data: data.prefix(240), encoding: .utf8),
+           head.hasPrefix("#!") {
+            let line = head.split(separator: "\n", maxSplits: 1).first.map(String.init) ?? ""
+            var path = line.replacingOccurrences(of: "#!", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            if path.hasPrefix("/usr/bin/env ") {
+                path = String(path.dropFirst("/usr/bin/env ".count))
+            }
+            if path.hasSuffix("/python") || path.hasSuffix("/python3"),
+               FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+            // uv shim: exec …/markitdown/bin/markitdown
+            if let match = path.range(of: "/bin/markitdown") {
+                let python = String(path[..<match.lowerBound]) + "/bin/python"
+                if FileManager.default.isExecutableFile(atPath: python) { return python }
+            }
+        }
+        if let data = FileManager.default.contents(atPath: exe),
+           let text = String(data: data.prefix(2000), encoding: .utf8),
+           let range = text.range(of: #"(/[^\s]+/markitdown/bin/)"#, options: .regularExpression) {
+            let python = String(text[range]) + "python"
+            if FileManager.default.isExecutableFile(atPath: python) { return python }
+        }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let guessed = [
+            "\(home)/.local/share/uv/tools/markitdown/bin/python",
+            "\(home)/.local/share/uv/tools/markitdown/bin/python3",
+        ]
+        return guessed.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
     /// Install Microsoft’s official MarkItDown from PyPI (uv). Not vendored.

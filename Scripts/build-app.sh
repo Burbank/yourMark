@@ -31,6 +31,9 @@ cp "$BIN" "$MACOS/$EXEC_NAME"
 if [[ -f "$ROOT/Resources/Help.html" ]]; then
   cp "$ROOT/Resources/Help.html" "$RESOURCES/Help.html"
 fi
+if [[ -f "$ROOT/Resources/pdf_enrich.py" ]]; then
+  cp "$ROOT/Resources/pdf_enrich.py" "$RESOURCES/pdf_enrich.py"
+fi
 
 if [[ -f "$ROOT/Resources/AppIcon.png" ]]; then
   cp "$ROOT/Resources/AppIcon.png" "$RESOURCES/AppIcon.png"
@@ -71,9 +74,9 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.3.20</string>
+	<string>0.3.21</string>
 	<key>CFBundleVersion</key>
-	<string>32</string>${ICON_PLIST}
+	<string>33</string>${ICON_PLIST}
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>NSHighResolutionCapable</key>

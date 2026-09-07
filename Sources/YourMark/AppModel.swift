@@ -554,23 +554,22 @@ final class AppModel {
         NSApp.activate(ignoringOtherApps: true)
         NSApp.windows.first?.makeKeyAndOrderFront(nil)
 
-        let graphic = allowed.filter { url in
+        let scans = allowed.filter { url in
             guard url.pathExtension.lowercased() == "pdf", ocrEnabled else { return false }
-            let p = OcrService.profile(url)
-            return p.needsOCR || p.looksGraphic
+            return OcrService.profile(url).needsOCR
         }
-        let rest = allowed.filter { url in !graphic.contains(where: { $0.path == url.path }) }
+        let rest = allowed.filter { url in !scans.contains(where: { $0.path == url.path }) }
         if !rest.isEmpty { enqueue(rest) }
 
         let doclingReady = OcrService.doclingPath() != nil
             || UserDefaults.standard.bool(forKey: "doclingReady")
-        if !graphic.isEmpty, !doclingReady {
-            pendingGraphics.append(contentsOf: graphic.filter { g in
+        if !scans.isEmpty, !doclingReady {
+            pendingGraphics.append(contentsOf: scans.filter { g in
                 !pendingGraphics.contains(where: { $0.path == g.path })
             })
             showDoclingPrompt = true
-        } else if !graphic.isEmpty {
-            enqueue(graphic)
+        } else if !scans.isEmpty {
+            enqueue(scans)
         }
 
         Task { await convertQueued() }
@@ -678,7 +677,6 @@ final class AppModel {
             let original = jobs[index].sourceURL
             let jobID = jobs[index].id
             let scan = jobs[index].needsOCR
-            let graphic = jobs[index].looksGraphic
             jobs[index].status = .running
             jobs[index].startedAt = Date()
             statusText = "Converting \(original.lastPathComponent)…"
@@ -688,7 +686,7 @@ final class AppModel {
                 var input = original
                 var usedOCR = false
                 let isPDF = original.pathExtension.lowercased() == "pdf"
-                let layoutFirst = ocrEnabled && isPDF && (scan || graphic)
+                let layoutFirst = ocrEnabled && isPDF && scan
                 if layoutFirst {
                     jobs[index].needsOCR = true
                     jobs[index].detail = "Layout OCR first — this takes a little longer"
@@ -713,9 +711,12 @@ final class AppModel {
                             sourcePDF: original,
                             onStatus: onOCR
                         )
+                        if let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py") {
+                            await service.enrichPDF(markdown: output, pdf: original, script: script)
+                        }
                         let bookmarks = await loadBookmarks(original)
-                        let url = await finalizeMarkdown(output, original: original, bookmarks: bookmarks)
-                        await finishJob(jobID: jobID, markdown: url, original: original, usedOCR: true, pictures: pictures, bookmarks: bookmarks)
+                        let (url, located) = await finalizeMarkdown(output, original: original, bookmarks: bookmarks)
+                        await finishJob(jobID: jobID, markdown: url, original: original, usedOCR: true, pictures: pictures, bookmarks: located)
                         continue
                     }
                     let prepared = try await OcrService.searchablePDF(from: original, onStatus: onOCR)
@@ -741,16 +742,19 @@ final class AppModel {
                     if pictures == 0, usedOCR, OcrService.markdownLooksEmpty(url) {
                         await OcrService.enrichMarkdown(markdownURL: url, sourcePDF: original, onStatus: onFig)
                     }
+                    let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py")
+                    statusText = "Restoring the PDF outline and tables…"
+                    await service.enrichPDF(markdown: url, pdf: original, script: script)
                 }
                 let bookmarks = await loadBookmarks(original)
-                let final = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
+                let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
                 await finishJob(
                     jobID: jobID,
                     markdown: final,
                     original: original,
                     usedOCR: usedOCR,
                     pictures: pictures,
-                    bookmarks: bookmarks
+                    bookmarks: located
                 )
             } catch {
                 if let i = jobs.firstIndex(where: { $0.id == jobID }) {
@@ -764,23 +768,26 @@ final class AppModel {
     private func loadBookmarks(_ url: URL) async -> [ManualBookmark] {
         await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
-                cont.resume(returning: PdfSidecar.bookmarks(from: url))
+                let fromPdf = PdfSidecar.bookmarks(from: url)
+                if !fromPdf.isEmpty {
+                    cont.resume(returning: fromPdf)
+                    return
+                }
+                cont.resume(returning: PdfSidecar.fontHeadings(from: url))
             }
         }
     }
 
-    private func finalizeMarkdown(_ url: URL, original: URL, bookmarks: [ManualBookmark]) async -> URL {
-        if !bookmarks.isEmpty {
-            let outline = PdfSidecar.outlineMarkdown(bookmarks)
-            await Task.detached {
-                guard var text = try? String(contentsOf: url, encoding: .utf8) else { return }
-                if !text.contains("## Outline") {
-                    text = outline + text
-                    try? text.write(to: url, atomically: true, encoding: .utf8)
-                }
-            }.value
-        }
-        return await maybeAddAIChapters(markdownURL: url, hasOutline: !bookmarks.isEmpty)
+    private func finalizeMarkdown(_ url: URL, original: URL, bookmarks: [ManualBookmark]) async -> (URL, [ManualBookmark]) {
+        let located = await Task.detached { () -> [ManualBookmark] in
+            guard var text = try? String(contentsOf: url, encoding: .utf8) else { return bookmarks }
+            let stitched = PdfSidecar.stitch(bookmarks: bookmarks, markdown: text, pdf: original)
+            try? stitched.text.write(to: url, atomically: true, encoding: .utf8)
+            PdfSidecar.writeSidecar(stitched.bookmarks, nextTo: url)
+            return stitched.bookmarks
+        }.value
+        let after = await maybeAddAIChapters(markdownURL: url, hasOutline: !located.isEmpty)
+        return (after, located)
     }
 
     private func finishJob(
@@ -1108,6 +1115,17 @@ final class AppModel {
     private func loadLibrary() {
         guard let data = try? Data(contentsOf: libraryURL) else { return }
         library = (try? JSONDecoder().decode([LibraryItem].self, from: data)) ?? []
+        for i in library.indices where library[i].bookmarks.isEmpty {
+            let md = URL(fileURLWithPath: library[i].markdownPath)
+            let side = PdfSidecar.readSidecar(nextTo: md)
+            if !side.isEmpty {
+                library[i].bookmarks = side
+                continue
+            }
+            if let src = library[i].sourcePath, FileManager.default.fileExists(atPath: src) {
+                library[i].bookmarks = PdfSidecar.bookmarks(from: URL(fileURLWithPath: src))
+            }
+        }
     }
 
     private func saveLibrary() {
