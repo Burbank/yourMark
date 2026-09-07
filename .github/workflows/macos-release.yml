@@ -1,0 +1,41 @@
+name: Mac app
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode_16.app || true
+          xcodebuild -version
+          swift --version
+      - name: Package DMG
+        run: |
+          chmod +x Scripts/*.sh Scripts/*.command || true
+          ./Scripts/package-dmg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yourMark-dmg
+          path: dist/yourMark.dmg
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" dist/yourMark.dmg --clobber
+          else
+            gh release create "${{ github.ref_name }}" dist/yourMark.dmg \
+              --title "yourMark ${{ github.ref_name }}" \
+              --notes "Double-click **Install yourMark** on the disk image. If macOS says it could not verify the app, click Done (not Move to Bin), then **If macOS blocks yourMark**. First launch installs Microsoft MarkItDown from PyPI."
+          fi

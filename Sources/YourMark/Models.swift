@@ -1,0 +1,91 @@
+import Foundation
+
+enum AppTool: String, CaseIterable, Identifiable {
+    case library = "Library"
+    case convert = "Convert"
+
+    var id: String { rawValue }
+}
+
+struct ConvertJob: Identifiable, Hashable {
+    let id: UUID
+    var sourceURL: URL
+    var outputURL: URL?
+    var status: Status
+    var detail: String
+    var startedAt: Date?
+
+    enum Status: String {
+        case queued, running, done, failed
+    }
+}
+
+struct LibraryItem: Identifiable, Hashable, Codable {
+    var id: UUID
+    var title: String
+    var sourceName: String
+    var markdownPath: String
+    var addedAt: Date
+    var byteCount: Int64
+    var bookmarks: [ManualBookmark] = []
+    var sourcePath: String = ""
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, sourceName, markdownPath, addedAt, byteCount, bookmarks, sourcePath
+    }
+
+    init(
+        id: UUID,
+        title: String,
+        sourceName: String,
+        markdownPath: String,
+        addedAt: Date,
+        byteCount: Int64,
+        bookmarks: [ManualBookmark] = [],
+        sourcePath: String = ""
+    ) {
+        self.id = id
+        self.title = title
+        self.sourceName = sourceName
+        self.markdownPath = markdownPath
+        self.addedAt = addedAt
+        self.byteCount = byteCount
+        self.bookmarks = bookmarks
+        self.sourcePath = sourcePath
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        sourceName = try c.decode(String.self, forKey: .sourceName)
+        markdownPath = try c.decode(String.self, forKey: .markdownPath)
+        addedAt = try c.decode(Date.self, forKey: .addedAt)
+        byteCount = try c.decode(Int64.self, forKey: .byteCount)
+        bookmarks = try c.decodeIfPresent([ManualBookmark].self, forKey: .bookmarks) ?? []
+        sourcePath = try c.decodeIfPresent(String.self, forKey: .sourcePath) ?? ""
+    }
+}
+
+enum YourMarkError: Error, LocalizedError {
+    case engineNotFound
+    case invalidInput(String)
+    case processFailed(String)
+    case cancelled
+    case outputMissing(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .engineNotFound:
+            return "Microsoft MarkItDown is not installed yet. yourMark installs it from PyPI on first launch — use Install converter if it did not finish."
+        case .invalidInput(let message):
+            return message
+        case .processFailed(let message):
+            return message
+        case .cancelled:
+            return "Cancelled"
+        case .outputMissing(let path):
+            return "No output at \(path)"
+        }
+    }
+}
