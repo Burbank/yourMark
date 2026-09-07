@@ -429,7 +429,7 @@ struct ConvertPanel: View {
                     .foregroundStyle(deck.cyan)
                 Text("Drop a PDF")
                     .font(.system(.title, design: .rounded).weight(.bold))
-                Text("Drop a PDF anywhere on this window — Library, Bookmarks, the header. yourMark switches here and starts. Microsoft MarkItDown writes Markdown on this Mac. Keep the original file.")
+                Text("Drop a PDF anywhere on this window — Library, Bookmarks, the header. yourMark switches here and starts. Microsoft MarkItDown writes the words; pictures from the PDF are added in one extra pass. Keep the original file.")
                     .foregroundStyle(deck.muted)
                     .frame(maxWidth: 520, alignment: .leading)
 
@@ -527,24 +527,7 @@ struct LibraryPanel: View {
     }
 
     private var headingBookmarks: [ManualBookmark] {
-        var used = Set<String>()
-        var items: [ManualBookmark] = []
-        let lines = model.previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false)
-        for (i, line) in lines.enumerated() {
-            guard let title = PdfSidecar.headingText(String(line)) else { continue }
-            guard title.caseInsensitiveCompare("Outline") != .orderedSame else { continue }
-            var key = title.lowercased()
-            if used.contains(key) { key += "-\(items.count)" }
-            used.insert(key)
-            items.append(ManualBookmark(title: title, level: {
-                var n = 0
-                for ch in String(line) {
-                    if ch == "#" { n += 1 } else { break }
-                }
-                return max(1, min(n, 3))
-            }(), pageIndex: nil, lineIndex: i))
-        }
-        return items
+        model.previewHeadings
     }
 
     private var outline: [ManualBookmark] {
@@ -671,13 +654,10 @@ struct LibraryPanel: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(markdownSections, id: \.id) { section in
+                    ForEach(markdownSections) { section in
                         VStack(alignment: .leading, spacing: 2) {
                             ForEach(Array(section.lines.enumerated()), id: \.offset) { _, line in
-                                Text(line.isEmpty ? " " : line)
-                                    .font(.body)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                markdownLine(line)
                             }
                         }
                         .id(section.id)
@@ -694,28 +674,60 @@ struct LibraryPanel: View {
         }
     }
 
-    private var markdownSections: [(id: Int, lines: [String])] {
-        let lines = model.previewMarkdown.isEmpty
-            ? ["Select a converted file."]
-            : model.previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var sections: [(id: Int, lines: [String])] = []
-        var currentId = 0
-        var current: [String] = []
-        for (i, line) in lines.enumerated() {
-            let isHeading = PdfSidecar.headingText(line) != nil
-            if isHeading, !current.isEmpty {
-                sections.append((currentId, current))
-                current = [line]
-                currentId = i
-            } else {
-                if current.isEmpty { currentId = i }
-                current.append(line)
+    @ViewBuilder
+    private func markdownLine(_ line: String) -> some View {
+        if let img = markdownImage(line, base: model.previewBaseURL) {
+            VStack(alignment: .leading, spacing: 4) {
+                if let ns = NSImage(contentsOf: img.url), ns.size.width > 1 {
+                    Image(nsImage: ns)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 420)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                if !img.alt.isEmpty {
+                    Text(img.alt)
+                        .font(.caption)
+                        .foregroundStyle(deck.muted)
+                }
             }
+            .padding(.vertical, 6)
+        } else {
+            Text(line.isEmpty ? " " : line)
+                .font(.body)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        if !current.isEmpty { sections.append((currentId, current)) }
-        if sections.isEmpty { sections.append((0, ["Select a converted file."])) }
-        return sections
     }
+
+    private var markdownSections: [PreviewSection] {
+        if model.previewSections.isEmpty {
+            return [PreviewSection(id: 0, lines: ["Select a converted file."])]
+        }
+        return model.previewSections
+    }
+}
+
+private func markdownImage(_ line: String, base: URL?) -> (alt: String, url: URL)? {
+    let t = line.trimmingCharacters(in: .whitespaces)
+    guard t.hasPrefix("!["), let mid = t.range(of: "]("), t.contains(")") else { return nil }
+    let alt = String(t[t.index(t.startIndex, offsetBy: 2)..<mid.lowerBound])
+    let after = t[mid.upperBound...]
+    guard let end = after.firstIndex(of: ")") else { return nil }
+    var path = String(after[..<end])
+    if let space = path.firstIndex(of: " ") {
+        path = String(path[..<space])
+    }
+    path = path.trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
+    if path.hasPrefix("data:") { return nil }
+    if path.hasPrefix("http://") || path.hasPrefix("https://"), let url = URL(string: path) {
+        return (alt, url)
+    }
+    guard let base else { return nil }
+    let url = path.hasPrefix("/")
+        ? URL(fileURLWithPath: path)
+        : base.appendingPathComponent(path)
+    return (alt, url)
 }
 
 private struct LibraryCard: View {

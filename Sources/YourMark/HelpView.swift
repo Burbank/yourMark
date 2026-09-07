@@ -38,7 +38,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Pictures").font(.headline)
-                    Text("In reading order, not the original page layout. Word / PowerPoint usually emit figures as Markdown images. Scans and drawings need extras (OCR) and will not sit in the original two-column x/y position.")
+                    Text("In reading order, not the original page layout. After MarkItDown, yourMark pulls pictures from the PDF into a figures folder next to the Markdown. Word / PowerPoint already emit figures as images. Scans use Docling. Pictures will not sit at the original two-column x/y position.")
                 }
 
                 Group {

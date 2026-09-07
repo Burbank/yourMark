@@ -15,6 +15,8 @@ struct ConvertJob: Identifiable, Hashable {
     var detail: String
     var startedAt: Date?
     var needsOCR: Bool = false
+    var looksGraphic: Bool = false
+    var pictureCount: Int = 0
 
     enum Status: String {
         case queued, running, done, failed
@@ -89,4 +91,17 @@ enum YourMarkError: Error, LocalizedError {
             return "No output at \(path)"
         }
     }
+}
+
+struct PreviewSection: Identifiable, Sendable, Hashable {
+    var id: Int
+    var lines: [String]
+}
+
+struct PreviewPack: Sendable {
+    var text: String
+    var lines: [String]
+    var headings: [ManualBookmark]
+    var sections: [PreviewSection]
+    var base: URL
 }
