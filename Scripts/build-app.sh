@@ -34,6 +34,9 @@ fi
 if [[ -f "$ROOT/Resources/pdf_enrich.py" ]]; then
   cp "$ROOT/Resources/pdf_enrich.py" "$RESOURCES/pdf_enrich.py"
 fi
+if [[ -f "$ROOT/Resources/markitdown_convert.py" ]]; then
+  cp "$ROOT/Resources/markitdown_convert.py" "$RESOURCES/markitdown_convert.py"
+fi
 
 if [[ -f "$ROOT/Resources/AppIcon.png" ]]; then
   cp "$ROOT/Resources/AppIcon.png" "$RESOURCES/AppIcon.png"
@@ -74,9 +77,9 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.3.22</string>
+	<string>0.3.23</string>
 	<key>CFBundleVersion</key>
-	<string>34</string>${ICON_PLIST}
+	<string>35</string>${ICON_PLIST}
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>NSHighResolutionCapable</key>

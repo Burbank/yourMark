@@ -13,6 +13,7 @@ enum ProcessRun {
         executable: String,
         arguments: [String],
         extraPATH: [String] = [],
+        extraEnv: [String: String] = [:],
         captureStdout: Bool = true
     ) throws -> Result {
         let process = Process()
@@ -31,6 +32,7 @@ enum ProcessRun {
             "/usr/local/bin",
         ]
         env["PATH"] = extra.joined(separator: ":") + ":" + (env["PATH"] ?? "")
+        for (k, v) in extraEnv { env[k] = v }
         process.environment = env
 
         let box = DrainBox()

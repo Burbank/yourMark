@@ -18,7 +18,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Engine").font(.headline)
-                    Text("yourMark does not ship a frozen converter. First launch installs Microsoft’s official `markitdown` package from PyPI (via uv). About once a day it checks PyPI and upgrades if Microsoft shipped a newer package. Menu → Settings → Upgrade engine does that immediately. The app also looks at GitHub for a newer yourMark and shows a banner when one is there. Drop a PDF anywhere on the window — it switches to Convert and starts. You do not have to hit the dashed box.")
+                    Text("yourMark does not ship a frozen converter. First launch installs Microsoft’s official `markitdown` package from PyPI (via uv), including the markitdown-ocr plugin. Convert goes through MarkItDown’s Python API (not only the thin CLI): Word styles, keep-data-uris for Office pictures, and — only if you tick it — vision OCR with your Ask key. About once a day it checks PyPI. Menu → Settings → Install or reinstall does that immediately. Drop a PDF anywhere on the window.")
                 }
 
                 Group {
