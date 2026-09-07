@@ -577,19 +577,18 @@ final class AppModel {
 
     func jumpToBookmark(_ bookmark: ManualBookmark) {
         askChapter = bookmark.title
-        let lines = previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false)
-        let needle = bookmark.title.trimmingCharacters(in: .whitespaces)
-        if let idx = lines.firstIndex(where: {
-            $0.localizedCaseInsensitiveContains(needle)
-        }) {
-            scrollToLine = idx
-            return
-        }
-        if let page = bookmark.pageIndex {
-            let label = "p. \(page + 1)"
-            if let idx = lines.firstIndex(where: { $0.localizedCaseInsensitiveContains(label) }) {
-                scrollToLine = idx
+        let lines = previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let pdf = selectedLibraryID.flatMap { id in
+            library.first(where: { $0.id == id }).flatMap { item -> URL? in
+                item.sourcePath.isEmpty ? nil : URL(fileURLWithPath: item.sourcePath)
             }
+        }
+        guard let idx = PdfSidecar.line(for: bookmark, in: lines, pdf: pdf) else { return }
+        if scrollToLine == idx {
+            scrollToLine = nil
+        }
+        Task { @MainActor in
+            self.scrollToLine = idx
         }
     }
 
