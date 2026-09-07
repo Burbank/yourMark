@@ -10,6 +10,11 @@ struct HelpView: View {
                     .foregroundStyle(.secondary)
 
                 Group {
+                    Text("Why Markdown").font(.headline)
+                    Text("A PDF is a picture of a page. Markdown is the words, in order, as plain text you can search and edit. That is why it works so well with AI: a model can read a chapter, quote it, and tell you when the file is silent — instead of guessing at columns or a scan. Paste one heading into Grok or ChatGPT, keep notes in Obsidian, or search a whole course. Tables stay tables. Headings stay an outline. Keep the original PDF; Markdown is the working copy.")
+                }
+
+                Group {
                     Text("Engine").font(.headline)
                     Text("yourMark does not ship a frozen converter. It runs the `markitdown` CLI from uv or Homebrew Python. Menu → Engine → Upgrade MarkItDown runs `uv tool upgrade markitdown` so Microsoft’s PyPI releases show up without a new .app.")
                 }
