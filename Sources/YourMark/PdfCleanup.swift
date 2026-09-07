@@ -106,10 +106,15 @@ enum PdfCleanup {
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !line.isEmpty else { continue }
             if stripChrome, isChrome(line, chrome: chrome) { continue }
-            if let heading = numberedHeading(line) {
+            if let hit = numberedHeading(line) {
                 if !out.isEmpty { out.append("") }
-                out.append(heading)
-                lastWasHeading = true
+                out.append(hit.heading)
+                if hit.rest.isEmpty {
+                    lastWasHeading = true
+                } else {
+                    out.append(hit.rest)
+                    lastWasHeading = false
+                }
                 continue
             }
             if let callout = numberedCallout(line) {
@@ -210,8 +215,8 @@ enum PdfCleanup {
     }
 
     /// "8.1 Controls and Indicators" → "## 8.1 Controls and Indicators"
-    /// Character scan — no NSRegularExpression (invalid patterns abort the process).
-    private static func numberedHeading(_ line: String) -> String? {
+    /// Also splits a glued title+paragraph. Allows "(ERF)" prefixes.
+    private static func numberedHeading(_ line: String) -> (heading: String, rest: String)? {
         let t = line.trimmingCharacters(in: .whitespaces)
         guard let first = t.first, first.isNumber else { return nil }
         var i = t.startIndex
@@ -231,15 +236,54 @@ enum PdfCleanup {
             }
             break
         }
-        guard dots >= 1, dots <= 6, i < t.endIndex, t[i].isWhitespace else { return nil }
-        let number = String(t[t.startIndex..<i])
-        let title = t[i...].trimmingCharacters(in: .whitespaces)
-        guard let head = title.first, head.isLetter else { return nil }
-        guard title.count >= 3, title.count <= 90 else { return nil }
+        guard dots >= 1, dots <= 6, i < t.endIndex else { return nil }
+        let numberEnd = i
+        if t[i].isWhitespace {
+            i = t.index(after: i)
+            while i < t.endIndex, t[i].isWhitespace { i = t.index(after: i) }
+        } else if !(t[i].isLetter || t[i] == "(") {
+            return nil
+        }
+        guard i < t.endIndex else { return nil }
+        let num = String(t[t.startIndex..<numberEnd])
+        let after = t[i...].trimmingCharacters(in: .whitespaces)
+        guard let title = takeHeadingTitle(after) else { return nil }
+        let rest = String(after.dropFirst(title.count)).trimmingCharacters(in: .whitespaces)
         let low = title.lowercased()
         if low.hasPrefix("page") || low.hasPrefix("date") || low.hasPrefix("iss") { return nil }
         let level = min(6, max(2, dots + 1))
-        return String(repeating: "#", count: level) + " " + number + " " + title
+        return (String(repeating: "#", count: level) + " " + num + " " + title, rest)
+    }
+
+    private static func takeHeadingTitle(_ after: String) -> String? {
+        guard !after.isEmpty else { return nil }
+        var i = after.startIndex
+        if after[i] == "(" {
+            guard let close = after[i...].firstIndex(of: ")") else { return nil }
+            i = after.index(after: close)
+            while i < after.endIndex, after[i].isWhitespace { i = after.index(after: i) }
+        }
+        guard i < after.endIndex, after[i].isLetter else { return nil }
+        if after.count <= 90 {
+            return after
+        }
+        var last = i
+        var words = 0
+        var j = i
+        while j < after.endIndex {
+            let start = j
+            while j < after.endIndex, !after[j].isWhitespace { j = after.index(after: j) }
+            let word = after[start..<j]
+            if words > 0, let f = word.first, f.isLowercase { break }
+            if word.count > 40 { break }
+            if after.distance(from: after.startIndex, to: j) > 90 { break }
+            last = j
+            words += 1
+            if words >= 8 { break }
+            while j < after.endIndex, after[j].isWhitespace { j = after.index(after: j) }
+        }
+        let title = String(after[after.startIndex..<last]).trimmingCharacters(in: .whitespaces)
+        return title.count >= 3 ? title : nil
     }
 
     /// "1 Engine Fire Switches" → "**1 Engine Fire Switches**"

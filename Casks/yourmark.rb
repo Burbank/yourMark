@@ -1,5 +1,5 @@
 cask "yourmark" do
-  version "0.3.29"
+  version "0.3.30"
   sha256 :no_check
 
   url "https://github.com/Burbank/yourMark/releases/latest/download/yourMark.dmg"
