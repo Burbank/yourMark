@@ -18,7 +18,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Engine").font(.headline)
-                    Text("yourMark does not ship a frozen converter. First launch installs Microsoft’s official `markitdown` package from PyPI (via uv). Menu → Settings → Upgrade engine pulls their current release without a new .app.")
+                    Text("yourMark does not ship a frozen converter. First launch installs Microsoft’s official `markitdown` package from PyPI (via uv). About once a day it checks PyPI and upgrades if Microsoft shipped a newer package. Menu → Settings → Upgrade engine does that immediately. The app also looks at GitHub for a newer yourMark and shows a banner when one is there. Drop a PDF anywhere on the window — it switches to Convert and starts. You do not have to hit the dashed box.")
                 }
 
                 Group {

@@ -16,6 +16,9 @@ struct ContentView: View {
             if model.installingEngine || model.enginePath == nil {
                 EngineBanner()
             }
+            if let tag = model.appUpdateTag {
+                AppUpdateBanner(tag: tag)
+            }
             Group {
                 if model.showSettings {
                     EnginePanel()
@@ -34,6 +37,21 @@ struct ContentView: View {
         .foregroundStyle(deck.ink)
         .environment(\.deck, deck)
         .preferredColorScheme(model.colorScheme)
+        .background(FileDropCatcher { urls in model.openIncoming(urls) })
+        .onDrop(of: [.fileURL], isTargeted: Binding(
+            get: { model.draggingFiles },
+            set: { model.draggingFiles = $0 }
+        )) { providers in
+            ingestDrop(providers)
+            return true
+        }
+        .overlay {
+            if model.draggingFiles {
+                RoundedRectangle(cornerRadius: 0)
+                    .strokeBorder(deck.cyan, lineWidth: 3)
+                    .allowsHitTesting(false)
+            }
+        }
         .task { await model.bootstrap() }
         .alert("Something went wrong", isPresented: Binding(
             get: { model.errorMessage != nil },
@@ -43,6 +61,34 @@ struct ContentView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
+    }
+
+    private func ingestDrop(_ providers: [NSItemProvider]) -> Bool {
+        let lock = NSLock()
+        var urls: [URL] = []
+        let group = DispatchGroup()
+        for provider in providers {
+            group.enter()
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                defer { group.leave() }
+                let url: URL?
+                if let value = item as? URL {
+                    url = value
+                } else if let data = item as? Data {
+                    url = URL(dataRepresentation: data, relativeTo: nil)
+                } else {
+                    url = nil
+                }
+                guard let url, ConvertibleKind.allows(url) else { return }
+                lock.lock()
+                urls.append(url)
+                lock.unlock()
+            }
+        }
+        group.notify(queue: .main) {
+            if !urls.isEmpty { model.openIncoming(urls) }
+        }
+        return true
     }
 
     private var statusBar: some View {
@@ -116,6 +162,36 @@ private struct EngineBanner: View {
     }
 }
 
+private struct AppUpdateBanner: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
+    let tag: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "arrow.down.app")
+                .foregroundStyle(deck.cyan)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("yourMark \(tag) is on GitHub")
+                    .font(.body.weight(.bold))
+                Text("This app is \(AppUpdates.currentVersion). Open the release page to download.")
+                    .font(.caption)
+                    .foregroundStyle(deck.muted)
+            }
+            Spacer()
+            Button("GitHub") { model.openAppUpdate() }
+                .buttonStyle(.borderedProminent)
+                .tint(deck.btn)
+            Button("Later") { model.dismissAppUpdate() }
+                .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(deck.field)
+        .overlay(Rectangle().frame(height: deck.border).foregroundStyle(deck.line), alignment: .bottom)
+    }
+}
+
 private struct TopBar: View {
     @Environment(AppModel.self) private var model
     @Environment(\.deck) private var deck
@@ -174,20 +250,18 @@ private struct TopBar: View {
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: model.showSettings ? 0 : deck.border))
             }
             .buttonStyle(.plain)
-            if model.showInfoButton {
-                Button {
-                    model.toggleHelp()
-                } label: {
-                    Text("i")
-                        .font(.body.weight(.bold))
-                        .frame(width: 36, height: 36)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(model.showHelp ? deck.btn : deck.panel))
-                        .foregroundStyle(model.showHelp ? deck.btnText : deck.ink)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: model.showHelp ? 0 : deck.border))
-                }
-                .buttonStyle(.plain)
-                .help("Guide")
+            Button {
+                model.toggleHelp()
+            } label: {
+                Text("i")
+                    .font(.body.weight(.bold))
+                    .frame(width: 36, height: 36)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(model.showHelp ? deck.btn : deck.panel))
+                    .foregroundStyle(model.showHelp ? deck.btnText : deck.ink)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: model.showHelp ? 0 : deck.border))
             }
+            .buttonStyle(.plain)
+            .help("Guide")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -224,7 +298,7 @@ struct ConvertPanel: View {
                     .foregroundStyle(deck.cyan)
                 Text("Drop a PDF")
                     .font(.system(.title, design: .rounded).weight(.bold))
-                Text("Lecture notes, papers, slides, handouts. Microsoft MarkItDown writes Markdown on this Mac. Keep the original file.")
+                Text("Drop a PDF anywhere on this window — Library, Bookmarks, the header. yourMark switches here and starts. Microsoft MarkItDown writes Markdown on this Mac. Keep the original file.")
                     .foregroundStyle(deck.muted)
                     .frame(maxWidth: 520, alignment: .leading)
 
@@ -234,7 +308,7 @@ struct ConvertPanel: View {
                 ) {
                     model.pickFiles()
                 } onDrop: { urls in
-                    model.enqueue(urls)
+                    model.openIncoming(urls)
                 }
 
                 if !model.jobs.isEmpty {
@@ -327,94 +401,110 @@ struct LibraryPanel: View {
     }
 
     var body: some View {
-        HSplitView {
-            List {
-                ForEach(model.library) { item in
-                    LibraryCard(item: item)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                model.removeLibrary(item)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                        .contextMenu {
-                            Button("Open") { model.selectLibrary(item) }
-                            Button("Show in Finder") { model.revealLibrary(item) }
-                            Divider()
-                            Button("Delete", role: .destructive) { model.removeLibrary(item) }
-                        }
-                }
-                .onMove { model.moveLibrary(from: $0, to: $1) }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(deck.page)
-            .frame(minWidth: 240, idealWidth: 280)
-
+        GeometryReader { geo in
+            let libraryW = max(180, geo.size.width * 0.20)
+            let marksW = max(140, geo.size.width * 0.15)
             HSplitView {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Bookmarks")
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(deck.cyan)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 10)
-                    if outline.isEmpty {
-                        Text("No outline. Scanned PDFs need OCR first, or the source had no bookmarks/headings.")
-                            .font(.caption)
-                            .foregroundStyle(deck.muted)
-                            .padding(12)
-                    }
-                    List(outline) { item in
-                        Button {
-                            model.jumpToBookmark(item)
-                        } label: {
-                            Text(item.title)
-                                .padding(.leading, CGFloat((item.level - 1) * 10))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .listRowBackground(Color.clear)
-                        .foregroundStyle(deck.ink)
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                }
-                .background(deck.panel)
-                .frame(minWidth: 180, idealWidth: 220)
+                libraryColumn
+                    .frame(minWidth: 160, idealWidth: libraryW, maxWidth: max(280, geo.size.width * 0.36))
 
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 2) {
-                            let lines = model.previewMarkdown.isEmpty
-                                ? ["Select a converted file."]
-                                : model.previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-                            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
-                                Text(line.isEmpty ? " " : line)
-                                    .font(.body)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .id(i)
-                            }
-                        }
-                        .padding(20)
-                    }
-                    .background(deck.field)
-                    .onChange(of: model.scrollToLine) { _, line in
-                        if let line {
-                            withAnimation { proxy.scrollTo(line, anchor: .top) }
-                        }
-                    }
+                HSplitView {
+                    bookmarksColumn
+                        .frame(minWidth: 120, idealWidth: marksW, maxWidth: max(240, geo.size.width * 0.32))
+                    markdownColumn
+                        .frame(minWidth: 280)
                 }
             }
         }
         .background(deck.page)
         .safeAreaInset(edge: .bottom) {
             AskStrip()
+        }
+    }
+
+    private var libraryColumn: some View {
+        List {
+            ForEach(model.library) { item in
+                LibraryCard(item: item)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            model.removeLibrary(item)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                    .contextMenu {
+                        Button("Open") { model.selectLibrary(item) }
+                        Button("Show in Finder") { model.revealLibrary(item) }
+                        Divider()
+                        Button("Delete", role: .destructive) { model.removeLibrary(item) }
+                    }
+            }
+            .onMove { model.moveLibrary(from: $0, to: $1) }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(deck.page)
+    }
+
+    private var bookmarksColumn: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Bookmarks")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(deck.cyan)
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+            if outline.isEmpty {
+                Text("No outline. Scanned PDFs need OCR first, or the source had no bookmarks/headings.")
+                    .font(.caption)
+                    .foregroundStyle(deck.muted)
+                    .padding(12)
+            }
+            List(outline) { item in
+                Button {
+                    model.jumpToBookmark(item)
+                } label: {
+                    Text(item.title)
+                        .padding(.leading, CGFloat((item.level - 1) * 10))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(Color.clear)
+                .foregroundStyle(deck.ink)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+        }
+        .background(deck.panel)
+    }
+
+    private var markdownColumn: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    let lines = model.previewMarkdown.isEmpty
+                        ? ["Select a converted file."]
+                        : model.previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+                    ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                        Text(line.isEmpty ? " " : line)
+                            .font(.body)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .id(i)
+                    }
+                }
+                .padding(20)
+            }
+            .background(deck.field)
+            .onChange(of: model.scrollToLine) { _, line in
+                if let line {
+                    withAnimation { proxy.scrollTo(line, anchor: .top) }
+                }
+            }
         }
     }
 }
@@ -548,7 +638,7 @@ struct EnginePanel: View {
                     Text(model.enginePath ?? "Not found")
                         .textSelection(.enabled)
                 }
-                Text("The GUI does not pin or vendor the converter. Install / Upgrade pulls the current package from PyPI.")
+                Text("The GUI does not pin or vendor the converter. About once a day it checks PyPI and upgrades if Microsoft shipped a newer package. Install / Upgrade does that immediately.")
                     .foregroundStyle(.secondary)
                 Button("Install or reinstall") { Task { await model.installEngine() } }
                     .disabled(model.installingEngine)

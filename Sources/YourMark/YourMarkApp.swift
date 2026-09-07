@@ -7,11 +7,12 @@ struct YourMarkApp: App {
     @State private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup {
+        Window("yourMark", id: "main") {
             ContentView()
                 .environment(model)
                 .frame(minWidth: 960, minHeight: 620)
-                .onAppear { appDelegate.model = model }
+                .onAppear { appDelegate.attach(model) }
+                .onOpenURL { url in model.openIncoming([url]) }
         }
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1180, height: 740)
@@ -29,30 +30,66 @@ struct YourMarkApp: App {
                 Button("Install converter") {
                     Task { await model.installEngine() }
                 }
+                Divider()
+                Button("Check for updates") {
+                    Task { await model.checkUpdates(force: true) }
+                }
             }
             CommandGroup(replacing: .help) {
                 Button("yourMark Help") { model.showHelp = true }
                     .keyboardShortcut("?", modifiers: .command)
             }
         }
-
-        Window("yourMark Help", id: "help") {
-            HelpView()
-                .environment(model)
-                .frame(minWidth: 480, minHeight: 400)
-        }
-        .defaultSize(width: 560, height: 620)
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    var model: AppModel?
+    private var model: AppModel?
+    private var pending: [URL] = []
 
-    func application(_ application: NSApplication, open urls: [URL]) {
-        model?.openIncoming(urls)
+    func attach(_ model: AppModel) {
+        self.model = model
+        let extra = pending
+        pending.removeAll()
+        if !extra.isEmpty {
+            Task { @MainActor in model.openIncoming(extra) }
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        NSWindow.allowsAutomaticWindowTabbing = false
+        for window in NSApp.windows {
+            window.tabbingMode = .disallowed
+        }
     }
+
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
+    func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            NSApp.windows.first?.makeKeyAndOrderFront(nil)
+        }
+        return true
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        if let model {
+            Task { @MainActor in model.openIncoming(urls) }
+        } else {
+            pending.append(contentsOf: urls)
+        }
+    }
+
+    func application(_ sender: NSApplication, openFile filename: String) -> Bool {
+        application(sender, open: [URL(fileURLWithPath: filename)])
+        return true
+    }
+
+    func application(_ sender: NSApplication, openFiles filenames: [String]) {
+        application(sender, open: filenames.map { URL(fileURLWithPath: $0) })
+        sender.reply(toOpenOrPrint: .success)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
