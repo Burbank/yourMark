@@ -36,7 +36,28 @@ If macOS says it could not verify the app: click **Done** (not Move to Bin), the
 
 ## Install
 
-**Everyone:** download the DMG, drag the app to Applications, double-click **Install Engine**.
+### If Apple blocks the app
+
+This build is not notarized, so macOS often shows **“yourMark.app” Not Opened** and offers **Move to Bin**. That is Gatekeeper, not malware.
+
+<p align="center">
+  <img src="docs/shots/not-opened.png" width="340" alt="macOS dialog: yourMark.app Not Opened. Apple could not verify yourMark.app is free of malware. Buttons: Done, Move to Bin.">
+</p>
+
+1. Click **Done** — not **Move to Bin**.
+2. Apple menu → **System Settings**.
+3. Sidebar → **Privacy & Security**.
+4. Scroll to **Security** (near the bottom of that pane).
+5. Next to *“yourMark.app” was blocked from use because it is not from an identified developer*, click **Open Anyway**.
+6. Confirm **Open Anyway** on the next dialog.
+
+<p align="center">
+  <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Security → Open Anyway">
+</p>
+
+You can also right-click yourMark → **Open**, or double-click **If macOS blocks yourMark** on the disk image.
+
+**Everyone:** download the DMG, drag the app to Applications, double-click **Install yourMark**. First launch installs Microsoft MarkItDown.
 
 **Homebrew (optional):**
 

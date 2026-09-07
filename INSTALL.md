@@ -9,10 +9,22 @@
 
 That dialog is Gatekeeper. This build is not notarized yet, so Apple cannot vouch for it. It is expected.
 
+<p align="center">
+  <img src="docs/shots/not-opened.png" width="340" alt="macOS dialog: yourMark.app Not Opened. Buttons: Done, Move to Bin.">
+</p>
+
 1. Click **Done** — not **Move to Bin**.
-2. Double-click **If macOS blocks yourMark** on the disk image.
-3. Or: right-click yourMark → **Open**.
-4. Or: System Settings → Privacy & Security → **Open Anyway**.
+2. Apple menu → **System Settings**.
+3. Sidebar → **Privacy & Security**.
+4. Scroll to **Security** (near the bottom).
+5. Click **Open Anyway** next to *“yourMark.app” was blocked…*
+6. Confirm **Open Anyway**.
+
+<p align="center">
+  <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Security → Open Anyway">
+</p>
+
+Or: right-click yourMark → **Open**. Or double-click **If macOS blocks yourMark** on the disk image.
 
 Then open yourMark. The first launch **installs Microsoft MarkItDown itself** (official PyPI package — not a copy inside the app). Needs the internet once.
 
