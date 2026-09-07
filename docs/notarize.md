@@ -27,6 +27,8 @@ When they say they are ready, wire signing + notarization. Do **not** recreate t
 
 Never commit the `.p12`, passwords, or API keys. Ad-hoc `codesign --sign -` stays the default until those secrets exist.
 
+Until Developer ID signing ships, each new unsigned binary is a stranger to Keychain. 0.3.33+ does not read the Ask key at launch, and rewrites the item ACL so later versions should not ask for the login password again. Notarization is still the real fix.
+
 ## Why this is enough
 
 Gatekeeper on current macOS wants both:

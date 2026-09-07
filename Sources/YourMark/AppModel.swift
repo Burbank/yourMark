@@ -88,10 +88,13 @@ final class AppModel {
         try? FileManager.default.createDirectory(at: convertedDir, withIntermediateDirectories: true)
         loadLibrary()
         seedGuideIfNeeded()
-        let stored = AskSecrets.load()
-        askHasKey = !stored.isEmpty
+        // Do not decrypt the Keychain item at launch — that dialog fired on
+        // every new unsigned build. Presence is remembered in UserDefaults.
+        askHasKey = UserDefaults.standard.bool(forKey: "askHasKey")
+            || UserDefaults.standard.bool(forKey: "askKeyTestPassed")
         askKeyDraft = ""
-        refreshKeyMeta(stored)
+        askKeyKind = UserDefaults.standard.string(forKey: "askKeyKind") ?? ""
+        askKeyTail = UserDefaults.standard.string(forKey: "askKeyTail") ?? ""
         askKeyTestPassed = askHasKey && UserDefaults.standard.bool(forKey: "askKeyTestPassed")
         askKeyTestNote = askHasKey ? (UserDefaults.standard.string(forKey: "askKeyTestNote") ?? "") : ""
         watcher.onChange = { [weak self] path in
@@ -492,6 +495,9 @@ final class AppModel {
     private func refreshKeyMeta(_ key: String) {
         askKeyKind = AskService.keyKind(key).rawValue
         askKeyTail = AskService.keyTail(key)
+        UserDefaults.standard.set(askHasKey, forKey: "askHasKey")
+        UserDefaults.standard.set(askKeyKind, forKey: "askKeyKind")
+        UserDefaults.standard.set(askKeyTail, forKey: "askKeyTail")
     }
 
     /// Clipboard fallback when SecureField paste has not yet reached the SwiftUI binding.
@@ -529,6 +535,9 @@ final class AppModel {
         askKeyKind = ""
         askKeyTestPassed = false
         askKeyTestNote = ""
+        UserDefaults.standard.set(false, forKey: "askHasKey")
+        UserDefaults.standard.set("", forKey: "askKeyKind")
+        UserDefaults.standard.set("", forKey: "askKeyTail")
         UserDefaults.standard.set(false, forKey: "askKeyTestPassed")
         UserDefaults.standard.set("", forKey: "askKeyTestNote")
         statusText = "Ask key cleared"
