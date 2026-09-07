@@ -626,7 +626,6 @@ final class AppModel {
         }
         return markdownURL
     }
-    }
 
     func upgradeEngine() async {
         isBusy = true
