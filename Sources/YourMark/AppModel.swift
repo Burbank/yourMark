@@ -27,8 +27,10 @@ final class AppModel {
     var askQuestion = ""
     var askChapter = "Entire file"
     var askAnswer = ""
+    var askOpenAnswer = ""
     var askBusy = false
     var askError = ""
+    var askWebFallback = UserDefaults.standard.bool(forKey: "askWebFallback")
 
     let service = MarkItDownService()
     private let askService = AskService()
@@ -59,6 +61,7 @@ final class AppModel {
         UserDefaults.standard.set(askProvider, forKey: "askProvider")
         UserDefaults.standard.set(askModel, forKey: "askModel")
         UserDefaults.standard.set(askBaseURL, forKey: "askBaseURL")
+        UserDefaults.standard.set(askWebFallback, forKey: "askWebFallback")
         AskSecrets.save(askKeyDraft)
         askHasKey = !AskSecrets.load().isEmpty
         statusText = askHasKey ? "Ask key saved in Keychain" : "Ask key cleared"
@@ -77,25 +80,51 @@ final class AppModel {
         askBusy = true
         askError = ""
         askAnswer = ""
+        askOpenAnswer = ""
         defer { askBusy = false }
         do {
             let excerpt = AskService.excerpt(
                 markdown: previewMarkdown,
                 heading: askChapter
             )
+            let title = library.first(where: { $0.id == selectedLibraryID })?.title ?? "Document"
+            let settings = AskService.Settings(
+                provider: askProvider,
+                model: askModel,
+                baseURL: askBaseURL,
+                apiKey: AskSecrets.load()
+            )
             askAnswer = try await askService.ask(
                 question: q,
-                title: library.first(where: { $0.id == selectedLibraryID })?.title ?? "Document",
+                title: title,
                 excerpt: excerpt,
-                settings: .init(
-                    provider: askProvider,
-                    model: askModel,
-                    baseURL: askBaseURL,
-                    apiKey: AskSecrets.load()
-                )
+                settings: settings
             )
+            if askWebFallback, AskService.chapterWasSilent(askAnswer) {
+                askOpenAnswer = try await askService.ask(
+                    question: q,
+                    title: title,
+                    excerpt: excerpt,
+                    settings: settings,
+                    openKnowledge: true
+                )
+            }
         } catch {
             askError = error.localizedDescription
+        }
+    }
+
+    func searchAskOnWeb() {
+        let note = askAnswer.split(separator: "\n").first.map(String.init) ?? ""
+        let q = AskService.searchQuery(
+            question: askQuestion,
+            title: library.first(where: { $0.id == selectedLibraryID })?.title ?? "",
+            chapter: askChapter,
+            note: note
+        )
+        let encoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
+        if let url = URL(string: "https://www.google.com/search?q=\(encoded)") {
+            NSWorkspace.shared.open(url)
         }
     }
 

@@ -8,7 +8,7 @@ struct AskService {
         var apiKey: String
     }
 
-    func ask(question: String, title: String, excerpt: String, settings: Settings) async throws -> String {
+    func ask(question: String, title: String, excerpt: String, settings: Settings, openKnowledge: Bool = false) async throws -> String {
         let key = settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
             throw YourMarkError.invalidInput("Add an Ask API key under Engine.")
@@ -32,11 +32,15 @@ struct AskService {
             "messages": [
                 [
                     "role": "system",
-                    "content": "You are a careful study assistant. Answer only from the provided excerpt. Quote short phrases when they help. If the excerpt is silent, say so clearly. Do not invent facts, citations, or numbers. Use short paragraphs.",
+                    "content": openKnowledge
+                        ? "The student's file did not contain this. Give a short study summary from general knowledge. Do not pretend it came from their notes. Flag uncertainty. Two to four short paragraphs."
+                        : "You are a careful study assistant. Answer only from the provided excerpt. Quote short phrases when they help. If the excerpt is silent, say so clearly. Do not invent facts, citations, or numbers. Use short paragraphs.",
                 ],
                 [
                     "role": "user",
-                    "content": "Document: \(title)\n\nExcerpt:\n\(excerpt)\n\nQuestion: \(question)",
+                    "content": openKnowledge
+                        ? "The chapter was silent.\nDocument: \(title)\nQuestion: \(question)\n\n(The file said: \(excerpt.prefix(800)))"
+                        : "Document: \(title)\n\nExcerpt:\n\(excerpt)\n\nQuestion: \(question)",
                 ],
             ],
         ]
@@ -56,6 +60,20 @@ struct AskService {
         let message = choices?.first?["message"] as? [String: Any]
         let text = message?["content"] as? String ?? ""
         return text
+    }
+
+    static func chapterWasSilent(_ text: String) -> Bool {
+        let t = text.lowercased()
+        let needles = [
+            "excerpt does not", "excerpt is silent", "not in the excerpt",
+            "not in this chapter", "not in this file", "does not define",
+            "does not mention", "not mentioned", "not defined in",
+        ]
+        return needles.contains { t.contains($0) }
+    }
+
+    static func searchQuery(question: String, title: String, chapter: String, note: String) -> String {
+        [question, title, chapter, note].filter { !$0.isEmpty }.joined(separator: " — ")
     }
 
     static func excerpt(markdown: String, heading: String, max: Int = 12000) -> String {

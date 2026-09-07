@@ -36,7 +36,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Ask chapter").font(.headline)
-                    Text("Put your own AI key under Engine (xAI, OpenAI, or an OpenAI-compatible URL). It is stored in the Keychain. Ask uses only the current chapter of the converted Markdown — it will not invent facts that are not in that excerpt.")
+                    Text("Put your own AI key under Engine (xAI, OpenAI, or an OpenAI-compatible URL). It is stored in the Keychain. Ask uses only the current chapter of the converted Markdown — it will not invent facts that are not in that excerpt. If the chapter is silent, Search the web opens a browser tab with the question and context. A model summary of missing terms is optional and off by default.")
                 }
 
                 Group {

@@ -336,6 +336,21 @@ private struct AskStrip: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 160)
+                if AskService.chapterWasSilent(model.askAnswer) {
+                    Button("Search the web") { model.searchAskOnWeb() }
+                }
+                if !model.askOpenAnswer.isEmpty {
+                    Text("From the model — not in this file")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    ScrollView {
+                        Text(model.askOpenAnswer)
+                            .font(.body)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 140)
+                }
             }
         }
         .padding(12)
@@ -390,6 +405,15 @@ struct EnginePanel: View {
                     set: { model.askKeyDraft = $0 }
                 ))
                 Text("Stored in the Keychain on this Mac. Sent only to the provider you pick when you Ask.")
+                    .foregroundStyle(.secondary)
+                Toggle("If the chapter is silent, also show a model summary", isOn: Binding(
+                    get: { model.askWebFallback },
+                    set: {
+                        model.askWebFallback = $0
+                        UserDefaults.standard.set($0, forKey: "askWebFallback")
+                    }
+                ))
+                Text("Off by default. Chapter answers stay from the file. The extra summary is labelled “not in this file”.")
                     .foregroundStyle(.secondary)
                 HStack {
                     Button("Save key") { model.persistAskSettings() }
