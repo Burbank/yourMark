@@ -6,7 +6,7 @@
 
 Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, Excel, pictures, and ZIP archives to Markdown **on this Mac**.
 
-**[Download yourMark-0.3.35.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.35.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
+**[Download yourMark-0.3.36.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.36.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
 
 ## Why Markdown
 

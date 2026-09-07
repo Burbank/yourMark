@@ -35,18 +35,23 @@ final class FileWatcher: @unchecked Sendable {
         guard fd >= 0 else { return }
         let src = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
-            eventMask: [.write, .extend, .rename, .delete, .attrib],
+            eventMask: [.write, .extend, .rename, .delete],
             queue: queue
         )
         src.setEventHandler { [weak self] in
             guard let self else { return }
             let flags = src.data
-            self.onChange?(path)
+            let p = path
+            // AppModel is @MainActor. Calling its closure on this queue
+            // traps on macOS 26 (Swift isolation assert). Hop first.
+            DispatchQueue.main.async {
+                self.onChange?(p)
+            }
             let gone = flags.contains(.delete) || flags.contains(.rename)
             if gone {
                 src.cancel()
                 self.queue.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-                    self?.rearm(path)
+                    self?.rearm(p)
                 }
             }
         }
