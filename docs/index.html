@@ -100,6 +100,18 @@
     @media (min-width: 720px) {
       .grid2 { grid-template-columns: 1fr 1fr; }
     }
+    .grid4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .7rem;
+      margin-bottom: 1.5rem;
+    }
+    @media (min-width: 720px) {
+      .grid4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    }
+    .grid4 figure { margin: 0; }
+    .grid4 figcaption { font-size: .8rem; padding: .5rem .65rem .6rem; }
+    figure.hero { margin-bottom: 1.15rem; }
     .opt-list { margin: .4rem 0 1rem; padding-left: 1.15rem; }
     .opt-list li + li { margin-top: .35rem; }
     .looks { color: var(--muted); margin: 0 0 1rem; }
@@ -155,29 +167,29 @@
       <p class="looks"><strong>Looks:</strong> Bright (paper), Dim (a night desk), or System (follow macOS). Switch any time in the header.</p>
     </section>
 
-    <div class="grid2">
+    <figure class="hero">
+      <img src="shots/library-dim.jpg" alt="Library in Dim: files on the left, bookmarks in the middle, Markdown on the right, Ask a chapter at the bottom" width="1483" height="1078" />
+      <figcaption>Library · Dim — the window you live in. File, bookmarks, Markdown. Ask a chapter underneath. Bookmarks jump like Preview.</figcaption>
+    </figure>
+
+    <div class="grid4">
       <figure>
-        <img src="shots/convert-bright.jpg" alt="Convert in Bright: drop a PDF, Word, PowerPoint, or Excel" width="1482" height="1075" />
-        <figcaption>Convert · Bright — drop a file. This 787 handbook kept 595 bookmarks from the PDF itself, the same tree as Preview.</figcaption>
+        <img src="shots/library-bright.jpg" alt="Library in Bright" width="1477" height="1068" loading="lazy" />
+        <figcaption>Library · Bright — same three columns on paper.</figcaption>
       </figure>
       <figure>
-        <img src="shots/convert-dim.jpg" alt="Convert in Dim, night desk look" width="1479" height="1073" loading="lazy" />
-        <figcaption>Convert · Dim — same window at night. Conversion stays on this Mac, not in the cloud.</figcaption>
+        <img src="shots/convert-dim.jpg" alt="Convert in Dim" width="1479" height="1073" loading="lazy" />
+        <figcaption>Convert · Dim — drop a PDF. Conversion stays on this Mac.</figcaption>
       </figure>
       <figure>
-        <img src="shots/library-bright.jpg" alt="Library in Bright: files, bookmarks, and Markdown" width="1477" height="1068" loading="lazy" />
-        <figcaption>Library · Bright — the built-in guide uses the same three-column layout you get after a convert. Ask a chapter underneath.</figcaption>
+        <img src="shots/convert-bright.jpg" alt="Convert in Bright" width="1482" height="1075" loading="lazy" />
+        <figcaption>Convert · Bright — this 787 handbook kept 595 bookmarks from the PDF itself.</figcaption>
       </figure>
       <figure>
-        <img src="shots/library-dim.jpg" alt="Library following macOS System / Dim" width="1483" height="1078" loading="lazy" />
-        <figcaption>Library · System / Dim — follow the Mac, or stay dark. Bookmarks jump like Preview.</figcaption>
+        <img src="shots/settings-dim.jpg" alt="Settings in Dim" width="1478" height="1070" loading="lazy" />
+        <figcaption>Settings — paste a key, press Enter, it is locked. Docling is only for scans.</figcaption>
       </figure>
     </div>
-
-    <figure>
-      <img src="shots/settings-dim.jpg" alt="Settings: Ask key locked in, Docling installed for scans" width="1478" height="1070" loading="lazy" />
-      <figcaption>Settings — paste your key, press Enter, and it is tested and locked on this Mac. Docling is only for scans; ordinary PDFs still go to Microsoft MarkItDown.</figcaption>
-    </figure>
 
     <section class="card">
       <h2>What this is</h2>
