@@ -25,14 +25,14 @@ struct YourMarkApp: App {
                 Button("Settings") { model.toggleSettings() }
                     .keyboardShortcut(",", modifiers: .command)
                 Button("Check for update of the processing engine") {
-                    Task { @MainActor in await model.upgradeEngine() }
+                    appDelegate.upgradeEngine()
                 }
                 Button("Install converter") {
-                    Task { @MainActor in await model.installEngine() }
+                    appDelegate.installEngine()
                 }
                 Divider()
                 Button("Check for update of the main app") {
-                    Task { @MainActor in await model.checkUpdates(force: true) }
+                    appDelegate.checkUpdates()
                 }
             }
             CommandGroup(replacing: .help) {
@@ -92,4 +92,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func upgradeEngine() {
+        Task { @MainActor in await model?.upgradeEngine() }
+    }
+
+    func installEngine() {
+        Task { @MainActor in await model?.installEngine() }
+    }
+
+    func checkUpdates() {
+        Task { @MainActor in await model?.checkUpdates(force: true) }
+    }
 }
