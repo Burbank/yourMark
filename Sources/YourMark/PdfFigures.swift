@@ -298,10 +298,11 @@ private final class XSink {
         switch format {
         case .jpegEncoded:
             images.append(ExtractedImage(data: data, ext: "jpg", fp: fingerprint(data)))
-        case .JPEG2000Encoded:
-            images.append(ExtractedImage(data: data, ext: "jp2", fp: fingerprint(data)))
         default:
-            if let jpeg = rawBitmapJPEG(data: data, width: Int(width), height: Int(height), dict: sdict) {
+            // JPEG2000 Swift case name differs by SDK; 2 is kCGPDFDataFormatJPEG2000Encoded.
+            if format.rawValue == 2 {
+                images.append(ExtractedImage(data: data, ext: "jp2", fp: fingerprint(data)))
+            } else if let jpeg = rawBitmapJPEG(data: data, width: Int(width), height: Int(height), dict: sdict) {
                 images.append(ExtractedImage(data: jpeg, ext: "jpg", fp: fingerprint(jpeg)))
             }
         }
