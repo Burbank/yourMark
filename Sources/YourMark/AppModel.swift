@@ -55,12 +55,14 @@ final class AppModel {
     var ocrEnabled = UserDefaults.standard.object(forKey: "ocrEnabled") as? Bool ?? true
     var showInstallSheet = false
     var showOCRSheet = false
+    var showMarkEditSheet = false
     var settingsFocus: String = ""
     var showDoclingPrompt = false
     var pendingGraphics: [URL] = []
     var aiChaptersEnabled = UserDefaults.standard.object(forKey: "aiChaptersEnabled") as? Bool ?? false
     var askReadPictures = UserDefaults.standard.object(forKey: "askReadPictures") as? Bool ?? false
     var stripChrome = UserDefaults.standard.object(forKey: "stripChrome") as? Bool ?? true
+    var previewFontName = UserDefaults.standard.string(forKey: "previewFontName") ?? "rounded"
     var doclingPath: String? = OcrService.doclingPath()
     var ocrmypdfPath: String? = OcrService.ocrmypdfPath()
     private var convertWanted = false
@@ -124,6 +126,8 @@ final class AppModel {
         }
         if !UserDefaults.standard.bool(forKey: "sawOCRSheet") {
             showOCRSheet = true
+        } else {
+            maybeOfferMarkEdit()
         }
         if status.path == nil, !installingEngine {
             statusText = "Installing Microsoft MarkItDown…"
@@ -170,6 +174,7 @@ final class AppModel {
     func skipOCRSheet() {
         UserDefaults.standard.set(true, forKey: "sawOCRSheet")
         showOCRSheet = false
+        maybeOfferMarkEdit()
     }
 
     func acceptOCRInstall() async {
@@ -179,6 +184,49 @@ final class AppModel {
         UserDefaults.standard.set(true, forKey: "doclingReady")
         showSettings = true
         settingsFocus = "ocr"
+        maybeOfferMarkEdit()
+    }
+
+    func maybeOfferMarkEdit() {
+        if UserDefaults.standard.bool(forKey: "sawMarkEditSheet") { return }
+        if Self.markEditAppURL() != nil {
+            UserDefaults.standard.set(true, forKey: "sawMarkEditSheet")
+            return
+        }
+        showMarkEditSheet = true
+    }
+
+    func skipMarkEditSheet() {
+        UserDefaults.standard.set(true, forKey: "sawMarkEditSheet")
+        showMarkEditSheet = false
+    }
+
+    func acceptMarkEditRecommend() {
+        UserDefaults.standard.set(true, forKey: "sawMarkEditSheet")
+        showMarkEditSheet = false
+        if let url = URL(string: "https://github.com/MarkEdit-app/MarkEdit/releases/latest") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    func setPreviewFont(_ name: String) {
+        previewFontName = name
+        UserDefaults.standard.set(name, forKey: "previewFontName")
+    }
+
+    func readerFont(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        switch previewFontName {
+        case "system":
+            return .system(size: size, weight: weight)
+        case "rounded", "":
+            return .system(size: size, weight: weight, design: .rounded)
+        default:
+            return .custom(previewFontName, size: size).weight(weight)
+        }
+    }
+
+    static var installedFontFamilies: [String] {
+        NSFontManager.shared.availableFontFamilies.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
     func installEngine() async {
@@ -469,6 +517,7 @@ final class AppModel {
         UserDefaults.standard.set(aiChaptersEnabled, forKey: "aiChaptersEnabled")
         UserDefaults.standard.set(askReadPictures, forKey: "askReadPictures")
         UserDefaults.standard.set(stripChrome, forKey: "stripChrome")
+        UserDefaults.standard.set(previewFontName, forKey: "previewFontName")
     }
 
     func clearAskKey() {

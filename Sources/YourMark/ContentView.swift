@@ -74,6 +74,14 @@ struct ContentView: View {
                 .environment(\.deck, deck)
         }
         .sheet(isPresented: Binding(
+            get: { model.showMarkEditSheet },
+            set: { if !$0 { model.skipMarkEditSheet() } }
+        )) {
+            FirstRunMarkEditSheet()
+                .environment(model)
+                .environment(\.deck, deck)
+        }
+        .sheet(isPresented: Binding(
             get: { model.showDoclingPrompt },
             set: { if !$0 { model.skipDoclingInstall() } }
         )) {
@@ -206,6 +214,35 @@ private struct FirstRunOCRSheet: View {
         }
         .padding(28)
         .frame(width: 500)
+        .background(deck.page)
+    }
+}
+
+private struct FirstRunMarkEditSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("A free editor for your Markdown")
+                .font(.title2.weight(.bold))
+            Text("yourMark is a reader. To change a converted file, we recommend MarkEdit — a native Mac Markdown editor, free and open source. Press Edit in the reader after it is installed.")
+                .foregroundStyle(deck.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("brew install --cask markedit")
+                .font(.system(.body, design: .monospaced))
+                .textSelection(.enabled)
+            HStack {
+                Button("Not now") { model.skipMarkEditSheet() }
+                Spacer()
+                Button("Get MarkEdit") { model.acceptMarkEditRecommend() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(deck.btn)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(28)
+        .frame(width: 480)
         .background(deck.page)
     }
 }
@@ -725,13 +762,20 @@ struct LibraryPanel: View {
                     model.openInMarkEdit(item)
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .font(.body.weight(.bold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(RoundedRectangle(cornerRadius: 8).fill(deck.btn))
+                .foregroundStyle(deck.btnText)
                 .help("Open this file in MarkEdit, a free Markdown editor")
                 Button("Finder") {
                     model.revealLibrary(item)
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .font(.body.weight(.bold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: deck.border))
                 .help("Show this file in Finder")
             }
         }
@@ -749,7 +793,7 @@ struct LibraryPanel: View {
                 PreviewPicture(url: img.url)
                 if !img.alt.isEmpty, previewRendered {
                     Text(img.alt)
-                        .font(.system(size: max(10, size - 4)))
+                        .font(model.readerFont(size: max(10, size - 4)))
                         .foregroundStyle(deck.muted)
                 }
             }
@@ -773,7 +817,7 @@ struct LibraryPanel: View {
             EmptyView()
         } else if let heading = atxHeading(line) {
             Text(heading.text)
-                .font(.system(size: headingSize(heading.level, base: size), weight: heading.level <= 2 ? .bold : .semibold, design: .rounded))
+                .font(model.readerFont(size: headingSize(heading.level, base: size), weight: heading.level <= 2 ? .bold : .semibold))
                 .foregroundStyle(deck.ink)
                 .textSelection(.enabled)
                 .padding(.top, heading.level <= 2 ? 14 : 8)
@@ -781,7 +825,7 @@ struct LibraryPanel: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else if let callout = wholeLineBold(line) {
             Text(callout)
-                .font(.system(size: size, weight: .semibold))
+                .font(model.readerFont(size: size, weight: .semibold))
                 .foregroundStyle(deck.ink)
                 .textSelection(.enabled)
                 .padding(.top, 6)
@@ -804,26 +848,28 @@ struct LibraryPanel: View {
     }
 
     private func inlineMarkdown(_ line: String, size: CGFloat) -> Text {
-        if line.isEmpty { return Text(" ").font(.system(size: size)) }
+        let body = model.readerFont(size: size)
+        let bold = model.readerFont(size: size, weight: .semibold)
+        if line.isEmpty { return Text(" ").font(body) }
         var text = Text("")
         var rest = line
         while let start = rest.range(of: "**") {
             let before = String(rest[rest.startIndex..<start.lowerBound])
             if !before.isEmpty {
-                text = text + Text(before).font(.system(size: size))
+                text = text + Text(before).font(body)
             }
             let afterStart = start.upperBound
             if let end = rest.range(of: "**", range: afterStart..<rest.endIndex) {
-                let bold = String(rest[afterStart..<end.lowerBound])
-                text = text + Text(bold).font(.system(size: size, weight: .semibold))
+                let chunk = String(rest[afterStart..<end.lowerBound])
+                text = text + Text(chunk).font(bold)
                 rest = String(rest[end.upperBound...])
             } else {
-                text = text + Text("**" + String(rest[afterStart...])).font(.system(size: size))
+                text = text + Text("**" + String(rest[afterStart...])).font(body)
                 rest = ""
             }
         }
         if !rest.isEmpty {
-            text = text + Text(rest).font(.system(size: size))
+            text = text + Text(rest).font(body)
         }
         return text.foregroundStyle(deck.ink)
     }
@@ -1101,6 +1147,26 @@ struct EnginePanel: View {
                     }
                 ))
                 Text("Drops the repeating page title, page number, date, revision line, and header logos. Chapter headings and the real text stay. On by default — manuals look much cleaner.")
+                    .foregroundStyle(.secondary)
+            }
+            Section("Reader") {
+                Picker("Font", selection: Binding(
+                    get: { model.previewFontName },
+                    set: { model.setPreviewFont($0) }
+                )) {
+                    Text("Rounded (default)").tag("rounded")
+                    Text("System").tag("system")
+                    if AppModel.installedFontFamilies.contains("Atkinson Hyperlegible") {
+                        Text("Atkinson Hyperlegible").tag("Atkinson Hyperlegible")
+                    }
+                    if AppModel.installedFontFamilies.contains("Atkins") {
+                        Text("Atkins").tag("Atkins")
+                    }
+                    ForEach(AppModel.installedFontFamilies.filter { $0 != "Atkinson Hyperlegible" && $0 != "Atkins" }, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                Text("Applies to the Markdown pane. Atkins and Atkinson Hyperlegible appear here if they are installed on this Mac (Font Book). Size is the A / slider / A control on the reader.")
                     .foregroundStyle(.secondary)
             }
             if model.settingsFocus == "ocr" {

@@ -79,7 +79,6 @@ enum PdfFigures {
             }
 
             var files: [String] = []
-            var extractedLarge = false
             for (n, img) in sink.images.enumerated() {
                 let seen = fingerprintCount[img.fp, default: 0]
                 // Repeating chrome (header logos). With "remove headers" on, skip them.
@@ -87,7 +86,6 @@ enum PdfFigures {
                 if seen >= logoCap { continue }
                 fingerprintCount[img.fp] = seen + 1
                 if stripChrome, seen >= 1 { continue }
-                if img.wide >= 200 && img.tall >= 200 { extractedLarge = true }
                 let name = String(format: "p%04d-%d.%@", i, n + 1, img.ext)
                 do {
                     try img.data.write(to: figDir.appendingPathComponent(name), options: .atomic)
@@ -100,16 +98,18 @@ enum PdfFigures {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .count
             let bytes = contentLength(page)
-            // Vector diagrams (Form XObjects) live on text-heavy handbook pages too.
-            // Do not require "few characters" — that dropped almost every QRH drawing.
+            // Full-page JPEGs are photographs of the whole page (text + figure).
+            // Users see those as screenshots, not original pictures. Only draw a
+            // page when it is a diagram with no extracted image and almost no text.
             let needsPageDraw =
-                !extractedLarge
+                files.isEmpty
+                && chars < 160
                 && (
                     sink.hasUndecodedImage
                     || sink.hasLargeForm
-                    || (sink.hasForm && files.isEmpty && bytes > 3500)
-                    || (sink.hasLargeImage && files.isEmpty)
-                    || (chars < 500 && bytes > 2500)
+                    || (sink.hasForm && bytes > 3500)
+                    || sink.hasLargeImage
+                    || bytes > 2500
                 )
             if needsPageDraw, let name = rasterize(page, index: i, into: figDir) {
                 files.append(name)
