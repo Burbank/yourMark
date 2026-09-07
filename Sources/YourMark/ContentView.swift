@@ -311,6 +311,27 @@ struct ConvertPanel: View {
                     model.openIncoming(urls)
                 }
 
+                if model.jobs.contains(where: { $0.needsOCR && ($0.status == .queued || $0.status == .running) }) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ProgressView()
+                            .controlSize(.small)
+                            .padding(.top, 2)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("OCR first — this takes a little longer")
+                                .font(.body.weight(.bold))
+                            Text("This PDF is a scan (a picture of a page, no text layer). yourMark writes the words first, then Microsoft MarkItDown converts. Page pictures are kept so tables, arrows, and diagrams still show.")
+                                .font(.caption)
+                                .foregroundStyle(deck.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(deck.field)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(deck.cyan, lineWidth: deck.border))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+
                 if !model.jobs.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(model.jobs) { job in
@@ -322,8 +343,8 @@ struct ConvertPanel: View {
                                         .font(.body.weight(.bold))
                                     Text(job.detail)
                                         .font(.caption)
-                                        .foregroundStyle(deck.muted)
-                                        .lineLimit(2)
+                                        .foregroundStyle(job.needsOCR && job.status == .running ? deck.cyan : deck.muted)
+                                        .lineLimit(3)
                                 }
                                 Spacer()
                                 if let out = job.outputURL {
@@ -706,7 +727,7 @@ struct EnginePanel: View {
                         UserDefaults.standard.set($0, forKey: "ocrEnabled")
                     }
                 ))
-                Text("Microsoft MarkItDown only reads a text layer. A scan is a picture of a page, so tables, arrows, and photos would vanish. OCR writes the words first, then MarkItDown runs. Page pictures are kept so diagrams still show.")
+                Text("Microsoft MarkItDown only reads a text layer. A scan is a picture of a page, so tables, arrows, and photos would vanish. OCR writes the words first — that takes a little longer — then MarkItDown runs. Page pictures are kept so diagrams still show.")
                     .foregroundStyle(.secondary)
                 LabeledContent("OCRmyPDF") {
                     Text(OcrService.ocrmypdfPath() ?? "Not installed — using Apple Live Text")
