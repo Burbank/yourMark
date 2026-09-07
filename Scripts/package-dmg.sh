@@ -22,20 +22,22 @@ BG="$ROOT/Resources/dmg-background.png"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/Support"
 cp -R "$APP" "$STAGE/yourMark.app"
-cp "$ROOT/Scripts/Privacy & Security Settings.webloc" "$STAGE/Privacy & Security Settings.webloc"
+# Finder .webloc files only open http/https. The Settings URL is a custom
+# scheme, so a double-clickable .command is what actually opens the pane.
+cp "$ROOT/Scripts/Open Privacy & Security Settings.command" "$STAGE/Privacy & Security Settings.command"
 cp "$ROOT/Scripts/Open Privacy & Security Settings.command" "$STAGE/Support/Open Privacy & Security Settings.command"
 cp "$ROOT/Scripts/Install yourMark.command" "$STAGE/Support/Install yourMark.command"
 cp "$ROOT/Scripts/If macOS blocks yourMark.command" "$STAGE/Support/If macOS blocks yourMark.command"
 if [[ -f "$ROOT/docs/shots/open-anyway.png" ]]; then
   cp "$ROOT/docs/shots/open-anyway.png" "$STAGE/Support/Open Anyway looks like this.png"
 fi
-chmod +x "$STAGE/Support/"*.command
+chmod +x "$STAGE/Privacy & Security Settings.command" "$STAGE/Support/"*.command
 cat > "$STAGE/Support/Read me first.txt" <<TXT
 yourMark $VERSION
 ================
 
 1. Drag yourMark onto Applications (follow the arrow).
-2. If macOS blocks it: click Done (not Move to Bin), then open
+2. If macOS blocks it: click Done (not Move to Bin), then double-click
    “Privacy & Security Settings” on this disk → Open Anyway.
 
 First launch installs Microsoft MarkItDown from PyPI (internet once).
@@ -79,7 +81,7 @@ tell application "Finder"
     set current view of container window to icon view
     set toolbar visible of container window to false
     set statusbar visible of container window to false
-    set bounds of container window to {200, 120, 860, 540}
+    set bounds of container window to {200, 120, 860, 660}
     set theViewOptions to the icon view options of container window
     set arrangement of theViewOptions to not arranged
     set icon size of theViewOptions to 128
@@ -87,13 +89,16 @@ tell application "Finder"
       set background picture of theViewOptions to file ".background:background.png"
     end try
     delay 1
-    set position of item "yourMark.app" to {165, 190}
-    set position of item "Applications" to {495, 190}
+    set position of item "yourMark.app" to {165, 175}
+    set position of item "Applications" to {495, 175}
     try
-      set position of item "Privacy & Security Settings.webloc" to {165, 355}
+      set position of item "Privacy & Security Settings.command" to {165, 365}
     end try
     try
-      set position of item "Support" to {495, 355}
+      set position of item "Support" to {495, 365}
+    end try
+    try
+      set the extension hidden of item "Privacy & Security Settings.command" to true
     end try
     close
     open
@@ -114,13 +119,14 @@ if command -v create-dmg >/dev/null 2>&1 || (command -v brew >/dev/null 2>&1 && 
       --volname "yourMark $VERSION" \
       --background "$BG" \
       --window-pos 200 120 \
-      --window-size 660 420 \
+      --window-size 660 540 \
       --icon-size 128 \
-      --icon "yourMark.app" 165 190 \
-      --app-drop-link 495 190 \
-      --icon "Privacy & Security Settings.webloc" 165 355 \
-      --icon "Support" 495 355 \
+      --icon "yourMark.app" 165 175 \
+      --app-drop-link 495 175 \
+      --icon "Privacy & Security Settings.command" 165 365 \
+      --icon "Support" 495 365 \
       --hide-extension "yourMark.app" \
+      --hide-extension "Privacy & Security Settings.command" \
       --no-internet-enable \
       "$DMG" \
       "$STAGE"; then
