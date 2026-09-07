@@ -1,0 +1,56 @@
+# yourMark
+
+Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown) — convert FCOM, QRH, AIP, and other aviation PDFs to Markdown **on this Mac**. The GUI never vendors the converter: it discovers `markitdown` on PATH / uv and **Upgrade Engine** pulls the current PyPI release.
+
+Sister cockpit chrome to [GearUp4U](https://gearup4u.net/#EHAM). Same family as [Ghostscript GUI](https://github.com/Burbank/ghostscript-gui): thin local CLI wrapper.
+
+**Requires:** macOS 14+, Xcode (to build), and MarkItDown via uv or pip.
+
+Not for operations. Converted Markdown is a study overlay. Keep the approved PDF.
+
+---
+
+## Install the engine (once)
+
+```sh
+# recommended — stays current independently of this app
+uv tool install 'markitdown[all]'
+markitdown --version
+```
+
+Or: `pip3 install -U 'markitdown[all]'`
+
+## Build the app
+
+```sh
+./Scripts/build-app.sh
+open -a yourMark
+```
+
+Dev run:
+
+```sh
+swift run YourMark
+```
+
+## After install
+
+| Route | How |
+|------|-----|
+| **Applications** | `/Applications/yourMark.app` |
+| **Open With** | Right-click a PDF → Open With → **yourMark** |
+| **Upgrade engine** | yourMark → Engine → Upgrade MarkItDown (`uv tool upgrade markitdown`) |
+| **Help** | Help → yourMark Help (⌘?) |
+
+## Why this instead of a downloaded .dmg GUI
+
+Packaged community GUIs pin `markitdown==0.1.x` at build time. yourMark is the Ghostscript-GUI pattern: **your** `markitdown` binary, upgraded from PyPI, no fork of Microsoft’s code.
+
+## Bundle
+
+- Identifier: `com.burbank.yourmark`
+- Team: use your Apple Developer team when you are ready to notarize / App Store
+
+## License
+
+This repository is a macOS GUI wrapper. MarkItDown is MIT from Microsoft.
