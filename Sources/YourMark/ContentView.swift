@@ -886,7 +886,11 @@ private struct AskStrip: View {
                 .tint(deck.btn)
             }
             if !model.askError.isEmpty {
-                Text(model.askError).font(.caption).foregroundStyle(.orange)
+                Text(model.askError)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if !model.askAnswer.isEmpty {
                 ScrollView {
@@ -988,6 +992,8 @@ struct EnginePanel: View {
                 }
                 VStack(alignment: .leading, spacing: 10) {
                     Text("API key")
+                    Text("xAI keys start with xai- (from console.x.ai). OpenAI keys start with sk-. Provider must match the key — yourMark will switch it for you when you press Enter.")
+                        .foregroundStyle(.secondary)
                     HStack(alignment: .center, spacing: 10) {
                         SecureField(
                             model.askHasKey ? "Key locked in — paste a new one to replace" : "Paste your API key here",
@@ -1001,20 +1007,29 @@ struct EnginePanel: View {
                         )
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { model.lockAskKey() }
-                        Button("Enter") { model.lockAskKey() }
+                        Button(model.askCheckingKey ? "Checking…" : "Enter") { model.lockAskKey() }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.large)
+                            .disabled(model.askCheckingKey)
                             .help("Lock this API key on this Mac")
                     }
-                    Text("Paste the key, then press Enter. That locks it on this Mac so you do not have to paste it again.")
+                    Text("Paste the key, then press Enter. That checks it and locks it on this Mac so you do not have to paste it again.")
                         .foregroundStyle(.secondary)
                     if !model.askKeyHint.isEmpty {
                         Text(model.askKeyHint)
                             .foregroundStyle(.orange)
+                            .textSelection(.enabled)
                     }
                     if model.askHasKey {
-                        Label("Your key is locked in. yourMark will use it when you Ask. You do not need to paste it again.", systemImage: "lock.fill")
+                        let kind = model.askKeyKind == "openai" ? "OpenAI" : model.askKeyKind == "xai" ? "xAI (Grok)" : "your provider"
+                        let tail = model.askKeyTail.isEmpty ? "" : " Ending …\(model.askKeyTail)."
+                        Label("Your \(kind) key is locked in.\(tail) yourMark will use it when you Ask.", systemImage: "lock.fill")
                             .foregroundStyle(.green)
+                        if (model.askKeyKind == "openai" && model.askProvider == "xai")
+                            || (model.askKeyKind == "xai" && model.askProvider == "openai") {
+                            Text("This key does not match the Provider above. Press Enter after pasting again — yourMark will switch Provider to match the key.")
+                                .foregroundStyle(.orange)
+                        }
                         Button("Clear key", role: .destructive) { model.clearAskKey() }
                     }
                 }
