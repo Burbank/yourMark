@@ -17,13 +17,13 @@ That dialog is Gatekeeper. This build is not notarized yet, so Apple cannot vouc
 2. Apple menu → **System Settings**.
 3. Sidebar → **Privacy & Security**.
 4. Scroll to **Security** (near the bottom).
-5. Click **Open Anyway** next to *“yourMark.app” was blocked…*
+5. Click **Open Anyway** next to *“yourMark.app” was blocked to protect your Mac*.
 6. Confirm **Open Anyway**.
 
 The disk image also has a **Privacy & Security Settings** link that opens this same pane.
 
 <p align="center">
-  <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Security → Open Anyway">
+  <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Security. Allow applications from: App Store & Known Developers. yourMark.app was blocked to protect your Mac — Open Anyway.">
 </p>
 
 Or: right-click yourMark → **Open**. Or double-click **If macOS blocks yourMark** on the disk image.

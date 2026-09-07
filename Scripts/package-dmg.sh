@@ -25,6 +25,7 @@ cp "$ROOT/Scripts/Privacy & Security Settings.webloc" "$STAGE/Privacy & Security
 cp "$ROOT/Scripts/Open Privacy & Security Settings.command" "$STAGE/Support/Open Privacy & Security Settings.command"
 cp "$ROOT/Scripts/Install yourMark.command" "$STAGE/Support/Install yourMark.command"
 cp "$ROOT/Scripts/If macOS blocks yourMark.command" "$STAGE/Support/If macOS blocks yourMark.command"
+cp "$ROOT/docs/shots/open-anyway.png" "$STAGE/Support/Open Anyway looks like this.png"
 chmod +x "$STAGE/Support/"*.command
 cat > "$STAGE/Support/Read me first.txt" <<'TXT'
 yourMark

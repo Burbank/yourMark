@@ -48,11 +48,11 @@ This build is not notarized, so macOS often shows **“yourMark.app” Not Opene
 2. Apple menu → **System Settings**.
 3. Sidebar → **Privacy & Security**.
 4. Scroll to **Security** (near the bottom of that pane).
-5. Next to *“yourMark.app” was blocked from use because it is not from an identified developer*, click **Open Anyway**.
+5. Next to *“yourMark.app” was blocked to protect your Mac*, click **Open Anyway**.
 6. Confirm **Open Anyway** on the next dialog.
 
 <p align="center">
-  <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Security → Open Anyway">
+  <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Security. Allow applications from: App Store & Known Developers. yourMark.app was blocked to protect your Mac — Open Anyway.">
 </p>
 
 You can also right-click yourMark → **Open**, or double-click **If macOS blocks yourMark** on the disk image.
