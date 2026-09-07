@@ -423,7 +423,7 @@ struct EnginePanel: View {
                         set: { model.askModel = $0 }
                     )) {
                         ForEach(AskModels.list(for: model.askProvider), id: \.id) { m in
-                            Text(m.label).tag(m.id)
+                            Text("\(m.label)    \(m.note)").tag(m.id)
                         }
                     }
                 }
