@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>If Apple blocks yourMark</title>
+  <style>
+    :root {
+      --navy: #003d7a;
+      --cyan: #00a1e4;
+      --ink: #2d271f;
+      --paper: #e7dcc6;
+      --card: #f7f1e4;
+      --line: #c2b195;
+      --muted: #5c5346;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, "Helvetica Neue", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 40rem; margin: 0 auto; padding: 1.6rem 1.15rem 2.8rem; }
+    .kicker {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: .68rem;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: #0077aa;
+    }
+    h1 { font-size: 1.7rem; letter-spacing: -0.03em; margin: .35rem 0 .7rem; }
+    p { margin: 0 0 .85rem; }
+    .muted { color: var(--muted); }
+    a.btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 2.8rem; padding: 0 1.15rem; margin: .15rem .4rem .7rem 0;
+      border-radius: 8px; font: 700 1rem inherit; text-decoration: none;
+      border: 2px solid var(--navy); background: var(--navy); color: #fff;
+    }
+    a.btn.ghost { background: transparent; color: var(--navy); }
+    ol { margin: .2rem 0 1rem; padding-left: 1.2rem; }
+    li + li { margin-top: .35rem; }
+    figure {
+      margin: 1rem 0;
+      background: var(--card);
+      border: 2px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    figure img { display: block; width: 100%; height: auto; }
+    figcaption {
+      padding: .65rem .9rem .75rem;
+      font-size: .9rem;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+    }
+    .card {
+      background: var(--card);
+      border: 2px solid var(--line);
+      border-radius: 12px;
+      padding: 1rem 1.1rem 1.1rem;
+      margin: 1rem 0;
+    }
+    .warn { font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="kicker">yourMark · Gatekeeper</div>
+    <h1>If Apple blocks the app</h1>
+    <p>This is a help page, not a program. Apple has not notarized yourMark yet, so macOS may say it “could not verify” the app. That is Gatekeeper — not malware.</p>
+
+    <p>
+      <a class="btn" href="x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension">Open Privacy & Security Settings</a>
+    </p>
+    <p class="muted">Safari may ask to open System Settings. Click <strong>Allow</strong>. Then scroll to <strong>Security</strong> and press <strong>Open Anyway</strong>.</p>
+
+    <div class="card">
+      <p class="warn">1. On the “Not Opened” dialog, click <strong>Done</strong> — not Move to Bin.</p>
+      <ol start="2">
+        <li>Click the blue button above, or: Apple menu → <strong>System Settings</strong> → <strong>Privacy & Security</strong>.</li>
+        <li>Scroll to <strong>Security</strong> (near the bottom of that pane).</li>
+        <li>Next to <em>“yourMark.app” was blocked to protect your Mac</em>, click <strong>Open Anyway</strong>.</li>
+        <li>Confirm <strong>Open Anyway</strong> on the next dialog, then open yourMark from Applications.</li>
+      </ol>
+      <p class="muted" style="margin:0">You can also right-click yourMark → <strong>Open</strong>.</p>
+    </div>
+
+    <figure>
+      <img src="Open Anyway looks like this.png" alt="System Settings, Privacy and Security: yourMark.app was blocked to protect your Mac. Open Anyway button." />
+      <figcaption>This is the button you want. It only appears after macOS has blocked the app once.</figcaption>
+    </figure>
+  </div>
+</body>
+</html>

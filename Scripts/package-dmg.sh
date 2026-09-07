@@ -22,26 +22,26 @@ BG="$ROOT/Resources/dmg-background.png"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/Support"
 cp -R "$APP" "$STAGE/yourMark.app"
-# Finder .webloc files only open http/https. The Settings URL is a custom
-# scheme, so a double-clickable .command is what actually opens the pane.
-cp "$ROOT/Scripts/Open Privacy & Security Settings.command" "$STAGE/Privacy & Security Settings.command"
-cp "$ROOT/Scripts/Open Privacy & Security Settings.command" "$STAGE/Support/Open Privacy & Security Settings.command"
-cp "$ROOT/Scripts/Install yourMark.command" "$STAGE/Support/Install yourMark.command"
-cp "$ROOT/Scripts/If macOS blocks yourMark.command" "$STAGE/Support/If macOS blocks yourMark.command"
+# Do not put .command files on the disk. Gatekeeper treats them as unsigned
+# programs and shows “Move to Bin” — the same scare as the app itself.
+# A webloc to the help page is a normal internet shortcut (Safari).
+cp "$ROOT/Resources/If Apple blocks it.webloc" "$STAGE/If Apple blocks it.webloc"
+cp "$ROOT/Resources/Open Anyway.html" "$STAGE/Support/Open Anyway.html"
 if [[ -f "$ROOT/docs/shots/open-anyway.png" ]]; then
   cp "$ROOT/docs/shots/open-anyway.png" "$STAGE/Support/Open Anyway looks like this.png"
 fi
-chmod +x "$STAGE/Privacy & Security Settings.command" "$STAGE/Support/"*.command
 cat > "$STAGE/Support/Read me first.txt" <<TXT
 yourMark $VERSION
 ================
 
 1. Drag yourMark onto Applications (follow the arrow).
-2. If macOS blocks it: click Done (not Move to Bin), then double-click
-   “Privacy & Security Settings” on this disk → Open Anyway.
+2. If macOS blocks it: click Done (not Move to Bin).
+3. Open “If Apple blocks it” on this disk — that is a web page, not a program.
+   Safari may ask to open System Settings. Click Allow, then Open Anyway.
+
+You can also right-click yourMark → Open.
 
 First launch installs Microsoft MarkItDown from PyPI (internet once).
-
 Keep the original PDF. Markdown is the working copy.
 TXT
 
@@ -92,13 +92,13 @@ tell application "Finder"
     set position of item "yourMark.app" to {165, 175}
     set position of item "Applications" to {495, 175}
     try
-      set position of item "Privacy & Security Settings.command" to {165, 365}
+      set position of item "If Apple blocks it.webloc" to {165, 365}
     end try
     try
       set position of item "Support" to {495, 365}
     end try
     try
-      set the extension hidden of item "Privacy & Security Settings.command" to true
+      set the extension hidden of item "If Apple blocks it.webloc" to true
     end try
     close
     open
@@ -123,10 +123,10 @@ if command -v create-dmg >/dev/null 2>&1 || (command -v brew >/dev/null 2>&1 && 
       --icon-size 128 \
       --icon "yourMark.app" 165 175 \
       --app-drop-link 495 175 \
-      --icon "Privacy & Security Settings.command" 165 365 \
+      --icon "If Apple blocks it.webloc" 165 365 \
       --icon "Support" 495 365 \
       --hide-extension "yourMark.app" \
-      --hide-extension "Privacy & Security Settings.command" \
+      --hide-extension "If Apple blocks it.webloc" \
       --no-internet-enable \
       "$DMG" \
       "$STAGE"; then
