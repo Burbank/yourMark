@@ -205,7 +205,7 @@ final class AppModel {
 
     Drop a PDF **anywhere** on yourMark — Library, Bookmarks, Convert, the header. It switches to Convert and starts. Microsoft MarkItDown (the official PyPI package) writes Markdown. First launch installs that converter. yourMark also upgrades it from PyPI on its own when Microsoft ships a newer package, and it checks GitHub for a newer yourMark.
 
-    If the PDF is a **scan** (no text layer), yourMark OCRs it first — that takes a little longer — then MarkItDown runs. OCRmyPDF/Tesseract when installed, otherwise Apple Live Text. Page pictures are kept so tables, arrows, and diagrams still show.
+    If the PDF is a **scan** (no text layer), yourMark uses IBM **Docling** for layout — tables, columns, figures. That takes a little longer than a normal convert. Microsoft MarkItDown still handles ordinary PDFs. If Docling is missing, we fall back to OCRmyPDF / Apple Live Text and keep page pictures.
 
     ## Bookmarks
 
@@ -370,7 +370,7 @@ final class AppModel {
                 outputURL: nil,
                 status: .queued,
                 detail: scan
-                    ? "Scan — OCR runs first, so this takes a little longer"
+                    ? "Scan — layout OCR first, so this takes a little longer"
                     : url.path,
                 startedAt: nil,
                 needsOCR: scan
@@ -378,8 +378,8 @@ final class AppModel {
         }
         if scanCount > 0 {
             statusText = scanCount == 1
-                ? "Scan detected — OCR first, so this takes a little longer"
-                : "\(scanCount) scans — OCR first, so this takes a little longer"
+                ? "Scan detected — layout OCR first, so this takes a little longer"
+                : "\(scanCount) scans — layout OCR first, so this takes a little longer"
         } else {
             statusText = jobs.count == 1
                 ? "Queued \(urls.first?.lastPathComponent ?? "file")"
@@ -413,16 +413,38 @@ final class AppModel {
                 var usedOCR = false
                 if ocrEnabled, original.pathExtension.lowercased() == "pdf", OcrService.needsOCR(original) {
                     jobs[index].needsOCR = true
-                    jobs[index].detail = "OCR first — this takes a little longer"
-                    statusText = "OCR first — this takes a little longer · \(original.lastPathComponent)"
-                    let prepared = try await OcrService.searchablePDF(from: original) { msg in
+                    jobs[index].detail = "Layout OCR first — this takes a little longer"
+                    statusText = "Layout OCR first — this takes a little longer · \(original.lastPathComponent)"
+                    let onOCR: @Sendable (String) -> Void = { msg in
                         Task { @MainActor in
-                            self.statusText = "OCR first — this takes a little longer. \(msg)"
+                            self.statusText = "Layout OCR first — this takes a little longer. \(msg)"
                             if let i = self.jobs.firstIndex(where: { $0.id == jobID }) {
-                                self.jobs[i].detail = "OCR first — this takes a little longer. \(msg)"
+                                self.jobs[i].detail = "Layout OCR first — this takes a little longer. \(msg)"
                             }
                         }
                     }
+                    if await OcrService.layoutMarkdown(from: original, to: output, onStatus: onOCR) {
+                        usedOCR = true
+                        let url = output
+                        let bookmarks = PdfSidecar.bookmarks(from: original)
+                        if !bookmarks.isEmpty, var text = try? String(contentsOf: url, encoding: .utf8) {
+                            if !text.contains("## Outline") {
+                                text = PdfSidecar.outlineMarkdown(bookmarks) + text
+                                try? text.write(to: url, atomically: true, encoding: .utf8)
+                            }
+                        }
+                        if OcrService.markdownLooksEmpty(url) {
+                            await OcrService.enrichMarkdown(markdownURL: url, sourcePDF: original, onStatus: onOCR)
+                        }
+                        if let i = jobs.firstIndex(where: { $0.id == jobID }) {
+                            jobs[i].status = .done
+                            jobs[i].outputURL = url
+                            jobs[i].detail = "Docling layout OCR · \(url.lastPathComponent)"
+                        }
+                        addToLibrary(source: original, markdown: url, bookmarks: bookmarks)
+                        continue
+                    }
+                    let prepared = try await OcrService.searchablePDF(from: original, onStatus: onOCR)
                     input = prepared.url
                     usedOCR = prepared.didOCR
                     if let i = jobs.firstIndex(where: { $0.id == jobID }) {
@@ -494,6 +516,19 @@ final class AppModel {
         } catch {
             errorMessage = error.localizedDescription
             statusText = "Apple Live Text will OCR scans"
+        }
+    }
+
+    func installDocling() async {
+        installingEngine = true
+        statusText = "Installing Docling (layout models)… first run downloads extra files"
+        defer { installingEngine = false }
+        do {
+            lastUpgradeLog = try await OcrService.installDocling()
+            statusText = "Docling ready"
+        } catch {
+            errorMessage = error.localizedDescription
+            statusText = "Docling install failed"
         }
     }
 
