@@ -2,9 +2,11 @@ import Dispatch
 import Foundation
 
 /// Watches converted Markdown and original PDFs; fires when the user saves in Finder.
+/// Events run off the main thread so a burst of writes after convert cannot freeze the window.
 final class FileWatcher: @unchecked Sendable {
     private var sources: [String: DispatchSourceFileSystemObject] = [:]
     private let lock = NSLock()
+    private let queue = DispatchQueue(label: "com.burbank.yourmark.watch", qos: .utility)
     var onChange: ((String) -> Void)?
 
     func replace(paths: [String]) {
@@ -19,7 +21,7 @@ final class FileWatcher: @unchecked Sendable {
             let src = DispatchSource.makeFileSystemObjectSource(
                 fileDescriptor: fd,
                 eventMask: [.write, .extend, .rename, .delete],
-                queue: DispatchQueue.main
+                queue: queue
             )
             src.setEventHandler { [weak self] in
                 self?.onChange?(path)

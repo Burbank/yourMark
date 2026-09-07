@@ -336,29 +336,19 @@ dst.write_text(md, encoding="utf-8")
     private static func run(_ exe: String, _ args: [String]) async throws -> String {
         try await withCheckedThrowingContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
-                let p = Process()
-                let out = Pipe()
-                let err = Pipe()
-                p.executableURL = URL(fileURLWithPath: exe)
-                p.arguments = args
-                p.standardOutput = out
-                p.standardError = err
-                var env = ProcessInfo.processInfo.environment
-                let extra = ["/opt/homebrew/bin", "/usr/local/bin",
-                             FileManager.default.homeDirectoryForCurrentUser.path + "/.local/bin"]
-                env["PATH"] = extra.joined(separator: ":") + ":" + (env["PATH"] ?? "")
-                p.environment = env
                 do {
-                    try p.run()
-                    p.waitUntilExit()
-                    let msg = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
-                        ?? ""
-                    if p.terminationStatus == 0 {
+                    let result = try ProcessRun.run(
+                        executable: exe,
+                        arguments: args,
+                        captureStdout: true
+                    )
+                    let msg = result.stderr.isEmpty ? result.stdout : result.stderr
+                    if result.status == 0 {
                         cont.resume(returning: msg)
                     } else {
                         cont.resume(throwing: NSError(
                             domain: "OcrService",
-                            code: Int(p.terminationStatus),
+                            code: Int(result.status),
                             userInfo: [NSLocalizedDescriptionKey: msg.isEmpty ? "OCRmyPDF failed" : msg]
                         ))
                     }

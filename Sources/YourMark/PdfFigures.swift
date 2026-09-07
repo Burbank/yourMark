@@ -49,9 +49,18 @@ enum PdfFigures {
         var pageFiles: [Int: [String]] = [:]
         var fingerprintCount: [Int: Int] = [:]
         var rasters = 0
-        let rasterCap = 160
+        let rasterCap = pageCount > 80 ? 24 : 40
+        let deadline = Date().addingTimeInterval(28)
+        let allowRaster = pageCount <= 180
 
         for i in 1...pageCount {
+            if Date() > deadline {
+                onStatus("Saved the pictures found so far. The rest stay in the PDF.")
+                break
+            }
+            if i == 1 || i % 12 == 0 {
+                onStatus("Looking for pictures (page \(i) of \(pageCount))…")
+            }
             guard let page = cgDoc.page(at: i) else { continue }
             let sink = XSink()
             if let dict = page.dictionary {
@@ -73,7 +82,7 @@ enum PdfFigures {
                 } catch { continue }
             }
 
-            if files.isEmpty {
+            if files.isEmpty, allowRaster, rasters < rasterCap {
                 let chars = (pdfDoc?.page(at: i - 1)?.string ?? "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .count
@@ -82,7 +91,7 @@ enum PdfFigures {
                     (sink.hasLargeImage && sink.images.isEmpty)
                     || (sink.hasForm && chars < 1500 && bytes > 3000)
                     || (chars < 800 && bytes > 4000)
-                if illustrated, rasters < rasterCap,
+                if illustrated,
                    let name = rasterize(page, index: i, into: figDir) {
                     files.append(name)
                     rasters += 1
@@ -91,9 +100,6 @@ enum PdfFigures {
 
             if !files.isEmpty {
                 pageFiles[i - 1] = files
-                if pageFiles.count % 8 == 0 {
-                    onStatus("Saving pictures (\(pageFiles.count) so far)…")
-                }
             }
         }
 
@@ -254,6 +260,7 @@ private final class XSink {
     var hasForm = false
     var hasLargeImage = false
     private var walkDepth = 0
+    private var visits = 0
 
     func walk(resources: CGPDFDictionaryRef, depth: Int) {
         guard depth < 4 else { return }
@@ -268,6 +275,8 @@ private final class XSink {
     }
 
     private func consume(_ object: CGPDFObjectRef) {
+        visits += 1
+        if visits > 400 { return }
         var stream: CGPDFStreamRef?
         guard CGPDFObjectGetValue(object, .stream, &stream), let stream else { return }
         guard let sdict = CGPDFStreamGetDictionary(stream) else { return }

@@ -59,6 +59,7 @@ final class AppModel {
     private var convertWanted = false
     private var ignoreWatchUntil = Date.distantPast
     private var previewGen = 0
+    private var previewNeedsLoad = false
 
     let service = MarkItDownService()
     private let askService = AskService()
@@ -202,6 +203,10 @@ final class AppModel {
         selectedTool = tool
         showSettings = false
         showHelp = false
+        if tool == .library, previewNeedsLoad,
+           let item = library.first(where: { $0.id == selectedLibraryID }) {
+            selectLibrary(item, show: false)
+        }
     }
 
     func toggleSettings() {
@@ -591,7 +596,7 @@ final class AppModel {
                 convertWanted = true
             }
         }
-        quietWatch()
+        quietWatch(12)
         statusText = jobs.contains(where: { $0.status == .failed }) ? "Finished with errors" : "Done"
     }
 
@@ -739,7 +744,7 @@ final class AppModel {
         guard headings.count < 5 else { return markdownURL }
         statusText = "Adding chapters with AI…"
         do {
-            let next = try await askService.inferChapters(
+            let filled = try await askService.inferChapters(
                 markdown: text,
                 settings: AskService.Settings(
                     provider: askProvider,
@@ -748,8 +753,8 @@ final class AppModel {
                     apiKey: AskSecrets.load()
                 )
             )
-            if !next.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                try next.write(to: markdownURL, atomically: true, encoding: .utf8)
+            if !filled.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                try filled.write(to: markdownURL, atomically: true, encoding: .utf8)
             }
         } catch {
             statusText = "Chapters skipped: \(error.localizedDescription)"
@@ -809,6 +814,7 @@ final class AppModel {
 
     func selectLibrary(_ item: LibraryItem, show: Bool = true) {
         selectedLibraryID = item.id
+        previewNeedsLoad = false
         if show {
             selectedTool = .library
             showSettings = false
@@ -850,14 +856,32 @@ final class AppModel {
                 base: base
             )
         }
-        let cap = 280_000
+        let cap = 120_000
         if text.count > cap {
             let idx = text.index(text.startIndex, offsetBy: cap)
             var cut = String(text[..<idx])
             if let nl = cut.lastIndex(of: "\n") { cut = String(cut[..<nl]) }
             text = cut + "\n\n_Preview shows the start of this large file. Open it in Finder for the rest._\n"
         }
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let rawLines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var imageCount = 0
+        var droppedImages = false
+        var lines: [String] = []
+        lines.reserveCapacity(min(rawLines.count, 8_000))
+        for line in rawLines {
+            if isPreviewImageLine(line) {
+                imageCount += 1
+                if imageCount > 18 {
+                    droppedImages = true
+                    continue
+                }
+            }
+            lines.append(line)
+            if lines.count >= 4_500 { break }
+        }
+        if droppedImages {
+            lines.append("_Further pictures are in the figures folder next to this file. Open it in Finder to see them all._")
+        }
         var headings: [ManualBookmark] = []
         var used = Set<String>()
         for (i, line) in lines.enumerated() {
@@ -881,6 +905,11 @@ final class AppModel {
             sections = [PreviewSection(id: 0, lines: ["Select a converted file."])]
         }
         return PreviewPack(text: text, lines: lines, headings: headings, sections: sections, base: base)
+    }
+
+    nonisolated private static func isPreviewImageLine(_ line: String) -> Bool {
+        let t = line.trimmingCharacters(in: .whitespaces)
+        return t.hasPrefix("![") && t.contains("](")
     }
 
     func jumpToBookmark(_ bookmark: ManualBookmark) {
@@ -977,7 +1006,7 @@ final class AppModel {
     }
 
     private func addToLibrary(source: URL, markdown: URL, bookmarks: [ManualBookmark]) {
-        quietWatch()
+        quietWatch(12)
         let values = try? markdown.resourceValues(forKeys: [.fileSizeKey])
         let item = LibraryItem(
             id: UUID(),
@@ -993,7 +1022,14 @@ final class AppModel {
         library.insert(item, at: 0)
         saveLibrary()
         startWatching()
-        selectLibrary(item, show: false)
+        selectedLibraryID = item.id
+        // Do not parse a huge Markdown on the main thread the instant convert
+        // finishes — that freeze looked like the app dying after "Done".
+        if selectedTool == .library {
+            selectLibrary(item, show: false)
+        } else {
+            previewNeedsLoad = true
+        }
     }
 
     private func loadLibrary() {
