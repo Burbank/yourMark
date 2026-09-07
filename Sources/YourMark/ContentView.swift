@@ -430,12 +430,12 @@ struct ConvertPanel: View {
                     .foregroundStyle(deck.cyan)
                 Text("Drop a PDF")
                     .font(.system(.title, design: .rounded).weight(.bold))
-                Text("Drop a PDF anywhere on this window — Library, Bookmarks, the header. yourMark switches here and starts. Microsoft MarkItDown writes the words; pictures from the PDF are added in one extra pass. Word, PowerPoint, Excel, HTML, EPUB, CSV, and Outlook mail work too. Keep the original file.")
+                Text("Drop a PDF anywhere on this window — Library, Bookmarks, the header. yourMark switches here and starts. Microsoft MarkItDown writes the words; pictures from the PDF are added in one extra pass. Word, PowerPoint, Excel, pictures, ZIP folders, HTML, EPUB, CSV, RTF, and Outlook mail work too. Keep the original file.")
                     .foregroundStyle(deck.muted)
                     .frame(maxWidth: 520, alignment: .leading)
 
                 DropZone(
-                    title: "Drop PDFs, Word, PowerPoint, Excel, HTML…",
+                    title: "Drop PDFs, Word, PowerPoint, Excel, pictures, ZIP…",
                     subtitle: "Or choose files. Markdown is saved next to the original unless you pick another folder in Settings."
                 ) {
                     model.pickFiles()

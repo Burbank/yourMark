@@ -599,17 +599,21 @@ final class AppModel {
     func pickFiles() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [
-            .pdf, .plainText,
+            .pdf, .plainText, .image, .jpeg, .png, .gif, .webP, .tiff,
             UTType(filenameExtension: "md") ?? .plainText,
             UTType(filenameExtension: "docx") ?? .data,
             UTType(filenameExtension: "pptx") ?? .data,
             UTType(filenameExtension: "xlsx") ?? .data,
+            UTType(filenameExtension: "xls") ?? .data,
             UTType(filenameExtension: "html") ?? .html,
             UTType(filenameExtension: "epub") ?? .data,
             UTType(filenameExtension: "csv") ?? .commaSeparatedText,
             UTType(filenameExtension: "json") ?? .json,
             UTType(filenameExtension: "xml") ?? .xml,
             UTType(filenameExtension: "msg") ?? .data,
+            UTType(filenameExtension: "zip") ?? .zip,
+            UTType(filenameExtension: "rtf") ?? .rtf,
+            UTType(filenameExtension: "webp") ?? .webP,
         ]
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false

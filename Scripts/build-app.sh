@@ -77,9 +77,9 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.3.23</string>
+	<string>0.3.24</string>
 	<key>CFBundleVersion</key>
-	<string>35</string>${ICON_PLIST}
+	<string>36</string>${ICON_PLIST}
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>NSHighResolutionCapable</key>
@@ -105,6 +105,23 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 				<string>docx</string>
 				<string>pptx</string>
 				<string>xlsx</string>
+				<string>xls</string>
+				<string>html</string>
+				<string>htm</string>
+				<string>epub</string>
+				<string>csv</string>
+				<string>json</string>
+				<string>xml</string>
+				<string>msg</string>
+				<string>jpg</string>
+				<string>jpeg</string>
+				<string>png</string>
+				<string>gif</string>
+				<string>webp</string>
+				<string>tif</string>
+				<string>tiff</string>
+				<string>zip</string>
+				<string>rtf</string>
 				<string>md</string>
 			</array>
 			<key>LSItemContentTypes</key>
@@ -113,6 +130,19 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 				<string>org.openxmlformats.wordprocessingml.document</string>
 				<string>org.openxmlformats.presentationml.presentation</string>
 				<string>org.openxmlformats.spreadsheetml.sheet</string>
+				<string>com.microsoft.excel.xls</string>
+				<string>public.html</string>
+				<string>org.idpf.epub-container</string>
+				<string>public.comma-separated-values-text</string>
+				<string>public.json</string>
+				<string>public.xml</string>
+				<string>public.jpeg</string>
+				<string>public.png</string>
+				<string>com.compuserve.gif</string>
+				<string>org.webmproject.webp</string>
+				<string>public.tiff</string>
+				<string>public.zip-archive</string>
+				<string>public.rtf</string>
 				<string>net.daringfireball.markdown</string>
 				<string>public.plain-text</string>
 			</array>

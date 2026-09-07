@@ -6,6 +6,8 @@ enum ConvertibleKind {
     static let extensions: Set<String> = [
         "pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "md", "txt",
         "epub", "csv", "json", "xml", "msg",
+        "jpg", "jpeg", "png", "gif", "webp", "tif", "tiff",
+        "zip", "rtf",
     ]
 
     static func allows(_ url: URL) -> Bool {
