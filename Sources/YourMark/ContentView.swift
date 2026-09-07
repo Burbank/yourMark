@@ -914,30 +914,35 @@ struct EnginePanel: View {
                         }
                     }
                 }
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("API key")
-                    HStack(alignment: .center, spacing: 8) {
+                    HStack(alignment: .center, spacing: 10) {
                         SecureField(
                             model.askHasKey ? "Key locked in — paste a new one to replace" : "Paste your API key here",
                             text: Binding(
                                 get: { model.askKeyDraft },
-                                set: { model.askKeyDraft = $0 }
+                                set: {
+                                    model.askKeyDraft = $0
+                                    model.askKeyHint = ""
+                                }
                             )
                         )
+                        .textFieldStyle(.roundedBorder)
                         .onSubmit { model.lockAskKey() }
                         Button("Enter") { model.lockAskKey() }
                             .buttonStyle(.borderedProminent)
-                            .disabled(model.askKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).count < 8)
+                            .controlSize(.large)
+                            .help("Lock this API key on this Mac")
+                    }
+                    Text("Paste the key, then press Enter. That locks it on this Mac so you do not have to paste it again.")
+                        .foregroundStyle(.secondary)
+                    if !model.askKeyHint.isEmpty {
+                        Text(model.askKeyHint)
+                            .foregroundStyle(.orange)
                     }
                     if model.askHasKey {
                         Label("Your key is locked in. yourMark will use it when you Ask. You do not need to paste it again.", systemImage: "lock.fill")
                             .foregroundStyle(.green)
-                    }
-                    Text(model.askHasKey
-                         ? "Paste a new key and press Enter only if you want to replace it. The key stays on this Mac (Keychain) and is only sent when you Ask."
-                         : "Paste your API key, then press Enter. It stays on this Mac (Keychain) and is only sent when you Ask.")
-                        .foregroundStyle(.secondary)
-                    if model.askHasKey {
                         Button("Clear key", role: .destructive) { model.clearAskKey() }
                     }
                 }
