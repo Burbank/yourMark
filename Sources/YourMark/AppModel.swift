@@ -39,6 +39,9 @@ final class AppModel {
     var filePlace: String = UserDefaults.standard.string(forKey: "filePlace") ?? "beside"
     var customFolderPath: String = UserDefaults.standard.string(forKey: "customFolder") ?? ""
     var fileNotice: String = ""
+    var appUpdateTag: String?
+    var appUpdateURL: URL?
+    var draggingFiles = false
 
     let service = MarkItDownService()
     private let askService = AskService()
@@ -89,6 +92,7 @@ final class AppModel {
             await installEngine()
         } else if status.path != nil {
             statusText = "MarkItDown \(status.version)"
+            Task { await checkUpdates(force: false) }
         }
     }
 
@@ -133,9 +137,7 @@ final class AppModel {
 
     static let guideID = UUID(uuidString: "00000000-0000-4000-8000-000000000001")!
 
-    var showInfoButton: Bool {
-        !library.contains(where: { $0.id == Self.guideID })
-    }
+    var showInfoButton: Bool { true }
 
     func removeLibrary(_ item: LibraryItem) {
         if item.id == Self.guideID {
@@ -188,7 +190,7 @@ final class AppModel {
 
     Turn PDFs, Word, and slides into Markdown you can search, bookmark, and ask.
 
-    Swipe this card **to the left** when you are done — an **i** in the header keeps this same guide. Right-click a card for Open, Show in Finder, and Delete.
+    Swipe this card **to the left** when you are done — the **i** in the header always opens this same guide. Right-click a card for Open, Show in Finder, and Delete.
 
     ## Why Markdown
 
@@ -200,7 +202,7 @@ final class AppModel {
 
     ## Convert
 
-    Open **Convert** and drop a PDF, Word, PowerPoint, or Excel file. yourMark asks Microsoft MarkItDown (the official PyPI package) to write Markdown. The first launch installs that converter for you — it is not frozen inside the app, so Microsoft’s updates still reach you.
+    Drop a PDF **anywhere** on yourMark — Library, Bookmarks, Convert, the header. It switches to Convert and starts. Microsoft MarkItDown (the official PyPI package) writes Markdown. First launch installs that converter. yourMark also upgrades it from PyPI on its own when Microsoft ships a newer package, and it checks GitHub for a newer yourMark.
 
     ## Bookmarks
 
@@ -238,7 +240,7 @@ final class AppModel {
 
     ## After this file
 
-    Swipe this card left to delete it. The **i** in the header shows this guide whenever you need it.
+    Swipe this card left to delete it. The **i** in the header shows this guide whenever you need it — even after this card is gone.
     """
 
     func persistAskSettings() {
@@ -322,11 +324,16 @@ final class AppModel {
     }
 
     func openIncoming(_ urls: [URL]) {
-        let allowed = urls.filter { Self.isConvertible($0) }
+        let allowed = urls.filter { ConvertibleKind.allows($0) }
         guard !allowed.isEmpty else { return }
+        showSettings = false
+        showHelp = false
         selectedTool = .convert
         enqueue(allowed)
         NSApp.activate(ignoringOtherApps: true)
+        NSApp.windows.first(where: { $0.identifier?.rawValue.contains("main") == true })
+            ?.makeKeyAndOrderFront(nil)
+        Task { await convertQueued() }
     }
 
     func pickFiles() {
@@ -342,11 +349,11 @@ final class AppModel {
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK else { return }
-        enqueue(panel.urls)
+        openIncoming(panel.urls)
     }
 
     func enqueue(_ urls: [URL]) {
-        for url in urls where Self.isConvertible(url) {
+        for url in urls where ConvertibleKind.allows(url) {
             if jobs.contains(where: { $0.sourceURL == url }) { continue }
             jobs.append(ConvertJob(
                 id: UUID(),
@@ -363,6 +370,7 @@ final class AppModel {
     }
 
     func convertQueued() async {
+        if isBusy { return }
         clearError()
         isBusy = true
         defer { isBusy = false }
@@ -401,6 +409,11 @@ final class AppModel {
                 jobs[index].detail = error.localizedDescription
             }
         }
+        if jobs.contains(where: { $0.status == .queued }) {
+            isBusy = false
+            await convertQueued()
+            return
+        }
         statusText = jobs.contains(where: { $0.status == .failed }) ? "Finished with errors" : "Done"
     }
 
@@ -418,9 +431,13 @@ final class AppModel {
         }
     }
 
-    func selectLibrary(_ item: LibraryItem) {
+    func selectLibrary(_ item: LibraryItem, show: Bool = true) {
         selectedLibraryID = item.id
-        selectedTool = .library
+        if show {
+            selectedTool = .library
+            showSettings = false
+            showHelp = false
+        }
         scrollToLine = nil
         if let data = try? Data(contentsOf: URL(fileURLWithPath: item.markdownPath)),
            let text = String(data: data, encoding: .utf8) {
@@ -554,7 +571,7 @@ final class AppModel {
         library.insert(item, at: 0)
         saveLibrary()
         startWatching()
-        selectLibrary(item)
+        selectLibrary(item, show: false)
     }
 
     private func loadLibrary() {
@@ -568,8 +585,48 @@ final class AppModel {
         }
     }
 
+    func checkUpdates(force: Bool) async {
+        let now = Date().timeIntervalSince1970
+        let lastEngine = UserDefaults.standard.double(forKey: "lastEngineCheck")
+        let lastApp = UserDefaults.standard.double(forKey: "lastAppCheck")
+
+        if force || now - lastEngine > 86_400 {
+            UserDefaults.standard.set(now, forKey: "lastEngineCheck")
+            if let pypi = await AppUpdates.fetchPyPIVersion() {
+                let local = AppUpdates.engineVersionToken(engineVersion)
+                if AppUpdates.isNewer(pypi, than: local), !isBusy, !installingEngine {
+                    statusText = "Updating MarkItDown \(local) → \(pypi)…"
+                    await upgradeEngine()
+                }
+            }
+        }
+
+        if force || now - lastApp > 43_200 {
+            UserDefaults.standard.set(now, forKey: "lastAppCheck")
+            if let latest = await AppUpdates.fetchLatestApp() {
+                appUpdateTag = latest.tag
+                appUpdateURL = latest.url
+                statusText = "yourMark \(latest.tag) is available"
+            } else if force {
+                statusText = "yourMark \(AppUpdates.currentVersion) is current"
+            }
+        }
+    }
+
+    func dismissAppUpdate() {
+        appUpdateTag = nil
+        appUpdateURL = nil
+    }
+
+    func openAppUpdate() {
+        if let appUpdateURL {
+            NSWorkspace.shared.open(appUpdateURL)
+        } else {
+            NSWorkspace.shared.open(AppUpdates.releasesPage)
+        }
+    }
+
     static func isConvertible(_ url: URL) -> Bool {
-        let ext = url.pathExtension.lowercased()
-        return ["pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "md", "txt", "epub"].contains(ext)
+        ConvertibleKind.allows(url)
     }
 }
