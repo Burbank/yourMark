@@ -14,6 +14,7 @@ struct ConvertJob: Identifiable, Hashable {
     var status: Status
     var detail: String
     var startedAt: Date?
+    var needsOCR: Bool = false
 
     enum Status: String {
         case queued, running, done, failed
