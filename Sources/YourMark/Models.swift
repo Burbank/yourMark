@@ -104,4 +104,5 @@ struct PreviewPack: Sendable {
     var headings: [ManualBookmark]
     var sections: [PreviewSection]
     var base: URL
+    var missing: Bool = false
 }

@@ -207,6 +207,10 @@ final class AppModel {
     func acceptMarkEditRecommend() {
         UserDefaults.standard.set(true, forKey: "sawMarkEditSheet")
         showMarkEditSheet = false
+        openMarkEditDownload()
+    }
+
+    func openMarkEditDownload() {
         if let url = URL(string: "https://github.com/MarkEdit-app/MarkEdit/releases/latest") {
             NSWorkspace.shared.open(url)
         }
@@ -1027,6 +1031,9 @@ final class AppModel {
             let pack = AppModel.buildPreview(path: path)
             await MainActor.run {
                 guard gen == self.previewGen else { return }
+                if pack.missing, !self.previewMarkdown.isEmpty, self.previewMarkdown != "Loading…" {
+                    return
+                }
                 self.previewMarkdown = pack.text
                 self.previewLines = pack.lines
                 self.previewHeadings = pack.headings
@@ -1039,7 +1046,7 @@ final class AppModel {
     nonisolated static func buildPreview(path: String) -> PreviewPack {
         let url = URL(fileURLWithPath: path)
         let base = url.deletingLastPathComponent()
-        guard let data = try? Data(contentsOf: url),
+        guard let data = try? Data(contentsOf: url), data.count > 8,
               var text = String(data: data, encoding: .utf8) else {
             let missing = "_File missing on disk._"
             return PreviewPack(
@@ -1047,7 +1054,8 @@ final class AppModel {
                 lines: [missing],
                 headings: [],
                 sections: [PreviewSection(id: 0, lines: [missing])],
-                base: base
+                base: base,
+                missing: true
             )
         }
         let cap = 120_000
@@ -1213,10 +1221,23 @@ final class AppModel {
     }
 
     private func startWatching() {
-        let paths = Set(library.flatMap { [$0.markdownPath, $0.sourcePath] }.filter { !$0.isEmpty })
-        guard paths != watchedPaths else { return }
-        watchedPaths = paths
-        watcher.replace(paths: Array(paths))
+        var paths: [String] = []
+        for item in library {
+            if !item.markdownPath.isEmpty {
+                paths.append(item.markdownPath)
+                let folder = URL(fileURLWithPath: item.markdownPath).deletingLastPathComponent()
+                paths.append(folder.path)
+                let figures = folder.appendingPathComponent("figures", isDirectory: true).path
+                paths.append(figures)
+            }
+            if !item.sourcePath.isEmpty {
+                paths.append(item.sourcePath)
+            }
+        }
+        let unique = Set(paths.filter { !$0.isEmpty })
+        guard unique != watchedPaths else { return }
+        watchedPaths = unique
+        watcher.replace(paths: Array(unique))
     }
 
     private func quietWatch(_ seconds: TimeInterval = 4) {
@@ -1228,19 +1249,24 @@ final class AppModel {
         if Date() < ignoreWatchUntil { return }
         watchDebounce?.cancel()
         watchDebounce = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 600_000_000)
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
             guard !Task.isCancelled else { return }
             if self.isBusy || Date() < self.ignoreWatchUntil { return }
             if self.library.contains(where: { $0.sourcePath == path }) {
                 self.fileNotice = "Original file changed on disk"
                 return
             }
-            if let item = self.library.first(where: { $0.markdownPath == path }) {
-                self.fileNotice = "Updated from Finder"
-                if item.id == self.selectedLibraryID {
-                    self.selectLibrary(item, show: false)
-                }
-            }
+            guard let item = self.library.first(where: { $0.id == self.selectedLibraryID }) else { return }
+            let md = item.markdownPath
+            let folder = URL(fileURLWithPath: md).deletingLastPathComponent().path
+            let figures = folder + "/figures"
+            let related = path == md || path == folder || path == figures
+                || path.hasPrefix(figures + "/")
+            guard related else { return }
+            guard FileManager.default.isReadableFile(atPath: md) else { return }
+            self.fileNotice = "Updated from disk"
+            self.selectLibrary(item, show: false)
+            self.startWatching()
         }
     }
 

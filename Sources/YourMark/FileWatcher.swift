@@ -1,8 +1,9 @@
 import Dispatch
 import Foundation
 
-/// Watches converted Markdown and original PDFs; fires when the user saves in Finder.
-/// Events run off the main thread so a burst of writes after convert cannot freeze the window.
+/// Watches converted Markdown folders. Editors like MarkEdit save by replacing
+/// the file (the old vnode is deleted). We re-arm the watch so that does not
+/// crash the process.
 final class FileWatcher: @unchecked Sendable {
     private var sources: [String: DispatchSourceFileSystemObject] = [:]
     private let lock = NSLock()
@@ -14,23 +15,8 @@ final class FileWatcher: @unchecked Sendable {
         sources.values.forEach { $0.cancel() }
         sources.removeAll()
         lock.unlock()
-
-        for path in Set(paths) where FileManager.default.fileExists(atPath: path) {
-            let fd = open(path, O_EVTONLY)
-            guard fd >= 0 else { continue }
-            let src = DispatchSource.makeFileSystemObjectSource(
-                fileDescriptor: fd,
-                eventMask: [.write, .extend, .rename, .delete],
-                queue: queue
-            )
-            src.setEventHandler { [weak self] in
-                self?.onChange?(path)
-            }
-            src.setCancelHandler { close(fd) }
-            src.resume()
-            lock.lock()
-            sources[path] = src
-            lock.unlock()
+        for path in Set(paths) {
+            addWatch(path)
         }
     }
 
@@ -42,4 +28,40 @@ final class FileWatcher: @unchecked Sendable {
     }
 
     deinit { stop() }
+
+    private func addWatch(_ path: String) {
+        guard FileManager.default.fileExists(atPath: path) else { return }
+        let fd = open(path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        let src = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .extend, .rename, .delete, .attrib],
+            queue: queue
+        )
+        src.setEventHandler { [weak self] in
+            guard let self else { return }
+            let flags = src.data
+            self.onChange?(path)
+            let gone = flags.contains(.delete) || flags.contains(.rename)
+            if gone {
+                src.cancel()
+                self.queue.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                    self?.rearm(path)
+                }
+            }
+        }
+        src.setCancelHandler { close(fd) }
+        src.resume()
+        lock.lock()
+        sources[path]?.cancel()
+        sources[path] = src
+        lock.unlock()
+    }
+
+    private func rearm(_ path: String) {
+        lock.lock()
+        sources[path] = nil
+        lock.unlock()
+        addWatch(path)
+    }
 }
