@@ -100,10 +100,11 @@ final class AppModel {
         askKeyTail = UserDefaults.standard.string(forKey: "askKeyTail") ?? ""
         askKeyTestPassed = askHasKey && UserDefaults.standard.bool(forKey: "askKeyTestPassed")
         askKeyTestNote = askHasKey ? (UserDefaults.standard.string(forKey: "askKeyTestNote") ?? "") : ""
-        watcher.onChange = { [weak self] path in
-            Task { @MainActor in self?.fileDidChange(path) }
+        watcher.onChange = { path in
+            DispatchQueue.main.async { [weak self] in
+                self?.fileDidChange(path)
+            }
         }
-        startWatching()
     }
 
     var colorScheme: ColorScheme? {
@@ -145,6 +146,7 @@ final class AppModel {
         refreshOCRTools()
         Task { await fillMissingBookmarks() }
         maybeOfferCrashReport()
+        startWatching()
     }
 
     func acceptFirstRunInstall() async {

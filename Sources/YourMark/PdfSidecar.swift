@@ -23,6 +23,9 @@ struct ManualBookmark: Identifiable, Hashable, Codable, Sendable {
 enum PdfSidecar {
     static func bookmarks(from url: URL) -> [ManualBookmark] {
         guard url.pathExtension.lowercased() == "pdf" else { return [] }
+        guard FileManager.default.isReadableFile(atPath: url.path) else { return [] }
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue ?? 0
+        guard size > 64 else { return [] }
         guard let doc = PDFDocument(url: url), let root = doc.outlineRoot else { return [] }
         var items: [ManualBookmark] = []
 
