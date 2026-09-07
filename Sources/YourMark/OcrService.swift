@@ -277,7 +277,7 @@ dst.write_text(md, encoding="utf-8")
             .split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .first { $0.count > 3 && $0.count < 80 }
-        return raw.map(String.init) ?? "Page \(index + 1)"
+        return raw ?? "Page \(index + 1)"
     }
 
     private static func savePageImage(_ page: PDFPage, index: Int, into dir: URL) -> String? {
