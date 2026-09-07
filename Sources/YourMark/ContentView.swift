@@ -532,16 +532,28 @@ struct DropZone: View {
                 .foregroundStyle(hovering ? DeckTheme.accent : Color.secondary.opacity(0.4))
         )
         .onDrop(of: [.fileURL], isTargeted: $hovering) { providers in
-            Task {
-                var urls: [URL] = []
-                for provider in providers {
-                    if let url = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? URL {
-                        urls.append(url)
-                    } else if let data = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data,
-                              let url = URL(dataRepresentation: data, relativeTo: nil) {
-                        urls.append(url)
+            let lock = NSLock()
+            var urls: [URL] = []
+            let group = DispatchGroup()
+            for provider in providers {
+                group.enter()
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                    defer { group.leave() }
+                    let url: URL?
+                    if let value = item as? URL {
+                        url = value
+                    } else if let data = item as? Data {
+                        url = URL(dataRepresentation: data, relativeTo: nil)
+                    } else {
+                        url = nil
                     }
+                    guard let url else { return }
+                    lock.lock()
+                    urls.append(url)
+                    lock.unlock()
                 }
+            }
+            group.notify(queue: .main) {
                 if !urls.isEmpty { onDrop(urls) }
             }
             return true
