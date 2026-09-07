@@ -3,7 +3,7 @@
 ## Double-click (recommended)
 
 1. Download [yourMark.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.dmg).
-2. Open the disk image and **double-click Install yourMark**. That copies the app to Applications, clears the macOS quarantine flag, and launches it.
+2. Open the disk image and **drag yourMark onto Applications** (follow the arrow). Then open yourMark from Applications.
 
 ### If macOS says it “could not verify” the app
 

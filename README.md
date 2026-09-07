@@ -57,7 +57,7 @@ This build is not notarized, so macOS often shows **“yourMark.app” Not Opene
 
 You can also right-click yourMark → **Open**, or double-click **If macOS blocks yourMark** on the disk image.
 
-**Everyone:** download the DMG, drag the app to Applications, double-click **Install yourMark**. First launch installs Microsoft MarkItDown.
+**Everyone:** download the DMG, drag **yourMark** onto **Applications** (follow the arrow), then open it. First launch installs Microsoft MarkItDown.
 
 **Homebrew (optional):**
 
