@@ -2,7 +2,7 @@
 
 ## Double-click (recommended)
 
-1. Download [yourMark-0.3.25.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.25.dmg) (the filename includes the version).
+1. Download [yourMark-0.3.26.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.26.dmg) (the filename includes the version).
 2. Open the disk image and **drag yourMark onto Applications** (follow the arrow). Then open yourMark from Applications.
 
 ### If macOS says it “could not verify” the app
@@ -20,7 +20,7 @@ That dialog is Gatekeeper. This build is not notarized yet, so Apple cannot vouc
 5. Click **Open Anyway** next to *“yourMark.app” was blocked to protect your Mac*.
 6. Confirm **Open Anyway**.
 
-The disk image has **If Apple blocks it** — that is a web page (not a program). It can open System Settings for you.
+The disk image has **If Apple blocks it** — that is a help page in Safari (not a program, and it does not need the internet). It can open System Settings for you.
 
 <p align="center">
   <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Security. Allow applications from: App Store & Known Developers. yourMark.app was blocked to protect your Mac — Open Anyway.">

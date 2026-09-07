@@ -24,8 +24,9 @@ mkdir -p "$STAGE/Support"
 cp -R "$APP" "$STAGE/yourMark.app"
 # Do not put .command files on the disk. Gatekeeper treats them as unsigned
 # programs and shows “Move to Bin” — the same scare as the app itself.
-# A webloc to the help page is a normal internet shortcut (Safari).
-cp "$ROOT/Resources/If Apple blocks it.webloc" "$STAGE/If Apple blocks it.webloc"
+# Do not use a .webloc to GitHub Pages either — that 404s if Pages is off.
+# A local HTML file opens in Safari from this disk. No internet needed.
+cp "$ROOT/Resources/If Apple blocks it.html" "$STAGE/If Apple blocks it.html"
 cp "$ROOT/Resources/Open Anyway.html" "$STAGE/Support/Open Anyway.html"
 if [[ -f "$ROOT/docs/shots/open-anyway.png" ]]; then
   cp "$ROOT/docs/shots/open-anyway.png" "$STAGE/Support/Open Anyway looks like this.png"
@@ -36,8 +37,9 @@ yourMark $VERSION
 
 1. Drag yourMark onto Applications (follow the arrow).
 2. If macOS blocks it: click Done (not Move to Bin).
-3. Open “If Apple blocks it” on this disk — that is a web page, not a program.
-   Safari may ask to open System Settings. Click Allow, then Open Anyway.
+3. Open “If Apple blocks it” on this disk — that is a help page in Safari,
+   not a program. Safari may ask to open System Settings. Click Allow,
+   then Open Anyway.
 
 You can also right-click yourMark → Open.
 
@@ -92,13 +94,13 @@ tell application "Finder"
     set position of item "yourMark.app" to {165, 175}
     set position of item "Applications" to {495, 175}
     try
-      set position of item "If Apple blocks it.webloc" to {165, 365}
+      set position of item "If Apple blocks it.html" to {165, 365}
     end try
     try
       set position of item "Support" to {495, 365}
     end try
     try
-      set the extension hidden of item "If Apple blocks it.webloc" to true
+      set the extension hidden of item "If Apple blocks it.html" to true
     end try
     close
     open
@@ -123,10 +125,10 @@ if command -v create-dmg >/dev/null 2>&1 || (command -v brew >/dev/null 2>&1 && 
       --icon-size 128 \
       --icon "yourMark.app" 165 175 \
       --app-drop-link 495 175 \
-      --icon "If Apple blocks it.webloc" 165 365 \
+      --icon "If Apple blocks it.html" 165 365 \
       --icon "Support" 495 365 \
       --hide-extension "yourMark.app" \
-      --hide-extension "If Apple blocks it.webloc" \
+      --hide-extension "If Apple blocks it.html" \
       --no-internet-enable \
       "$DMG" \
       "$STAGE"; then
