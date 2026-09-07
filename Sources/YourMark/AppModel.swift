@@ -43,6 +43,7 @@ final class AppModel {
     var appUpdateURL: URL?
     var draggingFiles = false
     var ocrEnabled = UserDefaults.standard.object(forKey: "ocrEnabled") as? Bool ?? true
+    var showInstallSheet = false
 
     let service = MarkItDownService()
     private let askService = AskService()
@@ -88,6 +89,13 @@ final class AppModel {
         let status = await service.refreshStatus()
         enginePath = status.path
         engineVersion = status.version
+        if !UserDefaults.standard.bool(forKey: "sawInstallSheet") {
+            showInstallSheet = true
+            if status.path != nil {
+                statusText = "MarkItDown \(status.version)"
+            }
+            return
+        }
         if status.path == nil, !installingEngine {
             statusText = "Installing Microsoft MarkItDown…"
             await installEngine()
@@ -95,6 +103,25 @@ final class AppModel {
             statusText = "MarkItDown \(status.version)"
             Task { await checkUpdates(force: false) }
         }
+    }
+
+    func acceptFirstRunInstall() async {
+        UserDefaults.standard.set(true, forKey: "sawInstallSheet")
+        showInstallSheet = false
+        await installEngine()
+        await installDocling()
+        Task { await checkUpdates(force: false) }
+    }
+
+    func skipFirstRunInstall() async {
+        showInstallSheet = false
+        let first = !UserDefaults.standard.bool(forKey: "sawInstallSheet")
+        UserDefaults.standard.set(true, forKey: "sawInstallSheet")
+        guard first else { return }
+        if enginePath == nil {
+            await installEngine()
+        }
+        Task { await checkUpdates(force: false) }
     }
 
     func installEngine() async {
