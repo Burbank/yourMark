@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>yourMark — PDFs to Markdown on your Mac</title>
+  <meta name="description" content="Convert PDFs to Markdown locally. Bookmarks, tables, Ask a chapter. Microsoft MarkItDown under the hood." />
+  <link rel="icon" href="favicon.svg" />
+  <meta property="og:title" content="yourMark" />
+  <meta property="og:description" content="Convert PDFs to Markdown" />
+  <meta property="og:image" content="og.jpg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #003d7a;
+      --cyan: #00a1e4;
+      --ink: #2d271f;
+      --paper: #efe6d4;
+      --line: #c2b195;
+      --muted: #5c5346;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.45;
+    }
+    header, main, footer { max-width: 42rem; margin: 0 auto; padding: 1.5rem 1.25rem; }
+    header { padding-top: 2.5rem; }
+    .mark {
+      display: inline-grid;
+      place-items: center;
+      width: 2.25rem; height: 2.25rem;
+      border-radius: 8px;
+      background: var(--navy);
+      color: #fff;
+      font-weight: 700;
+      margin-right: .6rem;
+    }
+    h1 { font-size: 2.1rem; letter-spacing: -0.03em; margin: .4rem 0 0; }
+    .lede { color: var(--muted); max-width: 36rem; }
+    .row { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.4rem 0 2rem; }
+    a.btn, button.btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 2.75rem; padding: 0 1.1rem;
+      border-radius: 8px; font: 700 1rem inherit; text-decoration: none;
+      border: 2px solid var(--navy);
+    }
+    a.btn.primary { background: var(--navy); color: #fff; }
+    a.btn.ghost { background: transparent; color: var(--navy); }
+    section {
+      background: #fff;
+      border: 2px solid var(--line);
+      border-radius: 14px;
+      padding: 1.1rem 1.2rem;
+      margin-bottom: .9rem;
+    }
+    h2 { font-size: 1.05rem; margin: 0 0 .45rem; }
+    ol { margin: .3rem 0 0; padding-left: 1.2rem; }
+    pre, code {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: .82rem;
+    }
+    pre {
+      background: #f4eee2;
+      border-radius: 8px;
+      padding: .7rem .85rem;
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
+    .kicker {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: .68rem;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: var(--cyan);
+    }
+    footer { color: var(--muted); font-size: .9rem; }
+    footer a { color: var(--navy); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="kicker">Mac app</div>
+    <h1><span class="mark">y</span>yourMark</h1>
+    <p class="lede">Turn a PDF into Markdown you can search, bookmark, and ask. Conversion stays on this Mac. Microsoft MarkItDown does the heavy lifting — yourMark is the window.</p>
+    <div class="row">
+      <a class="btn primary" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark.dmg">Download for Mac</a>
+      <a class="btn ghost" href="https://github.com/Burbank/yourMark">Source</a>
+    </div>
+  </header>
+  <main>
+    <section>
+      <h2>For everyone (no Terminal)</h2>
+      <ol>
+        <li>Download the disk image.</li>
+        <li>Drag <strong>yourMark</strong> into Applications.</li>
+        <li>Double-click <strong>Install Engine</strong> on that same disk image (installs MarkItDown once).</li>
+        <li>Open yourMark. If macOS asks, System Settings → Privacy & Security → Open Anyway.</li>
+      </ol>
+    </section>
+    <section>
+      <h2>Homebrew (optional)</h2>
+      <p>Not required. Handy if you already use brew:</p>
+      <pre>brew tap Burbank/yourMark
+brew install --cask yourmark
+uv tool install 'markitdown[all]'</pre>
+    </section>
+    <section>
+      <h2>Terminal</h2>
+      <pre>curl -LsSf https://astral.sh/uv/install.sh | sh
+uv tool install 'markitdown[all]'
+git clone https://github.com/Burbank/yourMark.git
+cd yourMark && ./Scripts/Install.command</pre>
+    </section>
+    <section>
+      <h2>What you get</h2>
+      <p>Tables stay tables. Pictures sit in reading order. The outline is the PDF’s bookmarks. Ask a chapter — answers come from the file. Keep the original PDF.</p>
+    </section>
+  </main>
+  <footer>
+    Free on GitHub. Wrapper is yours; MarkItDown is MIT from Microsoft.
+    <a href="https://github.com/Burbank/yourMark">Burbank/yourMark</a>
+  </footer>
+</body>
+</html>

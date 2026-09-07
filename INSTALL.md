@@ -1,62 +1,45 @@
-# yourMark — install
+# Install yourMark
 
-## 1. Engine
+## No Terminal (recommended)
+
+1. Download [yourMark.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.dmg).
+2. Drag **yourMark** into Applications.
+3. Double-click **Install Engine** on the disk image (Microsoft MarkItDown, once).
+4. Open yourMark. If macOS blocks it: System Settings → Privacy & Security → **Open Anyway**.
+
+macOS 14 or newer.
+
+## Homebrew (optional)
+
+Homebrew is not required. Use it if you already have brew:
 
 ```sh
-# uv (recommended)
+brew tap Burbank/yourMark
+brew install --cask yourmark
+uv tool install 'markitdown[all]'
+```
+
+## Terminal
+
+```sh
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv tool install 'markitdown[all]'
-markitdown --version
-```
-
-Homebrew Python also works:
-
-```sh
-brew install python
-pip3 install -U 'markitdown[all]'
-```
-
-Confirm:
-
-```
-which markitdown
-# typically ~/.local/bin/markitdown on Apple Silicon
-```
-
-## 2. App
-
-```sh
-git clone git@github.com:Burbank/yourMark.git
+git clone https://github.com/Burbank/yourMark.git
 cd yourMark
-chmod +x Scripts/build-app.sh
-./Scripts/build-app.sh
+chmod +x Scripts/Install.command
+./Scripts/Install.command
 ```
 
-That builds a release binary and copies `yourMark.app` to `/Applications`.
+`Install.command` is also double-clickable in Finder.
 
-## 3. First launch
-
-Gatekeeper may complain (ad-hoc signature). System Settings → Privacy & Security → Open Anyway, or:
-
-```sh
-xattr -cr /Applications/yourMark.app
-```
-
-## 4. Large PDFs
-
-Convert **one book or pack at a time**, not a huge combined dump. If output is empty, the PDF is likely a scan — reinstall extras:
-
-```sh
-uv tool install 'markitdown[all]'
-```
-
-OCR still depends on optional MarkItDown plugins; image-only scans may need a separate OCR pass.
-
-## 5. Uninstall
+## Uninstall
 
 ```sh
 rm -rf /Applications/yourMark.app
 rm -rf ~/Library/Application\ Support/yourMark
-# engine is independent
-uv tool uninstall markitdown
+uv tool uninstall markitdown   # optional — only if you do not need MarkItDown elsewhere
 ```
+
+## Site
+
+[burbank.github.io/yourMark](https://burbank.github.io/yourMark/)

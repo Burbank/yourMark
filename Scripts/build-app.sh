@@ -12,6 +12,7 @@ CONTENTS="$APP_DIR/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
 INSTALL_APP="/Applications/${APP_NAME}.app"
+SKIP_INSTALL="${SKIP_INSTALL:-0}"
 
 echo "→ Building $EXEC_NAME (release)…"
 swift build -c release --product "$EXEC_NAME"
@@ -45,7 +46,7 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>yourMark</string>
+	<string>${EXEC_NAME}</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.burbank.yourmark</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -91,6 +92,11 @@ PLIST
 
 echo -n 'APPL????' > "$CONTENTS/PkgInfo"
 codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1 || true
+
+if [[ "$SKIP_INSTALL" == "1" ]]; then
+  echo "✓ Built: $APP_DIR"
+  exit 0
+fi
 
 echo "→ Installing to $INSTALL_APP…"
 osascript -e 'tell application "yourMark" to quit' >/dev/null 2>&1 || true

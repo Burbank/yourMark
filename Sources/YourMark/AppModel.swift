@@ -41,6 +41,7 @@ final class AppModel {
     private let convertedDir: URL
     private let watcher = FileWatcher()
     private var watchDebounce: Task<Void, Never>?
+    private var watchedPaths: Set<String> = []
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -319,8 +320,10 @@ final class AppModel {
     }
 
     private func startWatching() {
-        var paths = library.flatMap { [$0.markdownPath, $0.sourcePath] }.filter { !$0.isEmpty }
-        watcher.replace(paths: paths)
+        let paths = Set(library.flatMap { [$0.markdownPath, $0.sourcePath] }.filter { !$0.isEmpty })
+        guard paths != watchedPaths else { return }
+        watchedPaths = paths
+        watcher.replace(paths: Array(paths))
     }
 
     private func fileDidChange(_ path: String) {

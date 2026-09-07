@@ -1,14 +1,14 @@
 # yourMark
 
-Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown) — convert PDFs, Word, PowerPoint, and Excel to Markdown **on this Mac**. Built for students, researchers, and anyone who would rather search a document than scroll it.
+Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, and Excel to Markdown **on this Mac**.
 
-The GUI never vendors the converter: it discovers `markitdown` on PATH / uv and **Upgrade Engine** pulls the current PyPI release. Same family as [Ghostscript GUI](https://github.com/Burbank/ghostscript-gui): thin local CLI wrapper.
+**[Download for Mac](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.dmg)** · [Install notes](INSTALL.md) · [Website](https://burbank.github.io/yourMark/)
 
-**Requires:** macOS 14+, Xcode (to build), and MarkItDown via uv or pip.
+The GUI never vendors the converter. It finds `markitdown` on this Mac; **Upgrade Engine** pulls the current PyPI release.
 
-Keep your original files. Converted Markdown is for search, bookmarks, and asking a chapter.
+**Requires:** macOS 14+. The DMG is for everyone. Building from source needs Xcode.
 
-**Ask:** paste your own xAI / OpenAI / OpenAI-compatible API key under Engine. It lives in the Mac Keychain and is sent only to that provider when you ask.
+Keep the original file. Markdown is for search, bookmarks, and asking a chapter.
 
 ---
 
@@ -16,53 +16,26 @@ Keep your original files. Converted Markdown is for search, bookmarks, and askin
 
 | You asked | Honest result |
 |-----------|----------------|
-| **Tables with formatting** | Yes when the PDF has a *real* table — GitHub-flavored Markdown tables (columns + cell text). Colours, merged cells, and drawn-line “tables” flatten. |
-| **Pictures in the right position** | In **reading order**, not the original page layout. Word/PPTX usually emit `![]()` figures. Microsoft’s default PDF path is text + tables; scans/drawings need extras. |
-| **Outline / bookmarks like a PDF** | Yes. yourMark reads the PDF outline (same tree as Preview.app) and also builds bookmarks from Markdown headings. Click to jump. |
+| **Tables** | Yes when the PDF has a real table (GFM). Colours / merged cells flatten. |
+| **Pictures** | Reading order, not page x/y. Word/PPTX usually include them. |
+| **Outline** | PDF bookmarks + Markdown headings. Click to jump. |
 
 ---
 
-## Install the engine (once)
+## Install
+
+**Everyone:** download the DMG, drag the app to Applications, double-click **Install Engine**.
+
+**Homebrew (optional):**
 
 ```sh
-# recommended — stays current independently of this app
+brew tap Burbank/yourMark
+brew install --cask yourmark
 uv tool install 'markitdown[all]'
-markitdown --version
 ```
 
-Or: `pip3 install -U 'markitdown[all]'`
-
-## Build the app
-
-```sh
-./Scripts/build-app.sh
-open -a yourMark
-```
-
-Dev run:
-
-```sh
-swift run YourMark
-```
-
-## After install
-
-| Route | How |
-|------|-----|
-| **Applications** | `/Applications/yourMark.app` |
-| **Open With** | Right-click a PDF → Open With → **yourMark** |
-| **Upgrade engine** | yourMark → Engine → Upgrade MarkItDown (`uv tool upgrade markitdown`) |
-| **Help** | Help → yourMark Help (⌘?) |
-
-## Why this instead of a downloaded .dmg GUI
-
-Packaged community GUIs pin `markitdown==0.1.x` at build time. yourMark is the Ghostscript-GUI pattern: **your** `markitdown` binary, upgraded from PyPI, no fork of Microsoft’s code.
-
-## Bundle
-
-- Identifier: `com.burbank.yourmark`
-- Team: use your Apple Developer team when you are ready to notarize / App Store
+**From source:** `./Scripts/Install.command` or `./Scripts/build-app.sh`
 
 ## License
 
-This repository is a macOS GUI wrapper. MarkItDown is MIT from Microsoft.
+MIT wrapper. MarkItDown is MIT from Microsoft.
