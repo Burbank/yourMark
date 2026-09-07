@@ -37,6 +37,8 @@ final class AppModel {
     var askCheckingKey = false
     var askKeyTail = ""
     var askKeyKind = ""
+    var askKeyTestPassed = false
+    var askKeyTestNote = ""
     var askQuestion = ""
     var askChapter = "Entire file"
     var askAnswer = ""
@@ -86,6 +88,8 @@ final class AppModel {
         askHasKey = !stored.isEmpty
         askKeyDraft = ""
         refreshKeyMeta(stored)
+        askKeyTestPassed = askHasKey && UserDefaults.standard.bool(forKey: "askKeyTestPassed")
+        askKeyTestNote = askHasKey ? (UserDefaults.standard.string(forKey: "askKeyTestNote") ?? "") : ""
         watcher.onChange = { [weak self] path in
             Task { @MainActor in self?.fileDidChange(path) }
         }
@@ -362,8 +366,8 @@ final class AppModel {
         applyProviderForKey(key)
         persistAskPrefs()
         askCheckingKey = true
-        askKeyHint = "Checking this key…"
-        statusText = "Checking this key…"
+        askKeyHint = "Testing this key — one short question to the model…"
+        statusText = "Testing this key…"
         Task { await finishLockAskKey(key) }
     }
 
@@ -374,24 +378,41 @@ final class AppModel {
             baseURL: askBaseURL,
             apiKey: key
         )
-        let problem = await askService.verify(settings)
+        let result = await askService.testKey(settings)
         askCheckingKey = false
-        if let problem {
+        if !result.passed {
+            askKeyTestPassed = false
+            askKeyTestNote = result.message
             askKeyHint = askHasKey
-                ? problem + " The key already on this Mac was left unchanged."
-                : problem
-            statusText = "Key was not locked in"
+                ? result.message + " The key already on this Mac was left unchanged."
+                : result.message
+            statusText = "Key test failed"
             return
         }
         AskSecrets.save(key)
         askKeyDraft = ""
         askHasKey = true
         refreshKeyMeta(key)
-        let host = AskService.kindLabel(AskService.keyKind(key))
-        let tail = AskService.keyTail(key)
-        let tailBit = tail.isEmpty ? "" : " Ending …\(tail)."
+        askKeyTestPassed = true
+        askKeyTestNote = result.message
+        UserDefaults.standard.set(true, forKey: "askKeyTestPassed")
+        UserDefaults.standard.set(result.message, forKey: "askKeyTestNote")
         askKeyHint = ""
-        statusText = "\(host.isEmpty ? "Ask" : host) accepted this key.\(tailBit)"
+        statusText = result.message
+    }
+
+    func testLockedKey() {
+        let key = AskSecrets.load()
+        guard !key.isEmpty else {
+            askKeyHint = "Paste your API key in the box first, then press Enter."
+            return
+        }
+        applyProviderForKey(key)
+        persistAskPrefs()
+        askCheckingKey = true
+        askKeyHint = "Testing this key — one short question to the model…"
+        statusText = "Testing this key…"
+        Task { await finishLockAskKey(key) }
     }
 
     func applyProviderForKey(_ key: String) {
@@ -448,6 +469,10 @@ final class AppModel {
         askHasKey = false
         askKeyTail = ""
         askKeyKind = ""
+        askKeyTestPassed = false
+        askKeyTestNote = ""
+        UserDefaults.standard.set(false, forKey: "askKeyTestPassed")
+        UserDefaults.standard.set("", forKey: "askKeyTestNote")
         statusText = "Ask key cleared"
     }
 
