@@ -28,34 +28,32 @@ yourMark is a Mac window, not a terminal. Three rooms, three looks. If this alre
 
 **Looks** — **Bright** (paper), **Dim** (a night desk), or **System** (follow macOS). Switch any time in the header.
 
+<p align="center">
+  <img src="docs/shots/library-dim.jpg" alt="Library in Dim: files on the left, bookmarks in the middle, Markdown on the right, Ask a chapter at the bottom">
+</p>
+
+<p align="center"><strong>Library · Dim</strong> — the window you live in. File, bookmarks, Markdown. Ask a chapter underneath. Bookmarks jump like Preview.</p>
+
 <table>
 <tr>
-<td width="50%">
-<img src="docs/shots/convert-bright.jpg" alt="Convert in Bright: drop a PDF, Word, PowerPoint, or Excel" />
-<p><strong>Convert · Bright</strong> — drop a file. This 787 handbook kept <em>595 bookmarks from the PDF itself</em>, the same tree as Preview.</p>
+<td width="25%" valign="top">
+<img src="docs/shots/library-bright.jpg" alt="Library in Bright" />
+<p><strong>Library · Bright</strong> — same three columns on paper.</p>
 </td>
-<td width="50%">
-<img src="docs/shots/convert-dim.jpg" alt="Convert in Dim, night desk look" />
-<p><strong>Convert · Dim</strong> — same window at night. Conversion stays on this Mac, not in the cloud.</p>
+<td width="25%" valign="top">
+<img src="docs/shots/convert-dim.jpg" alt="Convert in Dim" />
+<p><strong>Convert · Dim</strong> — drop a PDF. Conversion stays on this Mac.</p>
 </td>
-</tr>
-<tr>
-<td width="50%">
-<img src="docs/shots/library-bright.jpg" alt="Library in Bright: files, bookmarks, and Markdown" />
-<p><strong>Library · Bright</strong> — the built-in guide uses the same three-column layout you get after a convert. Ask a chapter underneath.</p>
+<td width="25%" valign="top">
+<img src="docs/shots/convert-bright.jpg" alt="Convert in Bright" />
+<p><strong>Convert · Bright</strong> — this 787 handbook kept 595 bookmarks from the PDF itself.</p>
 </td>
-<td width="50%">
-<img src="docs/shots/library-dim.jpg" alt="Library following macOS System / Dim" />
-<p><strong>Library · System / Dim</strong> — follow the Mac, or stay dark. Bookmarks jump like Preview.</p>
+<td width="25%" valign="top">
+<img src="docs/shots/settings-dim.jpg" alt="Settings in Dim" />
+<p><strong>Settings</strong> — paste a key, press Enter, it is tested and locked. Docling is only for scans.</p>
 </td>
 </tr>
 </table>
-
-<p align="center">
-  <img src="docs/shots/settings-dim.jpg" alt="Settings: Ask key locked in, Docling installed for scans" width="860" />
-</p>
-
-<p align="center"><strong>Settings</strong> — paste your key, press Enter, and it is tested and locked on this Mac. You do not paste it again. Docling is only for scans; ordinary PDFs still go to Microsoft MarkItDown.</p>
 
 The GUI never vendors the converter. It finds `markitdown` on this Mac; **Upgrade Engine** pulls the current PyPI release.
 
