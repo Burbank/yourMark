@@ -33,6 +33,7 @@ final class AppModel {
     var askBaseURL: String = UserDefaults.standard.string(forKey: "askBaseURL") ?? "https://api.x.ai/v1"
     var askKeyDraft: String = ""
     var askHasKey = false
+    var askKeyHint = ""
     var askQuestion = ""
     var askChapter = "Entire file"
     var askAnswer = ""
@@ -344,8 +345,16 @@ final class AppModel {
     }
 
     func lockAskKey() {
-        let key = askKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        var key = askKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if key.count < 8 {
+            let clip = NSPasteboard.general.string(forType: .string)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if Self.isPlausibleClipboardKey(clip) {
+                key = clip
+            }
+        }
         guard key.count >= 8 else {
+            askKeyHint = "Paste your API key in the box first, then press Enter. That locks it on this Mac."
             statusText = "Paste your API key, then press Enter to lock it in"
             return
         }
@@ -353,7 +362,21 @@ final class AppModel {
         AskSecrets.save(key)
         askKeyDraft = ""
         askHasKey = true
+        askKeyHint = ""
         statusText = "Ask key locked in"
+    }
+
+    /// Clipboard fallback when SecureField paste has not yet reached the SwiftUI binding.
+    private static func isPlausibleClipboardKey(_ value: String) -> Bool {
+        guard value.count >= 8, value.count <= 512 else { return false }
+        if value.contains(where: { $0.isNewline || $0.isWhitespace }) { return false }
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.+/=:"))
+        if value.unicodeScalars.contains(where: { !allowed.contains($0) }) { return false }
+        let lower = value.lowercased()
+        if lower.hasPrefix("sk-") || lower.hasPrefix("xai-") || lower.hasPrefix("gsk_") {
+            return true
+        }
+        return value.count >= 20
     }
 
     private func persistAskPrefs() {
@@ -369,6 +392,7 @@ final class AppModel {
 
     func clearAskKey() {
         askKeyDraft = ""
+        askKeyHint = ""
         AskSecrets.delete()
         askHasKey = false
         statusText = "Ask key cleared"
