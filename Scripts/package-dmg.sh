@@ -1,6 +1,5 @@
 #!/bin/zsh
-# Build yourMark.app and wrap it in a drag-to-Applications DMG
-# (app beside Applications, arrow on the background).
+# Build yourMark.app and wrap it in a versioned drag-to-Applications DMG.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,11 +10,13 @@ SKIP_INSTALL=1 "$ROOT/Scripts/build-app.sh"
 
 APP="$ROOT/dist/yourMark.app"
 STAGE="$ROOT/dist/dmg"
-DMG="$ROOT/dist/yourMark.dmg"
+[[ -d "$APP" ]] || { echo "missing $APP" >&2; exit 1; }
+
+VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null || echo "0.0.0")
+DMG="$ROOT/dist/yourMark-$VERSION.dmg"
+LATEST="$ROOT/dist/yourMark.dmg"
 RW="$ROOT/dist/yourMark.rw.dmg"
 BG="$ROOT/Resources/dmg-background.png"
-
-[[ -d "$APP" ]] || { echo "missing $APP" >&2; exit 1; }
 [[ -f "$BG" ]] || { echo "missing $BG" >&2; exit 1; }
 
 rm -rf "$STAGE"
@@ -25,57 +26,39 @@ cp "$ROOT/Scripts/Privacy & Security Settings.webloc" "$STAGE/Privacy & Security
 cp "$ROOT/Scripts/Open Privacy & Security Settings.command" "$STAGE/Support/Open Privacy & Security Settings.command"
 cp "$ROOT/Scripts/Install yourMark.command" "$STAGE/Support/Install yourMark.command"
 cp "$ROOT/Scripts/If macOS blocks yourMark.command" "$STAGE/Support/If macOS blocks yourMark.command"
-cp "$ROOT/docs/shots/open-anyway.png" "$STAGE/Support/Open Anyway looks like this.png"
+if [[ -f "$ROOT/docs/shots/open-anyway.png" ]]; then
+  cp "$ROOT/docs/shots/open-anyway.png" "$STAGE/Support/Open Anyway looks like this.png"
+fi
 chmod +x "$STAGE/Support/"*.command
-cat > "$STAGE/Support/Read me first.txt" <<'TXT'
-yourMark
-========
+cat > "$STAGE/Support/Read me first.txt" <<TXT
+yourMark $VERSION
+================
 
-Drag yourMark onto Applications (follow the arrow).
+1. Drag yourMark onto Applications (follow the arrow).
+2. If macOS blocks it: click Done (not Move to Bin), then open
+   “Privacy & Security Settings” on this disk → Open Anyway.
 
-If macOS says it "could not verify" yourMark:
-  1. Click Done (not Move to Bin)
-  2. Double-click "Privacy & Security Settings" on this disk
-     (or System Settings → Privacy & Security → Open Anyway)
-  or right-click yourMark → Open
-  or run "If macOS blocks yourMark" in this Support folder.
-
-First launch downloads Microsoft MarkItDown from PyPI (needs internet
-once). The converter is not frozen inside the app, so Microsoft’s
-updates still reach you.
+First launch installs Microsoft MarkItDown from PyPI (internet once).
 
 Keep the original PDF. Markdown is the working copy.
 TXT
 
-rm -f "$DMG" "$RW"
+rm -f "$DMG" "$LATEST" "$RW"
 
-layout_with_create_dmg() {
-  command -v create-dmg >/dev/null 2>&1 && return 0
-  command -v brew >/dev/null 2>&1 || return 1
-  brew install create-dmg >/dev/null
-  command -v create-dmg >/dev/null 2>&1
+make_plain() {
+  ln -sf /Applications "$STAGE/Applications"
+  hdiutil create \
+    -volname "yourMark $VERSION" \
+    -srcfolder "$STAGE" \
+    -ov -format UDZO \
+    -imagekey zlib-level=9 \
+    "$DMG"
 }
 
-if layout_with_create_dmg; then
-  # create-dmg adds the Applications drop-link itself.
-  create-dmg \
-    --volname "yourMark" \
-    --background "$BG" \
-    --window-pos 200 120 \
-    --window-size 660 420 \
-    --icon-size 128 \
-    --icon "yourMark.app" 165 190 \
-    --app-drop-link 495 190 \
-    --icon "Privacy & Security Settings.webloc" 165 355 \
-    --icon "Support" 495 355 \
-    --hide-extension "yourMark.app" \
-    --no-internet-enable \
-    "$DMG" \
-    "$STAGE"
-else
+layout_osascript() {
   mkdir -p "$STAGE/.background"
   cp "$BG" "$STAGE/.background/background.png"
-  ln -sf /Applications "$STAGE/Applications"
+  [[ -L "$STAGE/Applications" ]] || ln -sf /Applications "$STAGE/Applications"
   hdiutil create \
     -volname "yourMark" \
     -srcfolder "$STAGE" \
@@ -88,9 +71,7 @@ else
     [[ -d "$VOL/yourMark.app" ]] && break
     sleep 0.4
   done
-  if command -v SetFile >/dev/null; then
-    SetFile -a V "$VOL/.background" || true
-  fi
+  command -v SetFile >/dev/null && SetFile -a V "$VOL/.background" || true
   osascript <<'APPLESCRIPT'
 tell application "Finder"
   tell disk "yourMark"
@@ -126,6 +107,33 @@ APPLESCRIPT
   sleep 1
   hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -o "$DMG"
   rm -f "$RW"
+}
+
+if command -v create-dmg >/dev/null 2>&1 || (command -v brew >/dev/null 2>&1 && brew install create-dmg); then
+  if create-dmg \
+      --volname "yourMark $VERSION" \
+      --background "$BG" \
+      --window-pos 200 120 \
+      --window-size 660 420 \
+      --icon-size 128 \
+      --icon "yourMark.app" 165 190 \
+      --app-drop-link 495 190 \
+      --icon "Privacy & Security Settings.webloc" 165 355 \
+      --icon "Support" 495 355 \
+      --hide-extension "yourMark.app" \
+      --no-internet-enable \
+      "$DMG" \
+      "$STAGE"; then
+    :
+  else
+    echo "create-dmg failed — trying Finder layout" >&2
+    layout_osascript || make_plain
+  fi
+else
+  layout_osascript || make_plain
 fi
 
+[[ -f "$DMG" ]] || { echo "DMG was not created" >&2; exit 1; }
+cp -f "$DMG" "$LATEST"
 echo "✓ DMG: $DMG"
+echo "✓ also: $LATEST"

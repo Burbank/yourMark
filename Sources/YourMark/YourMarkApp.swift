@@ -24,15 +24,15 @@ struct YourMarkApp: App {
             CommandMenu("Settings") {
                 Button("Settings") { model.toggleSettings() }
                     .keyboardShortcut(",", modifiers: .command)
-                Button("Upgrade MarkItDown") {
-                    Task { await model.upgradeEngine() }
+                Button("Check for update of the processing engine") {
+                    Task { @MainActor in await model.upgradeEngine() }
                 }
                 Button("Install converter") {
-                    Task { await model.installEngine() }
+                    Task { @MainActor in await model.installEngine() }
                 }
                 Divider()
-                Button("Check for updates") {
-                    Task { await model.checkUpdates(force: true) }
+                Button("Check for update of the main app") {
+                    Task { @MainActor in await model.checkUpdates(force: true) }
                 }
             }
             CommandGroup(replacing: .help) {

@@ -53,9 +53,12 @@ enum PdfSidecar {
             let idx = doc.index(for: page)
             if idx >= 0 { return idx }
         }
-        if let action = outline.action as? PDFActionGoTo, let page = action.destination?.page {
-            let idx = doc.index(for: page)
-            if idx >= 0 { return idx }
+        if let action = outline.action as? PDFActionGoTo {
+            let page = action.destination.page
+            if let page {
+                let idx = doc.index(for: page)
+                if idx >= 0 { return idx }
+            }
         }
         return nil
     }

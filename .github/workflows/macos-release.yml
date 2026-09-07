@@ -2,12 +2,15 @@ name: Mac app
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: dmg-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   dmg:
@@ -23,19 +26,30 @@ jobs:
         run: |
           chmod +x Scripts/*.sh Scripts/*.command || true
           ./Scripts/package-dmg.sh
+          ls -lh dist/*.dmg
       - uses: actions/upload-artifact@v4
         with:
           name: yourMark-dmg
-          path: dist/yourMark.dmg
+          path: dist/yourMark*.dmg
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
-            gh release upload "${{ github.ref_name }}" dist/yourMark.dmg --clobber
+          TAG="${{ github.ref_name }}"
+          NOTES="$(cat <<'EOF'
+Drag **yourMark** onto **Applications** (follow the arrow).
+
+If macOS blocks it: click **Done** (not Move to Bin), then **Privacy & Security Settings** on the disk → **Open Anyway**.
+
+First launch installs Microsoft MarkItDown from PyPI.
+EOF
+)"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/yourMark-*.dmg dist/yourMark.dmg --clobber
           else
-            gh release create "${{ github.ref_name }}" dist/yourMark.dmg \
-              --title "yourMark ${{ github.ref_name }}" \
-              --notes "Double-click **Install yourMark** on the disk image. If macOS says it could not verify the app, click Done (not Move to Bin), then **If macOS blocks yourMark**. First launch installs Microsoft MarkItDown from PyPI."
+            gh release create "$TAG" dist/yourMark-*.dmg dist/yourMark.dmg \
+              --title "yourMark $TAG" \
+              --notes "$NOTES" \
+              --latest
           fi
