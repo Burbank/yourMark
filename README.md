@@ -6,7 +6,7 @@
 
 Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, Excel, pictures, and ZIP archives to Markdown **on this Mac**.
 
-**[Download yourMark-0.3.31.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.31.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
+**[Download yourMark-0.3.32.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.32.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
 
 ## Why Markdown
 
@@ -15,6 +15,10 @@ A PDF is a picture of a page. Markdown is the words, in order, as plain text you
 That is why it works so well with AI. A model can read a chapter, quote it, and tell you when the file is silent — instead of guessing at columns or a scan. Paste one heading into Grok or ChatGPT, keep notes in Obsidian, or search a whole course. Tables stay tables. Headings stay an outline.
 
 Keep the original PDF. Markdown is the working copy.
+
+## Edit the file
+
+yourMark is a **reader**. To change the Markdown, press **Edit** in the pane — that opens [MarkEdit](https://github.com/MarkEdit-app/MarkEdit), a free native Mac editor ([MIT](https://github.com/MarkEdit-app/MarkEdit/blob/main/LICENSE)). Install it once (`brew install --cask markedit`, or their DMG). First launch of yourMark offers that download. Saves in MarkEdit show up here.
 
 ## A look around — pick your rooms and your look
 
@@ -68,7 +72,7 @@ If macOS says it could not verify the app: click **Done** (not Move to Bin), the
 | You asked | Honest result |
 |-----------|----------------|
 | **Tables** | Yes when the PDF has a real table (GFM). Colours / merged cells flatten. |
-| **Pictures** | Every embedded photo, plus a drawing of diagram pages that have no photo, linked next to that page in the Markdown. Word/PPTX/photos use MarkItDown’s own images. Not the original x/y layout. Convert puts the Markdown and a `figures` folder together in a little folder named after the file. |
+| **Pictures** | Embedded photos from the PDF, linked next to that page. Full-page photographs of text pages are not added (those look like screenshots). Word/PPTX/photos use MarkItDown’s own images. Convert puts the Markdown and a `figures` folder together in a little folder named after the file. |
 | **Headers / footers** | **Remove headers and footers** in Settings (on by default) drops repeating page titles, page numbers, dates, and header logos. Chapter headings like 8.1 stay. |
 | **Outline** | The PDF’s own bookmarks (same tree as Preview.app) are written in as Markdown headings. Numbered titles (8.1, 8.1.1) become headings too. MarkItDown does not emit them. |
 | **Other files** | Word, PowerPoint, Excel, HTML, EPUB, CSV, JSON, XML, Outlook mail, RTF, ZIP (each file inside), and photos (JPEG/PNG/GIF/WebP, with EXIF when ExifTool is installed). |
