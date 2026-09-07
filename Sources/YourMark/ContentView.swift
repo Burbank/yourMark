@@ -914,29 +914,33 @@ struct EnginePanel: View {
                         }
                     }
                 }
-                SecureField(
-                    model.askHasKey ? "Key locked in — paste a new one to replace" : "Paste API key",
-                    text: Binding(
-                        get: { model.askKeyDraft },
-                        set: { model.askKeyDraft = $0 }
-                    )
-                )
-                .onSubmit { model.lockAskKey() }
-                HStack {
-                    Button("Enter") { model.lockAskKey() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.askKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).count < 8)
-                    if model.askHasKey {
-                        Label("Key locked in", systemImage: "lock.fill")
-                            .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("API key")
+                    HStack(alignment: .center, spacing: 8) {
+                        SecureField(
+                            model.askHasKey ? "Key locked in — paste a new one to replace" : "Paste your API key here",
+                            text: Binding(
+                                get: { model.askKeyDraft },
+                                set: { model.askKeyDraft = $0 }
+                            )
+                        )
+                        .onSubmit { model.lockAskKey() }
+                        Button("Enter") { model.lockAskKey() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.askKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).count < 8)
                     }
-                    Spacer()
-                    Button("Clear key", role: .destructive) { model.clearAskKey() }
+                    if model.askHasKey {
+                        Label("Your key is locked in. yourMark will use it when you Ask. You do not need to paste it again.", systemImage: "lock.fill")
+                            .foregroundStyle(.green)
+                    }
+                    Text(model.askHasKey
+                         ? "Paste a new key and press Enter only if you want to replace it. The key stays on this Mac (Keychain) and is only sent when you Ask."
+                         : "Paste your API key, then press Enter. It stays on this Mac (Keychain) and is only sent when you Ask.")
+                        .foregroundStyle(.secondary)
+                    if model.askHasKey {
+                        Button("Clear key", role: .destructive) { model.clearAskKey() }
+                    }
                 }
-                Text(model.askHasKey
-                     ? "Your key is locked in on this Mac. Ask will use it. Paste a new key and press Enter only if you want to replace it."
-                     : "Paste your API key, then press Enter. It stays on this Mac (Keychain) and is only sent when you Ask.")
-                    .foregroundStyle(.secondary)
                 Toggle("If the chapter does not provide an answer, also show a model summary", isOn: Binding(
                     get: { model.askWebFallback },
                     set: {
