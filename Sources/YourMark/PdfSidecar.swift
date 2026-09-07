@@ -1,7 +1,7 @@
 import Foundation
 import PDFKit
 
-struct ManualBookmark: Identifiable, Hashable, Codable {
+struct ManualBookmark: Identifiable, Hashable, Codable, Sendable {
     var id: UUID
     var title: String
     var level: Int

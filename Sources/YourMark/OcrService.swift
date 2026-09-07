@@ -5,16 +5,43 @@ import Vision
 
 /// Scans have no text layer, so Microsoft MarkItDown (pdfminer) cannot see
 /// tables, columns, or figures.
-///   1. Detect a scan (almost no text on the first pages).
+///   1. Detect a scan (almost no text on the first pages) — one PDF open.
 ///   2. Prefer IBM Docling: layout, TableFormer tables, pictures.
 ///   3. Fall back to OCRmyPDF (words only) then MarkItDown.
-///   4. Last resort: Apple Live Text + page pictures.
+///   4. Last resort: Apple Live Text + page pictures (empty markdown only).
+/// Digital PDFs with figures go through MarkItDown once, then PdfFigures.
 enum OcrService {
-    static let figureFolderSuffix = "-figures"
+    static let figureFolderSuffix = PdfFigures.folderSuffix
 
-    static func needsOCR(_ url: URL) -> Bool {
-        guard url.pathExtension.lowercased() == "pdf" else { return false }
-        guard let doc = PDFDocument(url: url), doc.pageCount > 0 else { return false }
+    struct PdfProfile: Equatable, Sendable {
+        var needsOCR: Bool
+        var looksGraphic: Bool
+    }
+
+    private static var profileCache: [String: (mtime: TimeInterval, value: PdfProfile)] = [:]
+
+    static func profile(_ url: URL) -> PdfProfile {
+        guard url.pathExtension.lowercased() == "pdf" else {
+            return PdfProfile(needsOCR: false, looksGraphic: false)
+        }
+        let mtime = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))
+            .flatMap(\.contentModificationDate)?.timeIntervalSince1970 ?? 0
+        if let hit = profileCache[url.path], hit.mtime == mtime {
+            return hit.value
+        }
+        let value = profileUncached(url)
+        profileCache[url.path] = (mtime, value)
+        return value
+    }
+
+    static func needsOCR(_ url: URL) -> Bool { profile(url).needsOCR }
+
+    static func looksGraphic(_ url: URL) -> Bool { profile(url).looksGraphic }
+
+    private static func profileUncached(_ url: URL) -> PdfProfile {
+        guard let doc = PDFDocument(url: url), doc.pageCount > 0 else {
+            return PdfProfile(needsOCR: false, looksGraphic: false)
+        }
         let sample = min(doc.pageCount, 6)
         var chars = 0
         for i in 0..<sample {
@@ -22,23 +49,8 @@ enum OcrService {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .count
         }
-        return chars < sample * 48
-    }
-
-    /// Sparse text or a scan — diagrams, photos, and tables will not survive
-    /// MarkItDown alone.
-    static func looksGraphic(_ url: URL) -> Bool {
-        guard url.pathExtension.lowercased() == "pdf" else { return false }
-        if needsOCR(url) { return true }
-        guard let doc = PDFDocument(url: url), doc.pageCount > 0 else { return false }
-        let sample = min(doc.pageCount, 4)
-        var chars = 0
-        for i in 0..<sample {
-            chars += (doc.page(at: i)?.string ?? "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .count
-        }
-        return chars / max(sample, 1) < 320
+        let avg = chars / max(sample, 1)
+        return PdfProfile(needsOCR: chars < sample * 48, looksGraphic: avg < 320)
     }
 
     static func ocrmypdfPath() -> String? {
@@ -72,9 +84,11 @@ enum OcrService {
 
     /// Layout-aware convert for scans. Docling (IBM, MIT) does tables, columns,
     /// reading order, and figures. MarkItDown cannot — it only reads a text layer.
+    /// `ocr: false` when the PDF already has a text layer (faster, no double OCR).
     static func layoutMarkdown(
         from pdf: URL,
         to markdown: URL,
+        ocr: Bool = true,
         onStatus: @escaping @Sendable (String) -> Void
     ) async -> Bool {
         onStatus("Layout OCR with Docling — tables and columns. This takes a little longer.")
@@ -84,7 +98,10 @@ enum OcrService {
             return false
         }
         do {
-            _ = try await run(pythonCmd.exe, pythonCmd.args + [script.path, pdf.path, markdown.path])
+            _ = try await run(
+                pythonCmd.exe,
+                pythonCmd.args + [script.path, pdf.path, markdown.path, ocr ? "ocr" : "text"]
+            )
             return FileManager.default.fileExists(atPath: markdown.path)
                 && !markdownLooksEmpty(markdown)
         } catch {
@@ -124,13 +141,14 @@ import sys
 from pathlib import Path
 
 src, dst = Path(sys.argv[1]), Path(sys.argv[2])
+want_ocr = len(sys.argv) < 4 or sys.argv[3] != "text"
 
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 
 opts = PdfPipelineOptions()
-opts.do_ocr = True
+opts.do_ocr = want_ocr
 opts.do_table_structure = True
 try:
     opts.table_structure_options.do_cell_matching = True
@@ -142,11 +160,12 @@ try:
 except Exception:
     pass
 
-try:
-    from docling.datamodel.pipeline_options import OcrMacOptions
-    opts.ocr_options = OcrMacOptions()
-except Exception:
-    pass
+if want_ocr:
+    try:
+        from docling.datamodel.pipeline_options import OcrMacOptions
+        opts.ocr_options = OcrMacOptions()
+    except Exception:
+        pass
 
 conv = DocumentConverter(
     format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}
@@ -193,14 +212,15 @@ dst.write_text(md, encoding="utf-8")
         return (url, true)
     }
 
-    /// After MarkItDown: if this was a scan, add page pictures + Live Text
-    /// so arrows, diagrams, and tables still appear as images, with words under them.
+    /// Last resort when the Markdown is still empty after convert.
+    /// Does not append full-page pictures onto a file that already has text
+    /// (that doubled huge manuals and froze the preview).
     static func enrichMarkdown(
         markdownURL: URL,
         sourcePDF: URL,
         onStatus: @escaping @Sendable (String) -> Void
     ) async {
-        guard needsOCR(sourcePDF) || markdownLooksEmpty(markdownURL) else { return }
+        guard markdownLooksEmpty(markdownURL) else { return }
         guard let doc = PDFDocument(url: sourcePDF), doc.pageCount > 0 else { return }
         onStatus("Keeping page pictures so diagrams stay visible…")
 
@@ -209,35 +229,7 @@ dst.write_text(md, encoding="utf-8")
             .appendingPathComponent(stem + figureFolderSuffix, isDirectory: true)
         try? FileManager.default.createDirectory(at: figDir, withIntermediateDirectories: true)
 
-        let existing = (try? String(contentsOf: markdownURL, encoding: .utf8)) ?? ""
-        let empty = markdownLooksEmpty(markdownURL)
-        let alreadyHasPictures = existing.contains(figureFolderSuffix) || existing.contains("data:image/")
-
-        try? FileManager.default.createDirectory(at: figDir, withIntermediateDirectories: true)
-
-        if !empty, alreadyHasPictures { return }
-
-        var parts: [String] = []
-        if !empty {
-            parts.append(existing.trimmingCharacters(in: .whitespacesAndNewlines))
-            parts.append("")
-            parts.append("> Page pictures from the scan — tables, arrows, and diagrams as they appear.")
-            parts.append("")
-            let count = doc.pageCount
-            for i in 0..<count {
-                onStatus("Saving page picture \(i + 1) of \(count)…")
-                guard let page = doc.page(at: i),
-                      let file = savePageImage(page, index: i, into: figDir) else { continue }
-                parts.append("### Page \(i + 1)")
-                parts.append("")
-                parts.append("![Page \(i + 1)](\(stem + figureFolderSuffix)/\(file))")
-                parts.append("")
-            }
-            try? parts.joined(separator: "\n").write(to: markdownURL, atomically: true, encoding: .utf8)
-            return
-        }
-
-        parts = [
+        var parts: [String] = [
             "> This PDF was a scan (no text layer). yourMark ran OCR, then Microsoft MarkItDown.",
             "> Page pictures are kept so tables, arrows, and diagrams still show.",
             "",

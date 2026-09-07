@@ -18,7 +18,7 @@ final class FileWatcher: @unchecked Sendable {
             guard fd >= 0 else { continue }
             let src = DispatchSource.makeFileSystemObjectSource(
                 fileDescriptor: fd,
-                eventMask: [.write, .extend, .rename, .delete, .attrib],
+                eventMask: [.write, .extend, .rename, .delete],
                 queue: DispatchQueue.main
             )
             src.setEventHandler { [weak self] in

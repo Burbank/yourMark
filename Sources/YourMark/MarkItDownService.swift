@@ -52,12 +52,15 @@ actor MarkItDownService {
 
     func convert(input: URL, output: URL) async throws -> URL {
         let exe = try await resolveEngine()
-        // keep-data-uris embeds figures from Word/PPTX as Markdown images.
-        // Older markitdown builds may not know the flag — retry plain.
-        let attempts: [[String]] = [
-            [input.path, "-o", output.path, "--keep-data-uris"],
-            [input.path, "-o", output.path],
-        ]
+        // keep-data-uris embeds figures from Word/PPTX. PDFs ignore it, so skip
+        // the extra attempt — that was a wasted second pass on huge manuals.
+        let ext = input.pathExtension.lowercased()
+        let office = ["docx", "pptx", "xlsx", "ppt", "xls"].contains(ext)
+        var attempts: [[String]] = []
+        if office {
+            attempts.append([input.path, "-o", output.path, "--keep-data-uris"])
+        }
+        attempts.append([input.path, "-o", output.path])
         var lastError: Error = YourMarkError.outputMissing(output.path)
         for args in attempts {
             do {
