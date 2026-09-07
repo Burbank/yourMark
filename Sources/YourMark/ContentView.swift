@@ -445,20 +445,20 @@ struct LibraryPanel: View {
     private var headingBookmarks: [ManualBookmark] {
         var used = Set<String>()
         var items: [ManualBookmark] = []
-        for line in model.previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false) {
-            let s = String(line)
-            guard s.hasPrefix("#") else { continue }
-            var level = 0
-            for ch in s {
-                if ch == "#" { level += 1 } else { break }
-            }
-            guard (1...3).contains(level) else { continue }
-            let title = s.drop(while: { $0 == "#" || $0 == " " }).trimmingCharacters(in: .whitespaces)
-            guard !title.isEmpty, title != "Outline" else { continue }
+        let lines = model.previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false)
+        for (i, line) in lines.enumerated() {
+            guard let title = PdfSidecar.headingText(String(line)) else { continue }
+            guard title.caseInsensitiveCompare("Outline") != .orderedSame else { continue }
             var key = title.lowercased()
             if used.contains(key) { key += "-\(items.count)" }
             used.insert(key)
-            items.append(ManualBookmark(title: title, level: level, pageIndex: nil))
+            items.append(ManualBookmark(title: title, level: {
+                var n = 0
+                for ch in String(line) {
+                    if ch == "#" { n += 1 } else { break }
+                }
+                return max(1, min(n, 3))
+            }(), pageIndex: nil, lineIndex: i))
         }
         return items
     }
@@ -553,27 +553,51 @@ struct LibraryPanel: View {
     private var markdownColumn: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    let lines = model.previewMarkdown.isEmpty
-                        ? ["Select a converted file."]
-                        : model.previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-                    ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
-                        Text(line.isEmpty ? " " : line)
-                            .font(.body)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .id(i)
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(markdownSections, id: \.id) { section in
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(Array(section.lines.enumerated()), id: \.offset) { _, line in
+                                Text(line.isEmpty ? " " : line)
+                                    .font(.body)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .id(section.id)
                     }
                 }
                 .padding(20)
             }
             .background(deck.field)
             .onChange(of: model.scrollToLine) { _, line in
-                if let line {
-                    withAnimation { proxy.scrollTo(line, anchor: .top) }
-                }
+                guard let line else { return }
+                let target = markdownSections.last(where: { $0.id <= line })?.id ?? line
+                withAnimation { proxy.scrollTo(target, anchor: .top) }
             }
         }
+    }
+
+    private var markdownSections: [(id: Int, lines: [String])] {
+        let lines = model.previewMarkdown.isEmpty
+            ? ["Select a converted file."]
+            : model.previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var sections: [(id: Int, lines: [String])] = []
+        var currentId = 0
+        var current: [String] = []
+        for (i, line) in lines.enumerated() {
+            let isHeading = PdfSidecar.headingText(line) != nil
+            if isHeading, !current.isEmpty {
+                sections.append((currentId, current))
+                current = [line]
+                currentId = i
+            } else {
+                if current.isEmpty { currentId = i }
+                current.append(line)
+            }
+        }
+        if !current.isEmpty { sections.append((currentId, current)) }
+        if sections.isEmpty { sections.append((0, ["Select a converted file."])) }
+        return sections
     }
 }
 
