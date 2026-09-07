@@ -49,6 +49,8 @@ final class AppModel {
     var showDoclingPrompt = false
     var pendingGraphics: [URL] = []
     var aiChaptersEnabled = UserDefaults.standard.object(forKey: "aiChaptersEnabled") as? Bool ?? false
+    var doclingPath: String? = OcrService.doclingPath()
+    var ocrmypdfPath: String? = OcrService.ocrmypdfPath()
     private var convertWanted = false
 
     let service = MarkItDownService()
@@ -112,6 +114,7 @@ final class AppModel {
             statusText = "MarkItDown \(status.version)"
             Task { await checkUpdates(force: false) }
         }
+        refreshOCRTools()
     }
 
     func acceptFirstRunInstall() async {
@@ -178,6 +181,12 @@ final class AppModel {
         let status = await service.refreshStatus()
         enginePath = status.path
         engineVersion = status.version
+        refreshOCRTools()
+    }
+
+    func refreshOCRTools() {
+        doclingPath = OcrService.doclingPath()
+        ocrmypdfPath = OcrService.ocrmypdfPath()
     }
 
     func clearError() { errorMessage = nil }
@@ -644,10 +653,14 @@ final class AppModel {
     func installOcrmypdf() async {
         installingEngine = true
         statusText = "Installing OCRmyPDF (Tesseract)…"
-        defer { installingEngine = false }
+        defer {
+            installingEngine = false
+            refreshOCRTools()
+        }
         do {
             lastUpgradeLog = try await OcrService.installViaHomebrew()
-            statusText = OcrService.ocrmypdfPath() == nil
+            refreshOCRTools()
+            statusText = ocrmypdfPath == nil
                 ? "OCRmyPDF install finished"
                 : "OCRmyPDF ready"
         } catch {
@@ -659,10 +672,14 @@ final class AppModel {
     func installDocling() async {
         installingEngine = true
         statusText = "Installing Docling (layout models)… first run downloads extra files"
-        defer { installingEngine = false }
+        defer {
+            installingEngine = false
+            refreshOCRTools()
+        }
         do {
             lastUpgradeLog = try await OcrService.installDocling()
-            statusText = "Docling ready"
+            refreshOCRTools()
+            statusText = doclingPath == nil ? "Docling install finished" : "Docling ready"
         } catch {
             errorMessage = error.localizedDescription
             statusText = "Docling install failed"
