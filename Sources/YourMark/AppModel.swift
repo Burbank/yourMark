@@ -1077,6 +1077,40 @@ final class AppModel {
         NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
 
+    func openInMarkEdit(_ item: LibraryItem) {
+        let file = URL(fileURLWithPath: item.markdownPath)
+        guard FileManager.default.fileExists(atPath: file.path) else {
+            errorMessage = "That Markdown file is not on disk anymore."
+            return
+        }
+        if let app = Self.markEditAppURL() {
+            NSWorkspace.shared.open([file], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+            return
+        }
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "Install MarkEdit to edit"
+        alert.informativeText = "yourMark is a reader. MarkEdit is a free, open-source Mac editor for Markdown.\n\nInstall it, then press Edit again."
+        alert.addButton(withTitle: "Get MarkEdit")
+        alert.addButton(withTitle: "Not now")
+        if alert.runModal() == .alertFirstButtonReturn {
+            if let url = URL(string: "https://github.com/MarkEdit-app/MarkEdit/releases/latest") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
+
+    static func markEditAppURL() -> URL? {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "app.cyan.markedit") {
+            return url
+        }
+        let path = "/Applications/MarkEdit.app"
+        if FileManager.default.fileExists(atPath: path) {
+            return URL(fileURLWithPath: path)
+        }
+        return nil
+    }
+
     func revealLibrary(_ item: LibraryItem) {
         var urls: [URL] = []
         if !item.sourcePath.isEmpty {

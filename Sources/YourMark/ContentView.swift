@@ -721,6 +721,12 @@ struct LibraryPanel: View {
             .foregroundStyle(previewRendered ? deck.btnText : deck.ink)
             .help("Rendered shows headings. Plain shows the raw Markdown.")
             if let item = selected {
+                Button("Edit") {
+                    model.openInMarkEdit(item)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .help("Open this file in MarkEdit, a free Markdown editor")
                 Button("Finder") {
                     model.revealLibrary(item)
                 }

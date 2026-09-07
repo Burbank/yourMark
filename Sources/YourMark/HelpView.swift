@@ -58,7 +58,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Reading").font(.headline)
-                    Text("The right-hand pane is a reader, not an editor. Use the A / slider / A controls to change text size. Rendered shows headings and callouts; Plain shows the raw Markdown. Finder opens the file. To edit the file, use a Markdown editor — MarkEdit is a good native, open-source Mac app: github.com/MarkEdit-app/MarkEdit")
+                    Text("The right-hand pane is a reader, not an editor. Use the A / slider / A controls to change text size. Rendered shows headings and callouts; Plain shows the raw Markdown. Edit opens the file in MarkEdit if it is installed (free, native, MIT). Finder shows the file on disk.")
                 }
 
                 Group {
