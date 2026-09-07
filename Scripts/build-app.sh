@@ -153,6 +153,8 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 PLIST
 
 echo -n 'APPL????' > "$CONTENTS/PkgInfo"
+# Ad-hoc until notarization. Developer already has Apple Developer Program
+# + Developer ID Application; when they ask, follow docs/notarize.md.
 codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1 || true
 
 if [[ "$SKIP_INSTALL" == "1" ]]; then
