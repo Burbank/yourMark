@@ -5,36 +5,49 @@ import PDFKit
 /// footer, logos, and the real chapter mashed together. Rebuild the page
 /// from PDFKit (which keeps line breaks), drop repeating chrome when asked,
 /// and turn 8.1 / 8.1.1 titles into Markdown headings.
+///
+/// PDFKit is used only on `PdfWork.queue` — never Task.detached / main init.
 enum PdfCleanup {
-    static func tidy(markdown: String, pdf: URL?, stripChrome: Bool) -> String {
-        guard let pdf, pdf.pathExtension.lowercased() == "pdf",
-              let doc = PDFDocument(url: pdf), doc.pageCount > 0
-        else { return markdown }
+    static func tidyAsync(markdown: String, pdf: URL?, stripChrome: Bool) async -> String {
+        guard let pdf, pdf.pathExtension.lowercased() == "pdf" else { return markdown }
+        let original = markdown
+        let cleaned = await PdfWork.runAsync {
+            tidyLocked(markdown: markdown, pdf: pdf, stripChrome: stripChrome)
+        }
+        let a = original.trimmingCharacters(in: .whitespacesAndNewlines).count
+        let b = cleaned.trimmingCharacters(in: .whitespacesAndNewlines).count
+        if b < 40 { return original }
+        if a > 200, b < a / 5 { return original }
+        return cleaned
+    }
 
+    private static func tidyLocked(markdown: String, pdf: URL, stripChrome: Bool) -> String {
+        guard let doc = PDFDocument(url: pdf), doc.pageCount > 0 else { return markdown }
         let chrome = stripChrome ? chromeKeys(in: doc) : []
         var pages = splitPages(markdown)
         if pages.count < 2, doc.pageCount >= 2 {
-            pages = (0..<doc.pageCount).map { _ in "" }
+            pages = Array(repeating: "", count: doc.pageCount)
         }
 
         var out: [String] = []
-        let n = max(pages.count, doc.pageCount)
+        let n = min(max(pages.count, doc.pageCount), 800)
         for i in 0..<n {
             let raw = i < pages.count ? pages[i] : ""
             let rebuilt = rebuildPage(
                 mashed: raw,
-                pdfPage: doc.page(at: i),
+                pdfPage: i < doc.pageCount ? doc.page(at: i) : nil,
                 chrome: chrome,
                 stripChrome: stripChrome
             )
-            guard !rebuilt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            let body = rebuilt.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !body.isEmpty else { continue }
             out.append("<!-- page \(i + 1) -->")
             out.append("")
-            out.append(rebuilt)
+            out.append(body)
             out.append("")
         }
-        let body = out.joined(separator: "\n")
-        return body.isEmpty ? markdown : body
+        let text = out.joined(separator: "\n")
+        return text.isEmpty ? markdown : text
     }
 
     private static func splitPages(_ markdown: String) -> [String] {
@@ -68,8 +81,8 @@ enum PdfCleanup {
         stripChrome: Bool
     ) -> String {
         let kit = cleanedLines(from: pdfPage?.string, chrome: chrome, stripChrome: stripChrome)
-        let mashedTrim = mashed.trimmingCharacters(in: .whitespacesAndNewlines)
-        let mashedLines = mashedTrim
+        let mashedLines = mashed
+            .trimmingCharacters(in: .whitespacesAndNewlines)
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty && !$0.hasPrefix("![") && !$0.hasPrefix("<!--") }
@@ -136,7 +149,7 @@ enum PdfCleanup {
 
     private static func chromeKeys(in doc: PDFDocument) -> Set<String> {
         var counts: [String: Int] = [:]
-        let n = doc.pageCount
+        let n = min(doc.pageCount, 800)
         for i in 0..<n {
             var seen = Set<String>()
             for line in cleanedLines(from: doc.page(at: i)?.string, chrome: [], stripChrome: false) {
@@ -160,14 +173,13 @@ enum PdfCleanup {
         if numberedCallout(t) != nil { return false }
         let key = fold(t)
         if chrome.contains(key) { return true }
-        if t.range(of: #"(?i)^page\s*:\s*\S"#, options: .regularExpression) != nil { return true }
-        if t.range(of: #"(?i)^date\s*:\s*"#, options: .regularExpression) != nil { return true }
-        if t.range(of: #"(?i)^iss\.?\s*/\s*revision"#, options: .regularExpression) != nil { return true }
-        if t.range(of: #"(?i)revision no\.?\s*:"#, options: .regularExpression) != nil { return true }
-        if t.range(of: #"(?i)^fcom\s*ii$"#, options: .regularExpression) != nil { return true }
-        if t.range(of: #"(?i)^747-400(\s+fcom)?\s*(ii)?$"#, options: .regularExpression) != nil { return true }
-        if t.range(of: #"^\d{1,2}[-/][A-Za-z]{3}[-/]\d{2,4}$"#, options: .regularExpression) != nil { return true }
-        if t.range(of: #"^(Page|Pág|Seite)\s+\d+(\s*/\s*\d+)?$"#, options: .regularExpression) != nil { return true }
+        let lower = key
+        if lower.hasPrefix("page:") { return true }
+        if lower.hasPrefix("date:") { return true }
+        if lower.hasPrefix("iss") && lower.contains("revision") { return true }
+        if lower.contains("revision no") { return true }
+        if lower == "fcom ii" || lower.hasPrefix("fcom ii ") { return true }
+        if lower.hasPrefix("747-400") { return true }
         return false
     }
 
@@ -175,63 +187,101 @@ enum PdfCleanup {
     private static func splitMashedLine(_ line: String, chrome: Set<String>) -> [String] {
         if line.count < 90 { return [line] }
         var text = line
-        let cutters: [String] = [
-            #"Page:\s*\S+"#,
-            #"Date:\s*\d{1,2}[-/][A-Za-z]{3}[-/]\d{2,4}"#,
-            #"Iss\.?\s*/\s*Revision no\.?:\s*[\d\s/]+"#,
-            #"747-400\s+FCOM\s*II"#,
-            #"FCOM\s*II"#,
-        ]
-        for pat in cutters {
-            text = text.replacingOccurrences(of: pat, with: "\n", options: [.regularExpression, .caseInsensitive])
+        for token in ["Page:", "Date:", "Iss. / Revision no.:", "Iss./Revision no.:", "747-400 FCOM II", "FCOM II"] {
+            text = text.replacingOccurrences(of: token, with: "\n", options: .caseInsensitive)
         }
-        text = text.replacingOccurrences(
-            of: #"(?<![\d.])(\d+(?:\.\d+){1,5})\s+(?=[A-Z])"#,
-            with: "\n$1 ",
-            options: .regularExpression
-        )
-        text = text.replacingOccurrences(
-            of: #"(?<=[a-z])(\d{1,2})\s{2,}(?=[A-Z])"#,
-            with: "\n$1 ",
-            options: .regularExpression
-        )
-        return text
-            .split(separator: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && !isChrome($0, chrome: chrome) }
+        var pieces: [String] = []
+        var current = ""
+        var i = text.startIndex
+        while i < text.endIndex {
+            if text[i] == "\n" {
+                let piece = current.trimmingCharacters(in: .whitespaces)
+                if !piece.isEmpty, !isChrome(piece, chrome: chrome) { pieces.append(piece) }
+                current = ""
+                i = text.index(after: i)
+                continue
+            }
+            current.append(text[i])
+            i = text.index(after: i)
+        }
+        let last = current.trimmingCharacters(in: .whitespaces)
+        if !last.isEmpty, !isChrome(last, chrome: chrome) { pieces.append(last) }
+        return pieces.isEmpty ? [line] : pieces
     }
 
     /// "8.1 Controls and Indicators" → "## 8.1 Controls and Indicators"
+    /// Character scan — no NSRegularExpression (invalid patterns abort the process).
     private static func numberedHeading(_ line: String) -> String? {
         let t = line.trimmingCharacters(in: .whitespaces)
-        guard let match = t.range(
-            of: #"^(\d+(?:\.\d+){1,6})\s+([A-Za-z].{2,90})$"#,
-            options: .regularExpression
-        ) else { return nil }
-        let s = String(t[match])
-        guard let space = s.firstIndex(of: " ") else { return nil }
-        let number = String(s[..<space])
-        let title = s[s.index(after: space)...].trimmingCharacters(in: .whitespaces)
-        guard title.first?.isLetter == true else { return nil }
-        if title.range(of: #"(?i)^(page|date|iss)"#, options: .regularExpression) != nil { return nil }
-        let parts = number.split(separator: ".").count
-        let level = min(6, max(2, parts))
+        guard let first = t.first, first.isNumber else { return nil }
+        var i = t.startIndex
+        var dots = 0
+        while i < t.endIndex {
+            let ch = t[i]
+            if ch.isNumber {
+                i = t.index(after: i)
+                continue
+            }
+            if ch == "." {
+                let next = t.index(after: i)
+                guard next < t.endIndex, t[next].isNumber else { break }
+                dots += 1
+                i = next
+                continue
+            }
+            break
+        }
+        guard dots >= 1, dots <= 6, i < t.endIndex, t[i].isWhitespace else { return nil }
+        let number = String(t[t.startIndex..<i])
+        let title = t[i...].trimmingCharacters(in: .whitespaces)
+        guard let head = title.first, head.isLetter else { return nil }
+        guard title.count >= 3, title.count <= 90 else { return nil }
+        let low = title.lowercased()
+        if low.hasPrefix("page") || low.hasPrefix("date") || low.hasPrefix("iss") { return nil }
+        let level = min(6, max(2, dots + 1))
         return String(repeating: "#", count: level) + " " + number + " " + title
     }
 
     /// "1 Engine Fire Switches" → "**1 Engine Fire Switches**"
     private static func numberedCallout(_ line: String) -> String? {
         let t = line.trimmingCharacters(in: .whitespaces)
-        guard t.range(of: #"^\d{1,2}\s+[A-Z][A-Za-z].{5,80}$"#, options: .regularExpression) != nil else {
-            return nil
+        guard let first = t.first, first.isNumber else { return nil }
+        var i = t.startIndex
+        var digits = 0
+        while i < t.endIndex, t[i].isNumber {
+            digits += 1
+            i = t.index(after: i)
         }
-        if t.contains(".") { return nil }
+        guard (1...2).contains(digits), i < t.endIndex, t[i].isWhitespace else { return nil }
+        let rest = t[i...].trimmingCharacters(in: .whitespaces)
+        guard let head = rest.first, head.isLetter, head.isUppercase else { return nil }
+        guard rest.count >= 6, rest.count <= 80 else { return nil }
+        if rest.contains(".") { return nil }
         return "**\(t)**"
     }
 
     private static func fold(_ s: String) -> String {
         s.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "  ", with: " ")
             .lowercased()
+    }
+}
+
+/// PDFKit is not safe from Task.detached or from AppModel.init on the main thread
+/// while SwiftUI is still putting the window up. One serial queue, both sides.
+enum PdfWork {
+    private static let key = DispatchSpecificKey<UInt8>()
+    static let queue: DispatchQueue = {
+        let q = DispatchQueue(label: "com.burbank.yourmark.pdf", qos: .userInitiated)
+        q.setSpecific(key: key, value: 1)
+        return q
+    }()
+
+    static func runAsync<T: Sendable>(_ body: @escaping @Sendable () -> T) async -> T {
+        await withCheckedContinuation { cont in
+            queue.async {
+                cont.resume(returning: body())
+            }
+        }
     }
 }

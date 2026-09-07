@@ -133,6 +133,7 @@ final class AppModel {
             Task { await checkUpdates(force: false) }
         }
         refreshOCRTools()
+        Task { await fillMissingBookmarks() }
     }
 
     func acceptFirstRunInstall() async {
@@ -561,26 +562,34 @@ final class AppModel {
         selectedTool = .convert
         NSApp.activate(ignoringOtherApps: true)
         NSApp.windows.first?.makeKeyAndOrderFront(nil)
+        // Classify scans off the first frame — PDFKit here used to crash launch-by-drop.
+        Task { await classifyAndEnqueue(allowed) }
+    }
 
-        let scans = allowed.filter { url in
-            guard url.pathExtension.lowercased() == "pdf", ocrEnabled else { return false }
-            return OcrService.profile(url).needsOCR
+    private func classifyAndEnqueue(_ allowed: [URL]) async {
+        let ocrOn = ocrEnabled
+        let scans = await PdfWork.runAsync { () -> [String] in
+            allowed.filter { url in
+                guard url.pathExtension.lowercased() == "pdf", ocrOn else { return false }
+                return OcrService.profile(url).needsOCR
+            }.map(\.path)
         }
-        let rest = allowed.filter { url in !scans.contains(where: { $0.path == url.path }) }
+        let scanSet = Set(scans)
+        let scanURLs = allowed.filter { scanSet.contains($0.path) }
+        let rest = allowed.filter { !scanSet.contains($0.path) }
         if !rest.isEmpty { enqueue(rest) }
 
         let doclingReady = OcrService.doclingPath() != nil
             || UserDefaults.standard.bool(forKey: "doclingReady")
-        if !scans.isEmpty, !doclingReady {
-            pendingGraphics.append(contentsOf: scans.filter { g in
+        if !scanURLs.isEmpty, !doclingReady {
+            pendingGraphics.append(contentsOf: scanURLs.filter { g in
                 !pendingGraphics.contains(where: { $0.path == g.path })
             })
             showDoclingPrompt = true
-        } else if !scans.isEmpty {
-            enqueue(scans)
+        } else if !scanURLs.isEmpty {
+            enqueue(scanURLs)
         }
-
-        Task { await convertQueued() }
+        await convertQueued()
     }
 
     func acceptDoclingInstall() async {
@@ -809,37 +818,32 @@ final class AppModel {
     }
 
     private func loadBookmarks(_ url: URL) async -> [ManualBookmark] {
-        await withCheckedContinuation { cont in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let fromPdf = PdfSidecar.bookmarks(from: url)
-                if !fromPdf.isEmpty {
-                    cont.resume(returning: fromPdf)
-                    return
-                }
-                cont.resume(returning: PdfSidecar.fontHeadings(from: url))
-            }
+        await PdfWork.runAsync {
+            let fromPdf = PdfSidecar.bookmarks(from: url)
+            if !fromPdf.isEmpty { return fromPdf }
+            return PdfSidecar.fontHeadings(from: url)
         }
     }
 
     private func finalizeMarkdown(_ url: URL, original: URL, bookmarks: [ManualBookmark]) async -> (URL, [ManualBookmark]) {
-        let located = await Task.detached { () -> [ManualBookmark] in
+        let located = await PdfWork.runAsync { () -> [ManualBookmark] in
             guard let text = try? String(contentsOf: url, encoding: .utf8) else { return bookmarks }
             let stitched = PdfSidecar.stitch(bookmarks: bookmarks, markdown: text, pdf: original)
             try? stitched.text.write(to: url, atomically: true, encoding: .utf8)
             PdfSidecar.writeSidecar(stitched.bookmarks, nextTo: url)
             return stitched.bookmarks
-        }.value
+        }
         let after = await maybeAddAIChapters(markdownURL: url, hasOutline: !located.isEmpty)
         return (after, located)
     }
 
     private func tidyPDFMarkdown(_ url: URL, pdf: URL) async {
         let strip = stripChrome
-        await Task.detached {
-            guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
-            let cleaned = PdfCleanup.tidy(markdown: text, pdf: pdf, stripChrome: strip)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        let cleaned = await PdfCleanup.tidyAsync(markdown: text, pdf: pdf, stripChrome: strip)
+        if cleaned != text {
             try? cleaned.write(to: url, atomically: true, encoding: .utf8)
-        }.value
+        }
     }
 
     private func finishJob(
@@ -1178,18 +1182,33 @@ final class AppModel {
     private func loadLibrary() {
         guard let data = try? Data(contentsOf: libraryURL) else { return }
         library = (try? JSONDecoder().decode([LibraryItem].self, from: data)) ?? []
-        for i in library.indices where library[i].bookmarks.isEmpty {
-            let md = URL(fileURLWithPath: library[i].markdownPath)
-            let side = PdfSidecar.readSidecar(nextTo: md)
-            if !side.isEmpty {
-                library[i].bookmarks = side
-                continue
-            }
-            let src = library[i].sourcePath
-            if !src.isEmpty, FileManager.default.fileExists(atPath: src) {
-                library[i].bookmarks = PdfSidecar.bookmarks(from: URL(fileURLWithPath: src))
-            }
+        // Do not open PDFs here. PDFKit during AppModel.init kills the first frame.
+    }
+
+    private func fillMissingBookmarks() async {
+        let jobs: [(Int, String, String)] = library.enumerated().compactMap { idx, item in
+            item.bookmarks.isEmpty ? (idx, item.markdownPath, item.sourcePath) : nil
         }
+        guard !jobs.isEmpty else { return }
+        let found = await PdfWork.runAsync { () -> [Int: [ManualBookmark]] in
+            var map: [Int: [ManualBookmark]] = [:]
+            for (idx, md, src) in jobs {
+                let side = PdfSidecar.readSidecar(nextTo: URL(fileURLWithPath: md))
+                if !side.isEmpty {
+                    map[idx] = side
+                    continue
+                }
+                if !src.isEmpty, FileManager.default.fileExists(atPath: src) {
+                    let marks = PdfSidecar.bookmarks(from: URL(fileURLWithPath: src))
+                    if !marks.isEmpty { map[idx] = marks }
+                }
+            }
+            return map
+        }
+        for (idx, marks) in found where library.indices.contains(idx) {
+            library[idx].bookmarks = marks
+        }
+        if !found.isEmpty { saveLibrary() }
     }
 
     private func saveLibrary() {
