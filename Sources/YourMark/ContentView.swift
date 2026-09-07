@@ -229,13 +229,31 @@ struct LibraryPanel: View {
                     }
                 }
             )) { item in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title).font(.headline)
-                    Text(item.sourceName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title).font(.headline)
+                        Text(item.sourceName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    Button {
+                        model.revealLibrary(item)
+                    } label: {
+                        Image(systemName: "folder")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Show in Finder")
                 }
                 .tag(item.id)
+                .contextMenu {
+                    Button("Show in Finder") { model.revealLibrary(item) }
+                    if !item.sourcePath.isEmpty {
+                        Button("Show original") {
+                            model.reveal(URL(fileURLWithPath: item.sourcePath))
+                        }
+                    }
+                }
             }
             .frame(minWidth: 200)
 
@@ -379,10 +397,10 @@ struct EnginePanel: View {
                         model.askProvider = $0
                         if $0 == "xai" {
                             model.askBaseURL = "https://api.x.ai/v1"
-                            if model.askModel.isEmpty { model.askModel = "grok-4.5" }
+                            model.askModel = AskModels.defaultID(for: "xai")
                         } else if $0 == "openai" {
                             model.askBaseURL = "https://api.openai.com/v1"
-                            if model.askModel == "grok-4.5" { model.askModel = "gpt-4o" }
+                            model.askModel = AskModels.defaultID(for: "openai")
                         }
                     }
                 )) {
@@ -390,15 +408,24 @@ struct EnginePanel: View {
                     Text("OpenAI").tag("openai")
                     Text("Custom").tag("custom")
                 }
-                TextField("Model", text: Binding(
-                    get: { model.askModel },
-                    set: { model.askModel = $0 }
-                ))
                 if model.askProvider == "custom" {
+                    TextField("Model", text: Binding(
+                        get: { model.askModel },
+                        set: { model.askModel = $0 }
+                    ))
                     TextField("Base URL", text: Binding(
                         get: { model.askBaseURL },
                         set: { model.askBaseURL = $0 }
                     ))
+                } else {
+                    Picker("Model", selection: Binding(
+                        get: { model.askModel },
+                        set: { model.askModel = $0 }
+                    )) {
+                        ForEach(AskModels.list(for: model.askProvider), id: \.id) { m in
+                            Text(m.label).tag(m.id)
+                        }
+                    }
                 }
                 SecureField("API key", text: Binding(
                     get: { model.askKeyDraft },
@@ -406,7 +433,7 @@ struct EnginePanel: View {
                 ))
                 Text("Stored in the Keychain on this Mac. Sent only to the provider you pick when you Ask.")
                     .foregroundStyle(.secondary)
-                Toggle("If the chapter is silent, also show a model summary", isOn: Binding(
+                Toggle("If the chapter does not provide an answer, also show a model summary", isOn: Binding(
                     get: { model.askWebFallback },
                     set: {
                         model.askWebFallback = $0
@@ -419,6 +446,28 @@ struct EnginePanel: View {
                     Button("Save key") { model.persistAskSettings() }
                     Button("Clear key", role: .destructive) { model.clearAskKey() }
                 }
+            }
+            Section("Converted files") {
+                Picker("Save Markdown", selection: Binding(
+                    get: { model.filePlace },
+                    set: {
+                        model.filePlace = $0
+                        if $0 == "custom" { model.pickOutputFolder() }
+                        else { model.persistAskSettings() }
+                    }
+                )) {
+                    Text("Next to the original PDF").tag("beside")
+                    Text("yourMark library folder").tag("library")
+                    Text("Choose a folder…").tag("custom")
+                }
+                if model.filePlace == "custom", !model.customFolderPath.isEmpty {
+                    Text(model.customFolderPath)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                    Button("Change folder") { model.pickOutputFolder() }
+                }
+                Text("Next to the original keeps the PDF and the Markdown in the same folder.")
+                    .foregroundStyle(.secondary)
             }
             Section("What you get") {
                 LabeledContent("Tables") {

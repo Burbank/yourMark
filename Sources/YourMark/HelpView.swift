@@ -31,7 +31,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Library cards").font(.headline)
-                    Text("Hold a card to rearrange. Swipe a card past the left edge to delete. After you delete Getting started, an i in the header shows the same guide.")
+                    Text("Hold a card to rearrange. Swipe a card past the left edge to delete. Show in Finder selects the file. If you edit that file, the library updates.")
                 }
 
                 Group {

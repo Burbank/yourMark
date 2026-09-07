@@ -45,9 +45,10 @@ struct LibraryItem: Identifiable, Hashable, Codable {
     var addedAt: Date
     var byteCount: Int64
     var bookmarks: [ManualBookmark] = []
+    var sourcePath: String = ""
 
     enum CodingKeys: String, CodingKey {
-        case id, title, sourceName, markdownPath, addedAt, byteCount, bookmarks
+        case id, title, sourceName, markdownPath, addedAt, byteCount, bookmarks, sourcePath
     }
 
     init(
@@ -57,7 +58,8 @@ struct LibraryItem: Identifiable, Hashable, Codable {
         markdownPath: String,
         addedAt: Date,
         byteCount: Int64,
-        bookmarks: [ManualBookmark] = []
+        bookmarks: [ManualBookmark] = [],
+        sourcePath: String = ""
     ) {
         self.id = id
         self.title = title
@@ -66,6 +68,7 @@ struct LibraryItem: Identifiable, Hashable, Codable {
         self.addedAt = addedAt
         self.byteCount = byteCount
         self.bookmarks = bookmarks
+        self.sourcePath = sourcePath
     }
 
     init(from decoder: Decoder) throws {
@@ -77,6 +80,7 @@ struct LibraryItem: Identifiable, Hashable, Codable {
         addedAt = try c.decode(Date.self, forKey: .addedAt)
         byteCount = try c.decode(Int64.self, forKey: .byteCount)
         bookmarks = try c.decodeIfPresent([ManualBookmark].self, forKey: .bookmarks) ?? []
+        sourcePath = try c.decodeIfPresent(String.self, forKey: .sourcePath) ?? ""
     }
 }
 

@@ -20,7 +20,7 @@ final class AppModel {
     var lastUpgradeLog: String = ""
     var scrollToLine: Int?
     var askProvider: String = UserDefaults.standard.string(forKey: "askProvider") ?? "xai"
-    var askModel: String = UserDefaults.standard.string(forKey: "askModel") ?? "grok-4.5"
+    var askModel: String = UserDefaults.standard.string(forKey: "askModel") ?? AskModels.defaultID(for: UserDefaults.standard.string(forKey: "askProvider") ?? "xai")
     var askBaseURL: String = UserDefaults.standard.string(forKey: "askBaseURL") ?? "https://api.x.ai/v1"
     var askKeyDraft: String = ""
     var askHasKey = false
@@ -31,10 +31,16 @@ final class AppModel {
     var askBusy = false
     var askError = ""
     var askWebFallback = UserDefaults.standard.bool(forKey: "askWebFallback")
+    var filePlace: String = UserDefaults.standard.string(forKey: "filePlace") ?? "beside"
+    var customFolderPath: String = UserDefaults.standard.string(forKey: "customFolder") ?? ""
+    var fileNotice: String = ""
 
     let service = MarkItDownService()
     private let askService = AskService()
     private let libraryURL: URL
+    private let convertedDir: URL
+    private let watcher = FileWatcher()
+    private var watchDebounce: Task<Void, Never>?
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -42,10 +48,16 @@ final class AppModel {
         let dir = appSupport.appendingPathComponent("yourMark", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         libraryURL = dir.appendingPathComponent("library.json")
+        convertedDir = dir.appendingPathComponent("Converted", isDirectory: true)
+        try? FileManager.default.createDirectory(at: convertedDir, withIntermediateDirectories: true)
         loadLibrary()
         let stored = AskSecrets.load()
         askHasKey = !stored.isEmpty
         askKeyDraft = stored
+        watcher.onChange = { [weak self] path in
+            Task { @MainActor in self?.fileDidChange(path) }
+        }
+        startWatching()
     }
 
     func bootstrap() async {
@@ -62,6 +74,8 @@ final class AppModel {
         UserDefaults.standard.set(askModel, forKey: "askModel")
         UserDefaults.standard.set(askBaseURL, forKey: "askBaseURL")
         UserDefaults.standard.set(askWebFallback, forKey: "askWebFallback")
+        UserDefaults.standard.set(filePlace, forKey: "filePlace")
+        UserDefaults.standard.set(customFolderPath, forKey: "customFolder")
         AskSecrets.save(askKeyDraft)
         askHasKey = !AskSecrets.load().isEmpty
         statusText = askHasKey ? "Ask key saved in Keychain" : "Ask key cleared"
@@ -187,7 +201,7 @@ final class AppModel {
             jobs[index].status = .running
             jobs[index].startedAt = Date()
             statusText = "Converting \(input.lastPathComponent)…"
-            let output = await service.suggestedOutput(for: input)
+            let output = outputURL(for: input)
             do {
                 let url = try await service.convert(input: input, output: output)
                 let bookmarks = PdfSidecar.bookmarks(from: input)
@@ -259,6 +273,90 @@ final class AppModel {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    func revealLibrary(_ item: LibraryItem) {
+        var urls: [URL] = []
+        if !item.sourcePath.isEmpty {
+            urls.append(URL(fileURLWithPath: item.sourcePath))
+        }
+        urls.append(URL(fileURLWithPath: item.markdownPath))
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
+    func pickOutputFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Converted Markdown will be saved here."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        customFolderPath = url.path
+        filePlace = "custom"
+        persistAskSettings()
+        statusText = "Saving Markdown in \(url.lastPathComponent)"
+    }
+
+    func outputURL(for input: URL) -> URL {
+        let name = input.deletingPathExtension().lastPathComponent + ".md"
+        switch filePlace {
+        case "library":
+            return convertedDir.appendingPathComponent(name)
+        case "custom":
+            if !customFolderPath.isEmpty {
+                return URL(fileURLWithPath: customFolderPath).appendingPathComponent(name)
+            }
+            fallthrough
+        default:
+            return input.deletingLastPathComponent().appendingPathComponent(name)
+        }
+    }
+
+    private func startWatching() {
+        var paths = library.flatMap { [$0.markdownPath, $0.sourcePath] }.filter { !$0.isEmpty }
+        watcher.replace(paths: paths)
+    }
+
+    private func fileDidChange(_ path: String) {
+        watchDebounce?.cancel()
+        watchDebounce = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+            if let item = library.first(where: { $0.sourcePath == path }) {
+                await reconvert(item)
+            } else if let item = library.first(where: { $0.markdownPath == path }) {
+                fileNotice = "Updated from Finder"
+                if item.id == selectedLibraryID {
+                    selectLibrary(item)
+                }
+            }
+        }
+    }
+
+    private func reconvert(_ item: LibraryItem) async {
+        guard !item.sourcePath.isEmpty else { return }
+        let input = URL(fileURLWithPath: item.sourcePath)
+        let output = URL(fileURLWithPath: item.markdownPath)
+        statusText = "Updating \(item.title)…"
+        do {
+            _ = try await service.convert(input: input, output: output)
+            let bookmarks = PdfSidecar.bookmarks(from: input)
+            if let idx = library.firstIndex(where: { $0.id == item.id }) {
+                library[idx].bookmarks = bookmarks
+                if let values = try? output.resourceValues(forKeys: [.fileSizeKey]) {
+                    library[idx].byteCount = Int64(values.fileSize ?? 0)
+                }
+                saveLibrary()
+            }
+            if item.id == selectedLibraryID {
+                selectLibrary(library.first(where: { $0.id == item.id }) ?? item)
+            }
+            fileNotice = "Updated from Finder"
+            statusText = "Updated \(item.title)"
+        } catch {
+            statusText = "Could not update \(item.title)"
+        }
+    }
+
     private func addToLibrary(source: URL, markdown: URL, bookmarks: [ManualBookmark]) {
         let values = try? markdown.resourceValues(forKeys: [.fileSizeKey])
         let item = LibraryItem(
@@ -268,11 +366,13 @@ final class AppModel {
             markdownPath: markdown.path,
             addedAt: Date(),
             byteCount: Int64(values?.fileSize ?? 0),
-            bookmarks: bookmarks
+            bookmarks: bookmarks,
+            sourcePath: source.path
         )
         library.removeAll { $0.markdownPath == item.markdownPath }
         library.insert(item, at: 0)
         saveLibrary()
+        startWatching()
         selectLibrary(item)
     }
 
