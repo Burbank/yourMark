@@ -18,7 +18,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Engine").font(.headline)
-                    Text("yourMark does not ship a frozen converter. First launch installs Microsoft’s official `markitdown` package from PyPI (via uv), including the markitdown-ocr plugin. Convert goes through MarkItDown’s Python API (not only the thin CLI): Word styles, keep-data-uris for Office pictures, and — only if you tick it — vision OCR with your Ask key. About once a day it checks PyPI. Menu → Settings → Install or reinstall does that immediately. Drop a PDF anywhere on the window.")
+                    Text("yourMark does not ship a frozen converter. First launch installs Microsoft’s official `markitdown` package from PyPI (via uv), plus the official markitdown-ocr and RTF plugins. Convert goes through MarkItDown’s Python API (not only the thin CLI): Word styles, keep-data-uris for Office and picture files, EXIF when ExifTool is present, ZIP archives, and — only if you tick it — vision OCR / slide captions with your Ask key. About once a day it checks PyPI. Menu → Settings → Install or reinstall does that immediately. Drop a PDF anywhere on the window.")
                 }
 
                 Group {
@@ -38,7 +38,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Pictures").font(.headline)
-                    Text("After MarkItDown, yourMark walks every PDF page: it saves embedded photos and, when a page is a vector diagram with no photo, draws that page. Every picture is linked in the Markdown next to its page (a figures folder sits beside the file). Word / PowerPoint already emit figures via --keep-data-uris. Scans use Docling. Pictures will not sit at the original two-column x/y position — they appear in reading order. The in-app preview shows a sample so the window stays responsive; open the Markdown in Finder to see them all.")
+                    Text("After MarkItDown, yourMark walks every PDF page: it saves embedded photos and, when a page is a vector diagram with no photo, draws that page. Every picture is linked in the Markdown next to its page (a figures folder sits beside the file). Word / PowerPoint / Excel / dropped photos use MarkItDown’s own keep-data-uris. Scans use Docling. Pictures will not sit at the original two-column x/y position — they appear in reading order. The in-app preview shows a sample so the window stays responsive; open the Markdown in Finder to see them all.")
                 }
 
                 Group {

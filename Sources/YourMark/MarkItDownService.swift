@@ -60,7 +60,8 @@ actor MarkItDownService {
     ) async throws -> URL {
         let exe = try await resolveEngine()
         let ext = input.pathExtension.lowercased()
-        let office = ["docx", "pptx", "xlsx", "ppt", "xls", "html", "htm"].contains(ext)
+        let keepUris = ["docx", "pptx", "xlsx", "ppt", "xls", "html", "htm",
+                        "jpg", "jpeg", "png", "gif", "webp", "tif", "tiff"].contains(ext)
 
         if let script, FileManager.default.isReadableFile(atPath: script.path),
            let py = await pythonForEngine() {
@@ -86,10 +87,10 @@ actor MarkItDownService {
         }
 
         var attempts: [[String]] = [
-            [input.path, "-o", output.path],
+            [input.path, "-o", output.path, "--use-plugins"],
         ]
-        if office {
-            attempts.insert([input.path, "-o", output.path, "--keep-data-uris"], at: 0)
+        if keepUris {
+            attempts.insert([input.path, "-o", output.path, "--keep-data-uris", "--use-plugins"], at: 0)
         }
         var lastError: Error = YourMarkError.outputMissing(output.path)
         for args in attempts {
@@ -211,14 +212,12 @@ actor MarkItDownService {
             throw error
         }
         if let py = await pythonForEngine() {
-            log.append("Installing Microsoft’s markitdown-ocr plugin (used only if you tick Read text in pictures)…")
-            if let uv {
-                _ = try? await run(
-                    executable: uv,
-                    arguments: ["pip", "install", "--python", py, "-U", "markitdown-ocr"],
-                    captureStdout: true
-                )
-            }
+            log.append("Installing Microsoft’s official plugins (OCR + RTF) into the same converter…")
+            _ = try? await run(
+                executable: uv,
+                arguments: ["pip", "install", "--python", py, "-U", "markitdown-ocr", "markitdown-sample-plugin"],
+                captureStdout: true
+            )
         }
         log.append("Ready · \(versionString)")
         return log.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.joined(separator: "\n")
@@ -237,6 +236,21 @@ actor MarkItDownService {
                 let result = try await runShell(command)
                 _ = try await resolveEngine()
                 versionString = await readVersion(executable: enginePath ?? "")
+                if let py = await pythonForEngine() {
+                    let home = FileManager.default.homeDirectoryForCurrentUser.path
+                    let uvBin = [
+                        "\(home)/.local/bin/uv",
+                        "/opt/homebrew/bin/uv",
+                        "/usr/local/bin/uv",
+                    ].first { FileManager.default.isExecutableFile(atPath: $0) }
+                    if let uvBin {
+                        _ = try? await run(
+                            executable: uvBin,
+                            arguments: ["pip", "install", "--python", py, "-U", "markitdown-ocr", "markitdown-sample-plugin"],
+                            captureStdout: true
+                        )
+                    }
+                }
                 return result.stdout.isEmpty ? "Upgraded via \(command)" : result.stdout
             } catch {
                 lastError = error.localizedDescription
