@@ -1007,13 +1007,13 @@ struct EnginePanel: View {
                         )
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { model.lockAskKey() }
-                        Button(model.askCheckingKey ? "Checking…" : "Enter") { model.lockAskKey() }
+                        Button(model.askCheckingKey ? "Testing…" : "Enter") { model.lockAskKey() }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.large)
                             .disabled(model.askCheckingKey)
                             .help("Lock this API key on this Mac")
                     }
-                    Text("Paste the key, then press Enter. That checks it and locks it on this Mac so you do not have to paste it again.")
+                    Text("Paste the key, then press Enter. yourMark sends one short test question so you know the key works before it is locked in.")
                         .foregroundStyle(.secondary)
                     if !model.askKeyHint.isEmpty {
                         Text(model.askKeyHint)
@@ -1023,8 +1023,17 @@ struct EnginePanel: View {
                     if model.askHasKey {
                         let kind = model.askKeyKind == "openai" ? "OpenAI" : model.askKeyKind == "xai" ? "xAI (Grok)" : "your provider"
                         let tail = model.askKeyTail.isEmpty ? "" : " Ending …\(model.askKeyTail)."
-                        Label("Your \(kind) key is locked in.\(tail) yourMark will use it when you Ask.", systemImage: "lock.fill")
+                        Label("Your \(kind) key is locked in.\(tail)", systemImage: "lock.fill")
                             .foregroundStyle(.green)
+                        if model.askKeyTestPassed {
+                            Label(model.askKeyTestNote.isEmpty ? "Key test passed. Ask is ready." : model.askKeyTestNote, systemImage: "checkmark.seal.fill")
+                                .foregroundStyle(.green)
+                        } else {
+                            Text("This key has not been tested yet.")
+                                .foregroundStyle(.secondary)
+                            Button("Test this key") { model.testLockedKey() }
+                                .disabled(model.askCheckingKey)
+                        }
                         if (model.askKeyKind == "openai" && model.askProvider == "xai")
                             || (model.askKeyKind == "xai" && model.askProvider == "openai") {
                             Text("This key does not match the Provider above. Press Enter after pasting again — yourMark will switch Provider to match the key.")

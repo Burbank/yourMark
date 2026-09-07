@@ -104,29 +104,63 @@ struct AskService {
         return text
     }
 
-    /// Cheap check used when locking a key in. GET /models — no chat charge.
-    func verify(_ settings: Settings) async -> String? {
+    struct KeyTest {
+        var passed: Bool
+        var message: String
+    }
+
+    /// One short chat to prove the key, the model, and billing all work.
+    func testKey(_ settings: Settings) async -> KeyTest {
         let key = Self.normalizeKey(settings.apiKey)
-        guard !key.isEmpty else { return "Paste an API key first." }
+        let host = settings.provider == "xai" ? "xAI" : settings.provider == "openai" ? "OpenAI" : "The API"
+        let modelName = settings.model.isEmpty ? "the model" : settings.model
+        guard !key.isEmpty else {
+            return KeyTest(passed: false, message: "Paste an API key first.")
+        }
         let base = settings.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let url = URL(string: "\(base)/models") else {
-            return "Ask base URL is not valid."
+        guard let url = URL(string: "\(base)/chat/completions") else {
+            return KeyTest(passed: false, message: "Ask base URL is not valid.")
         }
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 15
+        request.timeoutInterval = 25
+        let body: [String: Any] = [
+            "model": settings.model,
+            "max_tokens": 16,
+            "temperature": 0,
+            "messages": [
+                ["role": "user", "content": "Reply with the single word OK."],
+            ],
+        ]
         do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
             let (data, response) = try await URLSession.shared.data(for: request)
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             if let auth = Self.friendlyAuthError(code: code, body: data, key: key, provider: settings.provider) {
-                return auth
+                return KeyTest(passed: false, message: "Key test failed. " + auth)
             }
-            if (200...299).contains(code) { return nil }
-            return Self.friendlyHTTPError(code: code, body: data, model: settings.model, provider: settings.provider)
+            if (200...299).contains(code) {
+                let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                let choices = json?["choices"] as? [[String: Any]]
+                let message = choices?.first?["message"] as? [String: Any]
+                let text = (message?["content"] as? String ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "\"", with: "")
+                let shown = text.isEmpty ? "OK" : String(text.prefix(40))
+                return KeyTest(
+                    passed: true,
+                    message: "Key test passed. \(host) answered “\(shown)” using \(modelName). Ask is ready."
+                )
+            }
+            return KeyTest(
+                passed: false,
+                message: "Key test failed. " + Self.friendlyHTTPError(code: code, body: data, model: settings.model, provider: settings.provider)
+            )
         } catch {
-            return "Could not reach \(settings.provider == "xai" ? "xAI" : settings.provider == "openai" ? "OpenAI" : "the API"). Check the internet and try Enter again."
+            return KeyTest(passed: false, message: "Key test failed. Could not reach \(host). Check the internet and press Enter again.")
         }
     }
 
