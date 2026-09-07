@@ -18,7 +18,8 @@ enum OcrService {
         var looksGraphic: Bool
     }
 
-    private static var profileCache: [String: (mtime: TimeInterval, value: PdfProfile)] = [:]
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var profileCache: [String: (mtime: TimeInterval, value: PdfProfile)] = [:]
 
     static func profile(_ url: URL) -> PdfProfile {
         guard url.pathExtension.lowercased() == "pdf" else {
@@ -26,11 +27,16 @@ enum OcrService {
         }
         let mtime = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))
             .flatMap(\.contentModificationDate)?.timeIntervalSince1970 ?? 0
-        if let hit = profileCache[url.path], hit.mtime == mtime {
+        cacheLock.lock()
+        let hit = profileCache[url.path]
+        cacheLock.unlock()
+        if let hit, hit.mtime == mtime {
             return hit.value
         }
         let value = profileUncached(url)
+        cacheLock.lock()
         profileCache[url.path] = (mtime, value)
+        cacheLock.unlock()
         return value
     }
 
