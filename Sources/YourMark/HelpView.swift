@@ -27,8 +27,13 @@ struct HelpView: View {
                 }
 
                 Group {
+                    Text("Scanned PDFs / OCR").font(.headline)
+                    Text("MarkItDown uses pdfminer: it only reads words that are already in the file. A scan has none, so conversion used to come back empty. yourMark now detects that and OCRs first. If OCRmyPDF (Tesseract) is installed it writes a searchable PDF and MarkItDown reads that — original pixels stay. If not, Apple Live Text does the same job. Page pictures are saved next to the Markdown so tables, arrows, and diagrams still show as images, with the OCR text underneath. MuPDF/PyMuPDF is a PDF renderer, not an OCR engine; we do not use it for this step.")
+                }
+
+                Group {
                     Text("Tables").font(.headline)
-                    Text("Yes — when the PDF has a real table, MarkItDown writes a GitHub-flavored Markdown table (columns and cell text). Cell colours, merged headers, and “tables” that are only drawn lines often flatten into plain rows.")
+                    Text("Yes — when the PDF has a real table, MarkItDown writes a GitHub-flavored Markdown table (columns and cell text). Cell colours, merged headers, and “tables” that are only drawn lines often flatten into plain rows. Scanned tables are kept as page pictures plus OCR text.")
                 }
 
                 Group {

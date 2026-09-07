@@ -42,6 +42,7 @@ final class AppModel {
     var appUpdateTag: String?
     var appUpdateURL: URL?
     var draggingFiles = false
+    var ocrEnabled = UserDefaults.standard.object(forKey: "ocrEnabled") as? Bool ?? true
 
     let service = MarkItDownService()
     private let askService = AskService()
@@ -204,13 +205,15 @@ final class AppModel {
 
     Drop a PDF **anywhere** on yourMark — Library, Bookmarks, Convert, the header. It switches to Convert and starts. Microsoft MarkItDown (the official PyPI package) writes Markdown. First launch installs that converter. yourMark also upgrades it from PyPI on its own when Microsoft ships a newer package, and it checks GitHub for a newer yourMark.
 
+    If the PDF is a **scan** (no text layer), yourMark OCRs it first — OCRmyPDF/Tesseract when installed, otherwise Apple Live Text — then MarkItDown runs. Page pictures are kept so tables, arrows, and diagrams still show.
+
     ## Bookmarks
 
     The Bookmarks pane is the PDF outline when the file has one, otherwise headings. Click to jump, like Preview.
 
     ## Tables and figures
 
-    Real tables become Markdown tables. Pictures sit in reading order, not the original page x/y. Scans need OCR extras.
+    Real tables become Markdown tables. Pictures sit in reading order. Scans get OCR first; page pictures are kept so arrows and diagrams still show.
 
     ## Library cards
 
@@ -250,6 +253,7 @@ final class AppModel {
         UserDefaults.standard.set(askWebFallback, forKey: "askWebFallback")
         UserDefaults.standard.set(filePlace, forKey: "filePlace")
         UserDefaults.standard.set(customFolderPath, forKey: "customFolder")
+        UserDefaults.standard.set(ocrEnabled, forKey: "ocrEnabled")
         AskSecrets.save(askKeyDraft)
         askHasKey = !AskSecrets.load().isEmpty
         statusText = askHasKey ? "Ask key saved in Keychain" : "Ask key cleared"
@@ -384,14 +388,33 @@ final class AppModel {
         }
 
         for index in jobs.indices where jobs[index].status == .queued || jobs[index].status == .failed {
-            let input = jobs[index].sourceURL
+            let original = jobs[index].sourceURL
             jobs[index].status = .running
             jobs[index].startedAt = Date()
-            statusText = "Converting \(input.lastPathComponent)…"
-            let output = outputURL(for: input)
+            statusText = "Converting \(original.lastPathComponent)…"
+            let output = outputURL(for: original)
             do {
+                var input = original
+                var usedOCR = false
+                if ocrEnabled, original.pathExtension.lowercased() == "pdf", OcrService.needsOCR(original) {
+                    jobs[index].detail = "Scan detected — OCR first"
+                    let prepared = try await OcrService.searchablePDF(from: original) { msg in
+                        Task { @MainActor in
+                            self.statusText = msg
+                        }
+                    }
+                    input = prepared.url
+                    usedOCR = prepared.didOCR
+                }
                 let url = try await service.convert(input: input, output: output)
-                let bookmarks = PdfSidecar.bookmarks(from: input)
+                if usedOCR {
+                    await OcrService.enrichMarkdown(markdownURL: url, sourcePDF: original) { msg in
+                        Task { @MainActor in
+                            self.statusText = msg
+                        }
+                    }
+                }
+                let bookmarks = PdfSidecar.bookmarks(from: original)
                 if !bookmarks.isEmpty, var text = try? String(contentsOf: url, encoding: .utf8) {
                     if !text.contains("## Outline") {
                         text = PdfSidecar.outlineMarkdown(bookmarks) + text
@@ -400,10 +423,10 @@ final class AppModel {
                 }
                 jobs[index].status = .done
                 jobs[index].outputURL = url
-                jobs[index].detail = bookmarks.isEmpty
-                    ? url.path
-                    : "\(bookmarks.count) bookmarks · \(url.lastPathComponent)"
-                addToLibrary(source: input, markdown: url, bookmarks: bookmarks)
+                jobs[index].detail = usedOCR
+                    ? "OCR · \(url.lastPathComponent)"
+                    : (bookmarks.isEmpty ? url.path : "\(bookmarks.count) bookmarks · \(url.lastPathComponent)")
+                addToLibrary(source: original, markdown: url, bookmarks: bookmarks)
             } catch {
                 jobs[index].status = .failed
                 jobs[index].detail = error.localizedDescription
@@ -428,6 +451,21 @@ final class AppModel {
         } catch {
             errorMessage = error.localizedDescription
             statusText = "Upgrade failed"
+        }
+    }
+
+    func installOcrmypdf() async {
+        installingEngine = true
+        statusText = "Installing OCRmyPDF (Tesseract)…"
+        defer { installingEngine = false }
+        do {
+            lastUpgradeLog = try await OcrService.installViaHomebrew()
+            statusText = OcrService.ocrmypdfPath() == nil
+                ? "OCRmyPDF install finished"
+                : "OCRmyPDF ready"
+        } catch {
+            errorMessage = error.localizedDescription
+            statusText = "Apple Live Text will OCR scans"
         }
     }
 

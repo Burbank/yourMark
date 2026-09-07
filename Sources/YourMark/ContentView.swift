@@ -698,6 +698,25 @@ struct EnginePanel: View {
                     Button("Clear key", role: .destructive) { model.clearAskKey() }
                 }
             }
+            Section("Scanned PDFs") {
+                Toggle("OCR scans before MarkItDown", isOn: Binding(
+                    get: { model.ocrEnabled },
+                    set: {
+                        model.ocrEnabled = $0
+                        UserDefaults.standard.set($0, forKey: "ocrEnabled")
+                    }
+                ))
+                Text("Microsoft MarkItDown only reads a text layer. A scan is a picture of a page, so tables, arrows, and photos would vanish. OCR writes the words first, then MarkItDown runs. Page pictures are kept so diagrams still show.")
+                    .foregroundStyle(.secondary)
+                LabeledContent("OCRmyPDF") {
+                    Text(OcrService.ocrmypdfPath() ?? "Not installed — using Apple Live Text")
+                        .textSelection(.enabled)
+                }
+                Button("Install OCRmyPDF via Homebrew") {
+                    Task { await model.installOcrmypdf() }
+                }
+                .disabled(model.installingEngine)
+            }
             Section("Converted files") {
                 Picker("Save Markdown", selection: Binding(
                     get: { model.filePlace },
