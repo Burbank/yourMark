@@ -189,9 +189,13 @@ struct ConvertPanel: View {
 struct LibraryPanel: View {
     @Environment(AppModel.self) private var model
 
-    private var outline: [(id: String, level: Int, title: String)] {
+    private var selected: LibraryItem? {
+        model.library.first(where: { $0.id == model.selectedLibraryID })
+    }
+
+    private var headingBookmarks: [ManualBookmark] {
         var used = Set<String>()
-        var items: [(id: String, level: Int, title: String)] = []
+        var items: [ManualBookmark] = []
         for line in model.previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false) {
             let s = String(line)
             guard s.hasPrefix("#") else { continue }
@@ -201,13 +205,18 @@ struct LibraryPanel: View {
             }
             guard (1...3).contains(level) else { continue }
             let title = s.drop(while: { $0 == "#" || $0 == " " }).trimmingCharacters(in: .whitespaces)
-            guard !title.isEmpty else { continue }
-            var id = title.lowercased().replacingOccurrences(of: " ", with: "-")
-            if used.contains(id) { id += "-\(items.count)" }
-            used.insert(id)
-            items.append((id, level, title))
+            guard !title.isEmpty, title != "Outline" else { continue }
+            var key = title.lowercased()
+            if used.contains(key) { key += "-\(items.count)" }
+            used.insert(key)
+            items.append(ManualBookmark(title: title, level: level, pageIndex: nil))
         }
         return items
+    }
+
+    private var outline: [ManualBookmark] {
+        let fromPdf = selected?.bookmarks ?? []
+        return fromPdf.isEmpty ? headingBookmarks : fromPdf
     }
 
     var body: some View {
@@ -234,24 +243,48 @@ struct LibraryPanel: View {
                 List {
                     Section("Bookmarks") {
                         if outline.isEmpty {
-                            Text("No headings. Scanned PDFs need OCR first.")
+                            Text("No outline. Scanned PDFs need OCR first, or the source had no bookmarks/headings.")
                                 .foregroundStyle(.secondary)
                         }
-                        ForEach(outline, id: \.id) { item in
-                            Text(item.title)
-                                .font(.callout)
-                                .padding(.leading, CGFloat((item.level - 1) * 10))
+                        ForEach(outline) { item in
+                            Button {
+                                model.jumpToBookmark(item)
+                            } label: {
+                                Text(item.title)
+                                    .font(.callout)
+                                    .padding(.leading, CGFloat((item.level - 1) * 10))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
                 .frame(minWidth: 180, idealWidth: 220)
 
-                ScrollView {
-                    Text(model.previewMarkdown.isEmpty ? "Select a converted manual." : model.previewMarkdown)
-                        .font(.body.monospaced())
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            let lines = model.previewMarkdown.isEmpty
+                                ? ["Select a converted manual."]
+                                : model.previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+                            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                                Text(line.isEmpty ? " " : line)
+                                    .font(.body.monospaced())
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .id(i)
+                            }
+                        }
                         .padding(20)
+                    }
+                    .onChange(of: model.scrollToLine) { _, line in
+                        if let line {
+                            withAnimation {
+                                proxy.scrollTo(line, anchor: .top)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -273,8 +306,15 @@ struct EnginePanel: View {
                     .foregroundStyle(.secondary)
             }
             Section("What you get") {
-                Text("Tables become Markdown tables when the PDF has a real table. Figures appear in reading order (not the original page layout). The bookmark pane is built from headings — the PDF outline, if MarkItDown found one.")
-                    .foregroundStyle(.secondary)
+                LabeledContent("Tables") {
+                    Text("Yes — GFM tables when the PDF has a real table. Colours / merged cells flatten.")
+                }
+                LabeledContent("Pictures") {
+                    Text("Reading order, not page layout. Word/PPTX usually include them. PDF figures need extras.")
+                }
+                LabeledContent("Outline") {
+                    Text("Yes — PDF bookmarks + Markdown headings. Click to jump, like Preview.app.")
+                }
             }
             Section("Actions") {
                 Button("Recheck") { Task { await model.bootstrap() } }
@@ -297,78 +337,51 @@ struct EnginePanel: View {
 struct DropZone: View {
     let title: String
     let subtitle: String
-    let onPick: () -> Void
-    let onDrop: ([URL]) -> Void
-    @State private var isTargeted = false
+    var onClick: () -> Void
+    var onDrop: ([URL]) -> Void
+
+    @State private var hovering = false
 
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "doc.badge.plus")
-                .font(.system(size: 28, weight: .light))
-                .foregroundStyle(.secondary)
+        VStack(spacing: 8) {
+            Image(systemName: "doc.badge.arrow.up")
+                .font(.system(size: 36, weight: .medium))
+                .foregroundStyle(DeckTheme.accent)
             Text(title).font(.headline)
             Text(subtitle)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Choose files…", action: onPick)
-                .buttonStyle(.bordered)
+            Button("Choose files", action: onClick)
+                .buttonStyle(.borderedProminent)
+                .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
-        .padding(28)
+        .padding(32)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(isTargeted ? DeckTheme.accent.opacity(0.10) : Color.primary.opacity(0.03))
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+                .foregroundStyle(hovering ? DeckTheme.accent : Color.secondary.opacity(0.4))
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(
-                    isTargeted ? DeckTheme.accent : Color.primary.opacity(0.14),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-                )
-        )
-        .onDrop(of: [UTType.fileURL], isTargeted: $isTargeted) { providers in
+        .onDrop(of: [.fileURL], isTargeted: $hovering) { providers in
             Task {
                 var urls: [URL] = []
                 for provider in providers {
-                    if let url = try? await loadURL(from: provider) {
+                    if let url = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? URL {
+                        urls.append(url)
+                    } else if let data = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) as? Data,
+                              let url = URL(dataRepresentation: data, relativeTo: nil) {
                         urls.append(url)
                     }
                 }
-                if !urls.isEmpty {
-                    await MainActor.run { onDrop(urls) }
-                }
+                if !urls.isEmpty { onDrop(urls) }
             }
             return true
-        }
-    }
-
-    private func loadURL(from provider: NSItemProvider) async throws -> URL? {
-        try await withCheckedThrowingContinuation { continuation in
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
-                    continuation.resume(returning: url)
-                } else if let url = item as? URL {
-                    continuation.resume(returning: url)
-                } else {
-                    continuation.resume(returning: nil)
-                }
-            }
         }
     }
 }
 
 enum DeckTheme {
-    static let bg = Color(red: 0.10, green: 0.14, blue: 0.20)
-    static let accent = Color(red: 0.00, green: 0.63, blue: 0.89)
-}
-
-#Preview {
-    ContentView()
-        .environment(AppModel())
-        .frame(width: 980, height: 640)
+    static let accent = Color(red: 0, green: 0.63, blue: 0.89)
+    static let bg = Color(nsColor: .windowBackgroundColor)
 }

@@ -18,7 +18,7 @@ enum AppTool: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .convert: return "Drop FCOM / QRH / AIP PDFs — Microsoft MarkItDown writes Markdown"
-        case .library: return "Converted manuals on this Mac"
+        case .library: return "Converted manuals — Bookmarks jump like a PDF outline"
         case .engine: return "Discover, inspect, and upgrade the PyPI engine"
         }
     }
@@ -44,6 +44,40 @@ struct LibraryItem: Identifiable, Hashable, Codable {
     var markdownPath: String
     var addedAt: Date
     var byteCount: Int64
+    var bookmarks: [ManualBookmark] = []
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, sourceName, markdownPath, addedAt, byteCount, bookmarks
+    }
+
+    init(
+        id: UUID,
+        title: String,
+        sourceName: String,
+        markdownPath: String,
+        addedAt: Date,
+        byteCount: Int64,
+        bookmarks: [ManualBookmark] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.sourceName = sourceName
+        self.markdownPath = markdownPath
+        self.addedAt = addedAt
+        self.byteCount = byteCount
+        self.bookmarks = bookmarks
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        sourceName = try c.decode(String.self, forKey: .sourceName)
+        markdownPath = try c.decode(String.self, forKey: .markdownPath)
+        addedAt = try c.decode(Date.self, forKey: .addedAt)
+        byteCount = try c.decode(Int64.self, forKey: .byteCount)
+        bookmarks = try c.decodeIfPresent([ManualBookmark].self, forKey: .bookmarks) ?? []
+    }
 }
 
 enum YourMarkError: Error, LocalizedError {

@@ -15,6 +15,21 @@ struct HelpView: View {
                 }
 
                 Group {
+                    Text("Tables").font(.headline)
+                    Text("Yes — when the PDF has a real table, MarkItDown writes a GitHub-flavored Markdown table (columns and cell text). QRH indexes and bus lists usually survive. Cell colours, merged headers, and “tables” that are only drawn lines often flatten into plain rows.")
+                }
+
+                Group {
+                    Text("Pictures").font(.headline)
+                    Text("In reading order, not the original page layout. Word / PowerPoint usually emit figures as Markdown images (`![ ]()`). Microsoft’s default PDF path is text + tables; embedded FCOM schematics and scans need extras (OCR / image plugin) and will not sit in the original two-column x/y position.")
+                }
+
+                Group {
+                    Text("Outline / bookmarks").font(.headline)
+                    Text("Yes, usable like a PDF sidebar. yourMark reads the PDF outline (the same tree Preview.app shows) and also builds bookmarks from Markdown headings. Click a bookmark in the Library pane to jump to that chapter. If a PDF has no outline and no headings (a scan), there is nothing to jump to until OCR.")
+                }
+
+                Group {
                     Text("Install the engine").font(.headline)
                     Text("uv tool install 'markitdown[all]'\nmarkitdown --version")
                         .font(.body.monospaced())

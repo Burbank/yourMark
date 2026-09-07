@@ -18,6 +18,7 @@ final class AppModel {
     var selectedLibraryID: UUID?
     var previewMarkdown: String = ""
     var lastUpgradeLog: String = ""
+    var scrollToLine: Int?
 
     let service = MarkItDownService()
     private let libraryURL: URL
@@ -102,10 +103,19 @@ final class AppModel {
             let output = await service.suggestedOutput(for: input)
             do {
                 let url = try await service.convert(input: input, output: output)
+                let bookmarks = PdfSidecar.bookmarks(from: input)
+                if !bookmarks.isEmpty, var text = try? String(contentsOf: url, encoding: .utf8) {
+                    if !text.contains("## Outline") {
+                        text = PdfSidecar.outlineMarkdown(bookmarks) + text
+                        try? text.write(to: url, atomically: true, encoding: .utf8)
+                    }
+                }
                 jobs[index].status = .done
                 jobs[index].outputURL = url
-                jobs[index].detail = url.path
-                addToLibrary(source: input, markdown: url)
+                jobs[index].detail = bookmarks.isEmpty
+                    ? url.path
+                    : "\(bookmarks.count) bookmarks · \(url.lastPathComponent)"
+                addToLibrary(source: input, markdown: url, bookmarks: bookmarks)
             } catch {
                 jobs[index].status = .failed
                 jobs[index].detail = error.localizedDescription
@@ -131,6 +141,7 @@ final class AppModel {
     func selectLibrary(_ item: LibraryItem) {
         selectedLibraryID = item.id
         selectedTool = .library
+        scrollToLine = nil
         if let data = try? Data(contentsOf: URL(fileURLWithPath: item.markdownPath)),
            let text = String(data: data, encoding: .utf8) {
             previewMarkdown = text
@@ -139,11 +150,28 @@ final class AppModel {
         }
     }
 
+    func jumpToBookmark(_ bookmark: ManualBookmark) {
+        let lines = previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false)
+        let needle = bookmark.title.trimmingCharacters(in: .whitespaces)
+        if let idx = lines.firstIndex(where: {
+            $0.localizedCaseInsensitiveContains(needle)
+        }) {
+            scrollToLine = idx
+            return
+        }
+        if let page = bookmark.pageIndex {
+            let label = "p. \(page + 1)"
+            if let idx = lines.firstIndex(where: { $0.localizedCaseInsensitiveContains(label) }) {
+                scrollToLine = idx
+            }
+        }
+    }
+
     func reveal(_ url: URL) {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    private func addToLibrary(source: URL, markdown: URL) {
+    private func addToLibrary(source: URL, markdown: URL, bookmarks: [ManualBookmark]) {
         let values = try? markdown.resourceValues(forKeys: [.fileSizeKey])
         let item = LibraryItem(
             id: UUID(),
@@ -151,7 +179,8 @@ final class AppModel {
             sourceName: source.lastPathComponent,
             markdownPath: markdown.path,
             addedAt: Date(),
-            byteCount: Int64(values?.fileSize ?? 0)
+            byteCount: Int64(values?.fileSize ?? 0),
+            bookmarks: bookmarks
         )
         library.removeAll { $0.markdownPath == item.markdownPath }
         library.insert(item, at: 0)

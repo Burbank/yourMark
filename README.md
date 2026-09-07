@@ -10,6 +10,16 @@ Not for operations. Converted Markdown is a study overlay. Keep the approved PDF
 
 ---
 
+## What conversion actually keeps
+
+| You asked | Honest result |
+|-----------|----------------|
+| **Tables with formatting** | Yes when the PDF has a *real* table — GitHub-flavored Markdown tables (columns + cell text). Colours, merged cells, and drawn-line “tables” flatten. |
+| **Pictures in the right position** | In **reading order**, not the original page layout. Word/PPTX usually emit `![]()` figures. Microsoft’s default PDF path is text + tables; FCOM schematics/scans need extras. |
+| **Outline / bookmarks like a PDF** | Yes. yourMark reads the PDF outline (same tree as Preview.app) and also builds bookmarks from Markdown headings. Click to jump. |
+
+---
+
 ## Install the engine (once)
 
 ```sh

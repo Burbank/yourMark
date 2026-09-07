@@ -50,19 +50,28 @@ actor MarkItDownService {
         throw YourMarkError.engineNotFound
     }
 
-    func convert(input: URL, output: URL, extras: [String] = []) async throws -> URL {
+    func convert(input: URL, output: URL) async throws -> URL {
         let exe = try await resolveEngine()
-        var args = [input.path, "-o", output.path]
-        if !extras.isEmpty {
-            args.append(contentsOf: extras)
+        // keep-data-uris embeds figures from Word/PPTX as Markdown images.
+        // Older markitdown builds may not know the flag — retry plain.
+        let attempts: [[String]] = [
+            [input.path, "-o", output.path, "--keep-data-uris"],
+            [input.path, "-o", output.path],
+        ]
+        var lastError: Error = YourMarkError.outputMissing(output.path)
+        for args in attempts {
+            do {
+                let result = try await run(executable: exe, arguments: args, captureStdout: true)
+                if FileManager.default.fileExists(atPath: output.path) {
+                    return output
+                }
+                let detail = result.stderr.isEmpty ? result.stdout : result.stderr
+                lastError = YourMarkError.outputMissing(detail.isEmpty ? output.path : detail)
+            } catch {
+                lastError = error
+            }
         }
-
-        let result = try await run(executable: exe, arguments: args, captureStdout: true)
-        guard FileManager.default.fileExists(atPath: output.path) else {
-            let detail = result.stderr.isEmpty ? result.stdout : result.stderr
-            throw YourMarkError.outputMissing(detail.isEmpty ? output.path : detail)
-        }
-        return output
+        throw lastError
     }
 
     /// Upgrade the PyPI package — this is how Microsoft updates reach the GUI.
