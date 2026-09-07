@@ -125,4 +125,57 @@ struct AskService {
         }
         return scored.prefix(3).map { $0.0 }.joined(separator: "\n\n")
     }
+
+    /// Insert ## / ### headings where chapters clearly start. Does not rewrite body text.
+    func inferChapters(markdown: String, settings: Settings) async throws -> String {
+        let sample = String(markdown.prefix(18_000))
+        let prompt = """
+        This Markdown is missing a usable chapter outline. Propose headings only.
+
+        Return JSON only, an array of objects:
+        [{"level":2,"title":"Chapter title","needle":"exact phrase copied from the text that starts that section"}]
+
+        Rules:
+        - needle MUST be a verbatim substring of the document (at least 12 characters).
+        - Do not invent content. 4–20 headings.
+        - Skip a heading named Outline.
+        - If the file already has a good outline, return [].
+
+        Document:
+        \(sample)
+        """
+        let raw = try await ask(
+            question: prompt,
+            title: "chapters",
+            excerpt: sample,
+            settings: settings,
+            openKnowledge: false
+        )
+        guard let start = raw.firstIndex(of: "["), let end = raw.lastIndex(of: "]") else {
+            return markdown
+        }
+        let json = String(raw[start...end])
+        guard let data = json.data(using: .utf8),
+              let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else { return markdown }
+
+        var text = markdown
+        for row in rows.reversed() {
+            let title = (row["title"] as? String ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let needle = (row["needle"] as? String ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let level = min(3, max(2, row["level"] as? Int ?? 2))
+            guard title.count >= 2, needle.count >= 12,
+                  let range = text.range(of: needle, options: .caseInsensitive)
+            else { continue }
+            let before = text[..<range.lowerBound]
+            if before.suffix(80).contains("# \(title)") || before.suffix(80).contains("#\(title)") {
+                continue
+            }
+            let hashes = String(repeating: "#", count: level)
+            text.replaceSubrange(range, with: "\n\(hashes) \(title)\n\n\(needle)")
+        }
+        return text
+    }
 }

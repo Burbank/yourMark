@@ -44,6 +44,10 @@ final class AppModel {
     var draggingFiles = false
     var ocrEnabled = UserDefaults.standard.object(forKey: "ocrEnabled") as? Bool ?? true
     var showInstallSheet = false
+    var showDoclingPrompt = false
+    var pendingGraphics: [URL] = []
+    var aiChaptersEnabled = UserDefaults.standard.object(forKey: "aiChaptersEnabled") as? Bool ?? false
+    private var convertWanted = false
 
     let service = MarkItDownService()
     private let askService = AskService()
@@ -230,7 +234,9 @@ final class AppModel {
 
     ## Convert
 
-    Drop a PDF **anywhere** on yourMark — Library, Bookmarks, Convert, the header. It switches to Convert and starts. Microsoft MarkItDown (the official PyPI package) writes Markdown. First launch installs that converter. yourMark also upgrades it from PyPI on its own when Microsoft ships a newer package, and it checks GitHub for a newer yourMark.
+    Drop a PDF **anywhere** on yourMark — Library, Bookmarks, Convert, the header. Conversion starts at once if nothing else is running. Graphic PDFs ask to install Docling first.
+
+    Settings → **Automatically add chapters with AI** (off unless you tick it) uses your Ask key to insert headings when the file has no outline.
 
     If the PDF is a **scan** (no text layer), yourMark uses IBM **Docling** for layout — tables, columns, figures. That takes a little longer than a normal convert. Microsoft MarkItDown still handles ordinary PDFs. If Docling is missing, we fall back to OCRmyPDF / Apple Live Text and keep page pictures.
 
@@ -281,6 +287,7 @@ final class AppModel {
         UserDefaults.standard.set(filePlace, forKey: "filePlace")
         UserDefaults.standard.set(customFolderPath, forKey: "customFolder")
         UserDefaults.standard.set(ocrEnabled, forKey: "ocrEnabled")
+        UserDefaults.standard.set(aiChaptersEnabled, forKey: "aiChaptersEnabled")
         AskSecrets.save(askKeyDraft)
         askHasKey = !AskSecrets.load().isEmpty
         statusText = askHasKey ? "Ask key saved in Keychain" : "Ask key cleared"
@@ -357,13 +364,49 @@ final class AppModel {
     func openIncoming(_ urls: [URL]) {
         let allowed = urls.filter { ConvertibleKind.allows($0) }
         guard !allowed.isEmpty else { return }
+        for url in allowed { _ = url.startAccessingSecurityScopedResource() }
         showSettings = false
         showHelp = false
         selectedTool = .convert
-        enqueue(allowed)
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.windows.first(where: { $0.identifier?.rawValue.contains("main") == true })
-            ?.makeKeyAndOrderFront(nil)
+        NSApp.windows.first?.makeKeyAndOrderFront(nil)
+
+        let graphic = allowed.filter {
+            $0.pathExtension.lowercased() == "pdf" && ocrEnabled && OcrService.looksGraphic($0)
+        }
+        let rest = allowed.filter { url in !graphic.contains(where: { $0.path == url.path }) }
+        if !rest.isEmpty { enqueue(rest) }
+
+        let doclingReady = OcrService.doclingPath() != nil
+            || UserDefaults.standard.bool(forKey: "doclingReady")
+        if !graphic.isEmpty, !doclingReady {
+            pendingGraphics.append(contentsOf: graphic.filter { g in
+                !pendingGraphics.contains(where: { $0.path == g.path })
+            })
+            showDoclingPrompt = true
+        } else if !graphic.isEmpty {
+            enqueue(graphic)
+        }
+
+        Task { await convertQueued() }
+    }
+
+    func acceptDoclingInstall() async {
+        let waiting = pendingGraphics
+        pendingGraphics = []
+        showDoclingPrompt = false
+        enqueue(waiting)
+        await installDocling()
+        UserDefaults.standard.set(true, forKey: "doclingReady")
+        await convertQueued()
+    }
+
+    func skipDoclingInstall() {
+        showDoclingPrompt = false
+        let waiting = pendingGraphics
+        pendingGraphics = []
+        guard !waiting.isEmpty else { return }
+        enqueue(waiting)
         Task { await convertQueued() }
     }
 
@@ -415,8 +458,8 @@ final class AppModel {
     }
 
     func convertQueued() async {
+        convertWanted = true
         if isBusy { return }
-        clearError()
         isBusy = true
         defer { isBusy = false }
 
@@ -428,6 +471,17 @@ final class AppModel {
             return
         }
 
+        while convertWanted {
+            convertWanted = false
+            await convertOnePass()
+            if jobs.contains(where: { $0.status == .queued }) {
+                convertWanted = true
+            }
+        }
+        statusText = jobs.contains(where: { $0.status == .failed }) ? "Finished with errors" : "Done"
+    }
+
+    private func convertOnePass() async {
         for index in jobs.indices where jobs[index].status == .queued || jobs[index].status == .failed {
             let original = jobs[index].sourceURL
             let jobID = jobs[index].id
@@ -438,7 +492,10 @@ final class AppModel {
             do {
                 var input = original
                 var usedOCR = false
-                if ocrEnabled, original.pathExtension.lowercased() == "pdf", OcrService.needsOCR(original) {
+                let graphic = ocrEnabled
+                    && original.pathExtension.lowercased() == "pdf"
+                    && (OcrService.needsOCR(original) || OcrService.looksGraphic(original))
+                if graphic {
                     jobs[index].needsOCR = true
                     jobs[index].detail = "Layout OCR first — this takes a little longer"
                     statusText = "Layout OCR first — this takes a little longer · \(original.lastPathComponent)"
@@ -451,24 +508,13 @@ final class AppModel {
                         }
                     }
                     if await OcrService.layoutMarkdown(from: original, to: output, onStatus: onOCR) {
+                        UserDefaults.standard.set(true, forKey: "doclingReady")
                         usedOCR = true
-                        let url = output
-                        let bookmarks = PdfSidecar.bookmarks(from: original)
-                        if !bookmarks.isEmpty, var text = try? String(contentsOf: url, encoding: .utf8) {
-                            if !text.contains("## Outline") {
-                                text = PdfSidecar.outlineMarkdown(bookmarks) + text
-                                try? text.write(to: url, atomically: true, encoding: .utf8)
-                            }
-                        }
+                        let url = await finalizeMarkdown(output, original: original)
                         if OcrService.markdownLooksEmpty(url) {
                             await OcrService.enrichMarkdown(markdownURL: url, sourcePDF: original, onStatus: onOCR)
                         }
-                        if let i = jobs.firstIndex(where: { $0.id == jobID }) {
-                            jobs[i].status = .done
-                            jobs[i].outputURL = url
-                            jobs[i].detail = "Docling layout OCR · \(url.lastPathComponent)"
-                        }
-                        addToLibrary(source: original, markdown: url, bookmarks: bookmarks)
+                        await finishJob(jobID: jobID, markdown: url, original: original, usedOCR: true)
                         continue
                     }
                     let prepared = try await OcrService.searchablePDF(from: original, onStatus: onOCR)
@@ -487,21 +533,8 @@ final class AppModel {
                         }
                     }
                 }
-                let bookmarks = PdfSidecar.bookmarks(from: original)
-                if !bookmarks.isEmpty, var text = try? String(contentsOf: url, encoding: .utf8) {
-                    if !text.contains("## Outline") {
-                        text = PdfSidecar.outlineMarkdown(bookmarks) + text
-                        try? text.write(to: url, atomically: true, encoding: .utf8)
-                    }
-                }
-                if let i = jobs.firstIndex(where: { $0.id == jobID }) {
-                    jobs[i].status = .done
-                    jobs[i].outputURL = url
-                    jobs[i].detail = usedOCR
-                        ? "OCR + MarkItDown · \(url.lastPathComponent)"
-                        : (bookmarks.isEmpty ? url.path : "\(bookmarks.count) bookmarks · \(url.lastPathComponent)")
-                }
-                addToLibrary(source: original, markdown: url, bookmarks: bookmarks)
+                let final = await finalizeMarkdown(url, original: original)
+                await finishJob(jobID: jobID, markdown: final, original: original, usedOCR: usedOCR)
             } catch {
                 if let i = jobs.firstIndex(where: { $0.id == jobID }) {
                     jobs[i].status = .failed
@@ -509,12 +542,59 @@ final class AppModel {
                 }
             }
         }
-        if jobs.contains(where: { $0.status == .queued }) {
-            isBusy = false
-            await convertQueued()
-            return
+    }
+
+    private func finalizeMarkdown(_ url: URL, original: URL) async -> URL {
+        var out = url
+        let bookmarks = PdfSidecar.bookmarks(from: original)
+        if !bookmarks.isEmpty, var text = try? String(contentsOf: out, encoding: .utf8) {
+            if !text.contains("## Outline") {
+                text = PdfSidecar.outlineMarkdown(bookmarks) + text
+                try? text.write(to: out, atomically: true, encoding: .utf8)
+            }
         }
-        statusText = jobs.contains(where: { $0.status == .failed }) ? "Finished with errors" : "Done"
+        out = await maybeAddAIChapters(markdownURL: out)
+        return out
+    }
+
+    private func finishJob(jobID: UUID, markdown: URL, original: URL, usedOCR: Bool) async {
+        let bookmarks = PdfSidecar.bookmarks(from: original)
+        if let i = jobs.firstIndex(where: { $0.id == jobID }) {
+            jobs[i].status = .done
+            jobs[i].outputURL = markdown
+            jobs[i].detail = usedOCR
+                ? "Layout OCR · \(markdown.lastPathComponent)"
+                : (bookmarks.isEmpty ? markdown.path : "\(bookmarks.count) bookmarks · \(markdown.lastPathComponent)")
+        }
+        addToLibrary(source: original, markdown: markdown, bookmarks: bookmarks)
+    }
+
+    private func maybeAddAIChapters(markdownURL: URL) async -> URL {
+        guard aiChaptersEnabled, askHasKey else { return markdownURL }
+        guard var text = try? String(contentsOf: markdownURL, encoding: .utf8) else { return markdownURL }
+        let headings = text.split(separator: "\n", omittingEmptySubsequences: false).compactMap {
+            PdfSidecar.headingText(String($0))
+        }.filter { $0.caseInsensitiveCompare("Outline") != .orderedSame }
+        guard headings.count < 5 else { return markdownURL }
+        statusText = "Adding chapters with AI…"
+        do {
+            let next = try await askService.inferChapters(
+                markdown: text,
+                settings: AskService.Settings(
+                    provider: askProvider,
+                    model: askModel,
+                    baseURL: askBaseURL,
+                    apiKey: AskSecrets.load()
+                )
+            )
+            if !next.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                try next.write(to: markdownURL, atomically: true, encoding: .utf8)
+            }
+        } catch {
+            statusText = "Chapters skipped: \(error.localizedDescription)"
+        }
+        return markdownURL
+    }
     }
 
     func upgradeEngine() async {

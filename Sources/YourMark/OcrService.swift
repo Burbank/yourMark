@@ -25,6 +25,22 @@ enum OcrService {
         return chars < sample * 48
     }
 
+    /// Sparse text or a scan — diagrams, photos, and tables will not survive
+    /// MarkItDown alone.
+    static func looksGraphic(_ url: URL) -> Bool {
+        guard url.pathExtension.lowercased() == "pdf" else { return false }
+        if needsOCR(url) { return true }
+        guard let doc = PDFDocument(url: url), doc.pageCount > 0 else { return false }
+        let sample = min(doc.pageCount, 4)
+        var chars = 0
+        for i in 0..<sample {
+            chars += (doc.page(at: i)?.string ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .count
+        }
+        return chars / max(sample, 1) < 320
+    }
+
     static func ocrmypdfPath() -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let candidates = [
