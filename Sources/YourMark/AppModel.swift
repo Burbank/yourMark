@@ -310,7 +310,7 @@ final class AppModel {
 
     ## Settings
 
-    Pick the model, paste your API key, and choose where converted files go:
+    Pick the model, paste your API key, then press **Enter** to lock it in, and choose where converted files go:
 
     - **Next to the original PDF**
     - **yourMark library folder**
@@ -339,14 +339,14 @@ final class AppModel {
             statusText = "Ask key locked in"
         } else {
             askHasKey = !AskSecrets.load().isEmpty
-            statusText = askHasKey ? "Ask settings saved" : "Ask settings saved — no key yet"
+            statusText = askHasKey ? "Ask settings saved — key still locked in" : "Ask settings saved — no key yet"
         }
     }
 
     func lockAskKey() {
         let key = askKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard key.count >= 8 else {
-            statusText = "Paste your API key, then press Enter"
+            statusText = "Paste your API key, then press Enter to lock it in"
             return
         }
         persistAskPrefs()
