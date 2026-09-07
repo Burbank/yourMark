@@ -60,6 +60,7 @@ final class AppModel {
     var pendingGraphics: [URL] = []
     var aiChaptersEnabled = UserDefaults.standard.object(forKey: "aiChaptersEnabled") as? Bool ?? false
     var askReadPictures = UserDefaults.standard.object(forKey: "askReadPictures") as? Bool ?? false
+    var stripChrome = UserDefaults.standard.object(forKey: "stripChrome") as? Bool ?? true
     var doclingPath: String? = OcrService.doclingPath()
     var ocrmypdfPath: String? = OcrService.ocrmypdfPath()
     private var convertWanted = false
@@ -303,7 +304,9 @@ final class AppModel {
 
     Settings → **Automatically add chapters with AI** (off unless you tick it) uses your Ask key to insert headings when the file has no outline.
 
-    If the PDF is a **scan** (no text layer), yourMark uses IBM **Docling** for layout — tables, columns, figures. That takes a little longer than a normal convert. Microsoft MarkItDown still handles ordinary PDFs. Pictures in a digital PDF are pulled into a `*-figures` folder next to the Markdown (one extra pass, not a second convert). If Docling is missing, we fall back to OCRmyPDF / Apple Live Text.
+    If the PDF is a **scan** (no text layer), yourMark uses IBM **Docling** for layout — tables, columns, figures. That takes a little longer than a normal convert. Microsoft MarkItDown still handles ordinary PDFs. Pictures in a digital PDF are pulled into a `figures` folder inside a little folder named after the file. If Docling is missing, we fall back to OCRmyPDF / Apple Live Text.
+
+    Settings → **Remove headers and footers** (on by default) drops the repeating page title, page number, date, and header logos.
 
     ## Bookmarks
 
@@ -311,7 +314,7 @@ final class AppModel {
 
     ## Tables and figures
 
-    Real tables become Markdown tables. Pictures from the PDF sit in a figures folder, linked in page order. Scans get OCR first.
+    Real tables become Markdown tables. Pictures from the PDF sit in a figures folder inside the convert folder, linked in page order. Scans get OCR first.
 
     ## Library cards
 
@@ -325,7 +328,9 @@ final class AppModel {
 
     ## Settings
 
-    Pick the model, paste your API key, then press **Enter** to lock it in, and choose where converted files go:
+    Pick the model, paste your API key, then press **Enter** to lock it in, and choose where converted files go. **Remove headers and footers** sits at the top of Settings.
+
+    - **Next to the original PDF** — a little folder with the Markdown and pictures together
 
     - **Next to the original PDF**
     - **yourMark library folder**
@@ -462,6 +467,7 @@ final class AppModel {
         UserDefaults.standard.set(ocrEnabled, forKey: "ocrEnabled")
         UserDefaults.standard.set(aiChaptersEnabled, forKey: "aiChaptersEnabled")
         UserDefaults.standard.set(askReadPictures, forKey: "askReadPictures")
+        UserDefaults.standard.set(stripChrome, forKey: "stripChrome")
     }
 
     func clearAskKey() {
@@ -725,6 +731,7 @@ final class AppModel {
                         let pictures = await PdfFigures.embed(
                             markdownURL: url,
                             sourcePDF: original,
+                            stripChrome: stripChrome,
                             onStatus: onOCR
                         )
                         await finishJob(jobID: jobID, markdown: url, original: original, usedOCR: true, pictures: pictures, bookmarks: located)
@@ -759,12 +766,19 @@ final class AppModel {
                     if usedOCR, OcrService.markdownLooksEmpty(url) {
                         await OcrService.enrichMarkdown(markdownURL: url, sourcePDF: original, onStatus: onFig)
                     }
+                    statusText = "Cleaning headers and headings…"
+                    await tidyPDFMarkdown(url, pdf: original)
                     let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py")
                     statusText = "Restoring the PDF outline and tables…"
                     await service.enrichPDF(markdown: url, pdf: original, script: script)
                     let bookmarks = await loadBookmarks(original)
                     let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
-                    pictures = await PdfFigures.embed(markdownURL: final, sourcePDF: original, onStatus: onFig)
+                    pictures = await PdfFigures.embed(
+                        markdownURL: final,
+                        sourcePDF: original,
+                        stripChrome: stripChrome,
+                        onStatus: onFig
+                    )
                     await finishJob(
                         jobID: jobID,
                         markdown: final,
@@ -817,6 +831,15 @@ final class AppModel {
         }.value
         let after = await maybeAddAIChapters(markdownURL: url, hasOutline: !located.isEmpty)
         return (after, located)
+    }
+
+    private func tidyPDFMarkdown(_ url: URL, pdf: URL) async {
+        let strip = stripChrome
+        await Task.detached {
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+            let cleaned = PdfCleanup.tidy(markdown: text, pdf: pdf, stripChrome: strip)
+            try? cleaned.write(to: url, atomically: true, encoding: .utf8)
+        }.value
     }
 
     private func finishJob(
@@ -989,7 +1012,7 @@ final class AppModel {
             if lines.count >= 4_500 { break }
         }
         if droppedImages {
-            lines.append("_Further pictures are in the figures folder next to this file. Open it in Finder to see them all._")
+            lines.append("_Further pictures are in the figures folder in this convert folder. Open it in Finder to see them all._")
         }
         var headings: [ManualBookmark] = []
         var used = Set<String>()
@@ -1041,7 +1064,13 @@ final class AppModel {
     }
 
     func reveal(_ url: URL) {
-        NSWorkspace.shared.activateFileViewerSelecting([url])
+        let folder = url.deletingLastPathComponent()
+        let figures = folder.appendingPathComponent("figures", isDirectory: true)
+        var urls = [url]
+        if FileManager.default.fileExists(atPath: figures.path) {
+            urls.append(figures)
+        }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
 
     func revealLibrary(_ item: LibraryItem) {
@@ -1068,18 +1097,23 @@ final class AppModel {
     }
 
     func outputURL(for input: URL) -> URL {
-        let name = input.deletingPathExtension().lastPathComponent + ".md"
+        let stem = input.deletingPathExtension().lastPathComponent
+        let parent: URL
         switch filePlace {
         case "library":
-            return convertedDir.appendingPathComponent(name)
+            parent = convertedDir
         case "custom":
             if !customFolderPath.isEmpty {
-                return URL(fileURLWithPath: customFolderPath).appendingPathComponent(name)
+                parent = URL(fileURLWithPath: customFolderPath)
+            } else {
+                parent = input.deletingLastPathComponent()
             }
-            fallthrough
         default:
-            return input.deletingLastPathComponent().appendingPathComponent(name)
+            parent = input.deletingLastPathComponent()
         }
+        let folder = parent.appendingPathComponent(stem, isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder.appendingPathComponent(stem + ".md")
     }
 
     private func startWatching() {

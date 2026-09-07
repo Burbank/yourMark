@@ -6,7 +6,7 @@
 
 Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, Excel, pictures, and ZIP archives to Markdown **on this Mac**.
 
-**[Download yourMark-0.3.26.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.26.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
+**[Download yourMark-0.3.27.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.27.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
 
 ## Why Markdown
 
@@ -68,8 +68,9 @@ If macOS says it could not verify the app: click **Done** (not Move to Bin), the
 | You asked | Honest result |
 |-----------|----------------|
 | **Tables** | Yes when the PDF has a real table (GFM). Colours / merged cells flatten. |
-| **Pictures** | Every embedded photo, plus a drawing of diagram pages that have no photo, linked next to that page in the Markdown. Word/PPTX/photos use MarkItDown’s own images. Not the original x/y layout. |
-| **Outline** | The PDF’s own bookmarks (same tree as Preview.app) are written in as Markdown headings. MarkItDown does not emit them. Guessed headings are only used if the PDF has no outline. |
+| **Pictures** | Every embedded photo, plus a drawing of diagram pages that have no photo, linked next to that page in the Markdown. Word/PPTX/photos use MarkItDown’s own images. Not the original x/y layout. Convert puts the Markdown and a `figures` folder together in a little folder named after the file. |
+| **Headers / footers** | **Remove headers and footers** in Settings (on by default) drops repeating page titles, page numbers, dates, and header logos. Chapter headings like 8.1 stay. |
+| **Outline** | The PDF’s own bookmarks (same tree as Preview.app) are written in as Markdown headings. Numbered titles (8.1, 8.1.1) become headings too. MarkItDown does not emit them. |
 | **Other files** | Word, PowerPoint, Excel, HTML, EPUB, CSV, JSON, XML, Outlook mail, RTF, ZIP (each file inside), and photos (JPEG/PNG/GIF/WebP, with EXIF when ExifTool is installed). |
 
 ---

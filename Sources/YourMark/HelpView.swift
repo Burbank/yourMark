@@ -38,7 +38,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Pictures").font(.headline)
-                    Text("After MarkItDown, yourMark walks every PDF page: it saves embedded photos and, when a page is a vector diagram with no photo, draws that page. Every picture is linked in the Markdown next to its page (a figures folder sits beside the file). Word / PowerPoint / Excel / dropped photos use MarkItDown’s own keep-data-uris. Scans use Docling. Pictures will not sit at the original two-column x/y position — they appear in reading order. The in-app preview shows a sample so the window stays responsive; open the Markdown in Finder to see them all.")
+                    Text("After MarkItDown, yourMark walks every PDF page: it saves embedded photos and, when a page is a vector diagram with no photo, draws that page. Pictures and the Markdown live together in a little folder named after the file. Repeating header logos are dropped when Remove headers and footers is on (Settings, at the top). Word / PowerPoint / Excel / dropped photos use MarkItDown’s own keep-data-uris. Scans use Docling. Pictures will not sit at the original two-column x/y position — they appear in reading order, after that page’s headings. The in-app preview shows a sample so the window stays responsive; open the folder in Finder to see them all.")
                 }
 
                 Group {

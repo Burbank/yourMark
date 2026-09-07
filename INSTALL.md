@@ -2,7 +2,7 @@
 
 ## Double-click (recommended)
 
-1. Download [yourMark-0.3.26.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.26.dmg) (the filename includes the version).
+1. Download [yourMark-0.3.27.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.27.dmg) (the filename includes the version).
 2. Open the disk image and **drag yourMark onto Applications** (follow the arrow). Then open yourMark from Applications.
 
 ### If macOS says it “could not verify” the app
