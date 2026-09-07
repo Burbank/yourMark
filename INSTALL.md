@@ -42,15 +42,15 @@ Gatekeeper may complain (ad-hoc signature). System Settings → Privacy & Securi
 xattr -cr /Applications/yourMark.app
 ```
 
-## 4. Large 787 PDFs
+## 4. Large PDFs
 
-Convert **per volume**, not a combined 400 MB book. If output is empty, the PDF is likely a scan — reinstall extras:
+Convert **one book or pack at a time**, not a huge combined dump. If output is empty, the PDF is likely a scan — reinstall extras:
 
 ```sh
 uv tool install 'markitdown[all]'
 ```
 
-OCR still depends on optional MarkItDown plugins; scanned FCOMs may need a separate OCR pass.
+OCR still depends on optional MarkItDown plugins; image-only scans may need a separate OCR pass.
 
 ## 5. Uninstall
 

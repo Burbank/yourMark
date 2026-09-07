@@ -6,7 +6,7 @@ struct HelpView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("yourMark")
                     .font(.largeTitle.bold())
-                Text("Aviation manuals → Markdown, using Microsoft MarkItDown on this Mac.")
+                Text("PDFs → Markdown, using Microsoft MarkItDown on this Mac.")
                     .foregroundStyle(.secondary)
 
                 Group {
@@ -16,12 +16,12 @@ struct HelpView: View {
 
                 Group {
                     Text("Tables").font(.headline)
-                    Text("Yes — when the PDF has a real table, MarkItDown writes a GitHub-flavored Markdown table (columns and cell text). QRH indexes and bus lists usually survive. Cell colours, merged headers, and “tables” that are only drawn lines often flatten into plain rows.")
+                    Text("Yes — when the PDF has a real table, MarkItDown writes a GitHub-flavored Markdown table (columns and cell text). Lecture handouts and spreadsheets usually survive. Cell colours, merged headers, and “tables” that are only drawn lines often flatten into plain rows.")
                 }
 
                 Group {
                     Text("Pictures").font(.headline)
-                    Text("In reading order, not the original page layout. Word / PowerPoint usually emit figures as Markdown images (`![ ]()`). Microsoft’s default PDF path is text + tables; embedded FCOM schematics and scans need extras (OCR / image plugin) and will not sit in the original two-column x/y position.")
+                    Text("In reading order, not the original page layout. Word / PowerPoint usually emit figures as Markdown images (`![ ]()`). Microsoft’s default PDF path is text + tables; scans and drawings need extras (OCR / image plugin) and will not sit in the original two-column x/y position.")
                 }
 
                 Group {
@@ -36,8 +36,8 @@ struct HelpView: View {
                 }
 
                 Group {
-                    Text("Not for operations").font(.headline)
-                    Text("Converted Markdown is a study overlay. Keep the approved PDF/EFB as the source of truth. Same posture as GearUp4U: education and situational awareness only.")
+                    Text("Keep the original").font(.headline)
+                    Text("Converted Markdown is for search and study. Keep the original PDF or Word file.")
                 }
             }
             .padding(24)

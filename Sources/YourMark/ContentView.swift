@@ -124,7 +124,7 @@ struct ConvertPanel: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 DropZone(
-                    title: "Drop FCOM, QRH, AIP, company briefs",
+                    title: "Drop PDFs, papers, lecture notes, slides",
                     subtitle: "PDF, DOCX, PPTX, XLSX, HTML, EPUB — converted beside the original as .md"
                 ) {
                     model.pickFiles()
@@ -157,7 +157,7 @@ struct ConvertPanel: View {
                     }
                 }
 
-                Text("Study aid only — not for operations. Keep the official PDF as source of truth.")
+                Text("Keep the original file. Markdown is for search and asking a chapter.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

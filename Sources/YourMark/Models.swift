@@ -17,8 +17,8 @@ enum AppTool: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
-        case .convert: return "Drop FCOM / QRH / AIP PDFs — Microsoft MarkItDown writes Markdown"
-        case .library: return "Converted manuals — Bookmarks jump like a PDF outline"
+        case .convert: return "Drop PDFs, Word, and slides — Microsoft MarkItDown writes Markdown"
+        case .library: return "Converted files — Bookmarks jump like a PDF outline"
         case .engine: return "Discover, inspect, and upgrade the PyPI engine"
         }
     }

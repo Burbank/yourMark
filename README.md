@@ -1,12 +1,12 @@
 # yourMark
 
-Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown) — convert FCOM, QRH, AIP, and other aviation PDFs to Markdown **on this Mac**. The GUI never vendors the converter: it discovers `markitdown` on PATH / uv and **Upgrade Engine** pulls the current PyPI release.
+Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown) — convert PDFs, Word, PowerPoint, and Excel to Markdown **on this Mac**. Built for students, researchers, and anyone who would rather search a document than scroll it.
 
-Sister cockpit chrome to [GearUp4U](https://gearup4u.net/#EHAM). Same family as [Ghostscript GUI](https://github.com/Burbank/ghostscript-gui): thin local CLI wrapper.
+The GUI never vendors the converter: it discovers `markitdown` on PATH / uv and **Upgrade Engine** pulls the current PyPI release. Same family as [Ghostscript GUI](https://github.com/Burbank/ghostscript-gui): thin local CLI wrapper.
 
 **Requires:** macOS 14+, Xcode (to build), and MarkItDown via uv or pip.
 
-Not for operations. Converted Markdown is a study overlay. Keep the approved PDF.
+Keep your original files. Converted Markdown is for search, bookmarks, and asking a chapter.
 
 ---
 
@@ -15,7 +15,7 @@ Not for operations. Converted Markdown is a study overlay. Keep the approved PDF
 | You asked | Honest result |
 |-----------|----------------|
 | **Tables with formatting** | Yes when the PDF has a *real* table — GitHub-flavored Markdown tables (columns + cell text). Colours, merged cells, and drawn-line “tables” flatten. |
-| **Pictures in the right position** | In **reading order**, not the original page layout. Word/PPTX usually emit `![]()` figures. Microsoft’s default PDF path is text + tables; FCOM schematics/scans need extras. |
+| **Pictures in the right position** | In **reading order**, not the original page layout. Word/PPTX usually emit `![]()` figures. Microsoft’s default PDF path is text + tables; scans/drawings need extras. |
 | **Outline / bookmarks like a PDF** | Yes. yourMark reads the PDF outline (same tree as Preview.app) and also builds bookmarks from Markdown headings. Click to jump. |
 
 ---
