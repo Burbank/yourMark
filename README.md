@@ -6,7 +6,7 @@
 
 Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, and Excel to Markdown **on this Mac**.
 
-**[Download yourMark-0.3.17.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.17.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
+**[Download yourMark-0.3.18.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.18.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
 
 ## Why Markdown
 
@@ -20,7 +20,7 @@ The GUI never vendors the converter. It finds `markitdown` on this Mac; **Upgrad
 
 **Requires:** macOS 14+. Open the disk image and **drag yourMark onto Applications** (follow the arrow). First launch installs Microsoft MarkItDown from PyPI if it is missing. Building from source needs Xcode.
 
-If macOS says it could not verify the app: click **Done** (not Move to Bin), then open **Privacy & Security Settings** on the disk, or right-click → Open. That warning is Gatekeeper (not notarized yet) — not malware.
+If macOS says it could not verify the app: click **Done** (not Move to Bin), then open **If Apple blocks it** on the disk (a web page, not a program), or right-click yourMark → Open. That warning is Gatekeeper (not notarized yet) — not malware.
 
 ---
 
@@ -69,7 +69,7 @@ This build is not notarized, so macOS often shows **“yourMark.app” Not Opene
   <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Security. Allow applications from: App Store & Known Developers. yourMark.app was blocked to protect your Mac — Open Anyway.">
 </p>
 
-You can also right-click yourMark → **Open**, or double-click **Privacy & Security Settings** on the disk image.
+You can also right-click yourMark → **Open**, or open **If Apple blocks it** on the disk image (a short web page with a button into System Settings).
 
 ## License
 

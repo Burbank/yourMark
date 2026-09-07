@@ -23,7 +23,7 @@ struct HelpView: View {
 
                 Group {
                     Text("If macOS blocks the app").font(.headline)
-                    Text("Apple has not notarized this build yet, so macOS may say it “could not verify” yourMark and offer Move to Bin. Click Done — not Move to Bin. Then: right-click yourMark → Open, or System Settings → Privacy & Security → Open Anyway. Or double-click “Install yourMark” on the disk image; that clears the quarantine flag and copies the app to Applications.")
+                    Text("Apple has not notarized this build yet, so macOS may say it “could not verify” yourMark and offer Move to Bin. Click Done — not Move to Bin. Then: right-click yourMark → Open, or System Settings → Privacy & Security → Open Anyway. The disk image has “If Apple blocks it” — that is a web page, not a program, so Apple will not treat it as malware.")
                 }
 
                 Group {
