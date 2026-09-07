@@ -34,6 +34,9 @@ final class AppModel {
     var askKeyDraft: String = ""
     var askHasKey = false
     var askKeyHint = ""
+    var askCheckingKey = false
+    var askKeyTail = ""
+    var askKeyKind = ""
     var askQuestion = ""
     var askChapter = "Entire file"
     var askAnswer = ""
@@ -82,6 +85,7 @@ final class AppModel {
         let stored = AskSecrets.load()
         askHasKey = !stored.isEmpty
         askKeyDraft = ""
+        refreshKeyMeta(stored)
         watcher.onChange = { [weak self] path in
             Task { @MainActor in self?.fileDidChange(path) }
         }
@@ -337,24 +341,16 @@ final class AppModel {
 
     func persistAskSettings() {
         persistAskPrefs()
-        let key = askKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if key.count >= 8 {
-            AskSecrets.save(key)
-            askKeyDraft = ""
-            askHasKey = true
-            statusText = "Ask key locked in"
-        } else {
-            askHasKey = !AskSecrets.load().isEmpty
-            statusText = askHasKey ? "Ask settings saved — key still locked in" : "Ask settings saved — no key yet"
-        }
+        askHasKey = !AskSecrets.load().isEmpty
+        statusText = askHasKey ? "Ask settings saved — key still locked in" : "Ask settings saved — no key yet"
     }
 
     func lockAskKey() {
-        var key = askKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        if key.count < 8 {
-            let clip = NSPasteboard.general.string(forType: .string)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if Self.isPlausibleClipboardKey(clip) {
+        let draft = AskService.normalizeKey(askKeyDraft)
+        let clip = AskService.normalizeKey(NSPasteboard.general.string(forType: .string) ?? "")
+        var key = draft
+        if Self.isPlausibleClipboardKey(clip) {
+            if key.count < 24 || clip.count > key.count {
                 key = clip
             }
         }
@@ -363,24 +359,74 @@ final class AppModel {
             statusText = "Paste your API key, then press Enter to lock it in"
             return
         }
+        applyProviderForKey(key)
         persistAskPrefs()
+        askCheckingKey = true
+        askKeyHint = "Checking this key…"
+        statusText = "Checking this key…"
+        Task { await finishLockAskKey(key) }
+    }
+
+    private func finishLockAskKey(_ key: String) async {
+        let settings = AskService.Settings(
+            provider: askProvider,
+            model: askModel,
+            baseURL: askBaseURL,
+            apiKey: key
+        )
+        let problem = await askService.verify(settings)
+        askCheckingKey = false
+        if let problem {
+            askKeyHint = askHasKey
+                ? problem + " The key already on this Mac was left unchanged."
+                : problem
+            statusText = "Key was not locked in"
+            return
+        }
         AskSecrets.save(key)
         askKeyDraft = ""
         askHasKey = true
+        refreshKeyMeta(key)
+        let host = AskService.kindLabel(AskService.keyKind(key))
+        let tail = AskService.keyTail(key)
+        let tailBit = tail.isEmpty ? "" : " Ending …\(tail)."
         askKeyHint = ""
-        statusText = "Ask key locked in"
+        statusText = "\(host.isEmpty ? "Ask" : host) accepted this key.\(tailBit)"
+    }
+
+    func applyProviderForKey(_ key: String) {
+        switch AskService.keyKind(key) {
+        case .xai:
+            askProvider = "xai"
+            askBaseURL = "https://api.x.ai/v1"
+            if AskModels.list(for: "xai").allSatisfy({ $0.id != askModel }) {
+                askModel = AskModels.defaultID(for: "xai")
+            }
+        case .openai:
+            askProvider = "openai"
+            askBaseURL = "https://api.openai.com/v1"
+            if AskModels.list(for: "openai").allSatisfy({ $0.id != askModel }) {
+                askModel = AskModels.defaultID(for: "openai")
+            }
+        default:
+            break
+        }
+    }
+
+    private func refreshKeyMeta(_ key: String) {
+        askKeyKind = AskService.keyKind(key).rawValue
+        askKeyTail = AskService.keyTail(key)
     }
 
     /// Clipboard fallback when SecureField paste has not yet reached the SwiftUI binding.
     private static func isPlausibleClipboardKey(_ value: String) -> Bool {
+        let value = AskService.normalizeKey(value)
         guard value.count >= 8, value.count <= 512 else { return false }
         if value.contains(where: { $0.isNewline || $0.isWhitespace }) { return false }
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.+/=:"))
         if value.unicodeScalars.contains(where: { !allowed.contains($0) }) { return false }
-        let lower = value.lowercased()
-        if lower.hasPrefix("sk-") || lower.hasPrefix("xai-") || lower.hasPrefix("gsk_") {
-            return true
-        }
+        let kind = AskService.keyKind(value)
+        if kind == .xai || kind == .openai { return true }
         return value.count >= 20
     }
 
@@ -400,6 +446,8 @@ final class AppModel {
         askKeyHint = ""
         AskSecrets.delete()
         askHasKey = false
+        askKeyTail = ""
+        askKeyKind = ""
         statusText = "Ask key cleared"
     }
 

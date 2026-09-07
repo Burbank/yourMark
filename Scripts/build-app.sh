@@ -71,9 +71,9 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.3.18</string>
+	<string>0.3.19</string>
 	<key>CFBundleVersion</key>
-	<string>30</string>${ICON_PLIST}
+	<string>31</string>${ICON_PLIST}
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>NSHighResolutionCapable</key>

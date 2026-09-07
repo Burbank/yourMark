@@ -53,7 +53,7 @@ struct HelpView: View {
 
                 Group {
                     Text("Ask chapter").font(.headline)
-                    Text("Put your own AI key under Settings (xAI, OpenAI, or an OpenAI-compatible URL). Paste it, then press Enter to lock it in. It is stored in the Keychain. Ask uses only the current chapter of the converted Markdown. If the chapter is silent, Search the web opens a browser tab with the question and context. A model summary of missing terms is optional and off by default.")
+                    Text("Put your own AI key under Settings (xAI or OpenAI). Paste it, then press Enter. yourMark checks the key before locking it in the Keychain, and switches Provider if the key is for the other service (xai- → Grok, sk- → OpenAI). Ask uses only the current chapter of the converted Markdown. If the chapter is silent, Search the web opens a browser tab with the question and context. A model summary of missing terms is optional and off by default.")
                 }
 
                 Group {

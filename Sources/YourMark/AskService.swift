@@ -8,8 +8,51 @@ struct AskService {
         var apiKey: String
     }
 
+    enum KeyKind: String {
+        case xai, openai, other, empty
+    }
+
+    static func normalizeKey(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if (s.hasPrefix("\"") && s.hasSuffix("\"")) || (s.hasPrefix("'") && s.hasSuffix("'")) {
+            s = String(s.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let eq = s.firstIndex(of: "="), s[..<eq].uppercased().contains("KEY") {
+            s = String(s[s.index(after: eq)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let bearer = "bearer "
+        if s.lowercased().hasPrefix(bearer) {
+            s = String(s.dropFirst(bearer.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return s
+    }
+
+    static func keyKind(_ raw: String) -> KeyKind {
+        let s = normalizeKey(raw).lowercased()
+        if s.isEmpty { return .empty }
+        if s.hasPrefix("xai-") { return .xai }
+        if s.hasPrefix("sk-ant-") { return .other }
+        if s.hasPrefix("sk-") { return .openai }
+        return .other
+    }
+
+    static func keyTail(_ raw: String) -> String {
+        let s = normalizeKey(raw)
+        guard s.count >= 8 else { return "" }
+        return String(s.suffix(4))
+    }
+
+    static func kindLabel(_ kind: KeyKind) -> String {
+        switch kind {
+        case .xai: return "xAI (Grok)"
+        case .openai: return "OpenAI"
+        case .other: return "custom"
+        case .empty: return ""
+        }
+    }
+
     func ask(question: String, title: String, excerpt: String, settings: Settings, openKnowledge: Bool = false) async throws -> String {
-        let key = settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = Self.normalizeKey(settings.apiKey)
         if key.isEmpty {
             return Self.localAsk(question: question, excerpt: excerpt)
         }
@@ -48,18 +91,86 @@ struct AskService {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        if code == 401 {
-            throw YourMarkError.processFailed("Key was rejected. Check the provider and key.")
+        if let auth = Self.friendlyAuthError(code: code, body: data, key: key, provider: settings.provider) {
+            throw YourMarkError.processFailed(auth)
         }
         guard (200...299).contains(code) else {
-            let snippet = String(data: data, encoding: .utf8)?.prefix(160) ?? ""
-            throw YourMarkError.processFailed("Ask failed (\(code)) \(snippet)")
+            throw YourMarkError.processFailed(Self.friendlyHTTPError(code: code, body: data, model: settings.model, provider: settings.provider))
         }
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let choices = json?["choices"] as? [[String: Any]]
         let message = choices?.first?["message"] as? [String: Any]
         let text = message?["content"] as? String ?? ""
         return text
+    }
+
+    /// Cheap check used when locking a key in. GET /models — no chat charge.
+    func verify(_ settings: Settings) async -> String? {
+        let key = Self.normalizeKey(settings.apiKey)
+        guard !key.isEmpty else { return "Paste an API key first." }
+        let base = settings.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(base)/models") else {
+            return "Ask base URL is not valid."
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 15
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if let auth = Self.friendlyAuthError(code: code, body: data, key: key, provider: settings.provider) {
+                return auth
+            }
+            if (200...299).contains(code) { return nil }
+            return Self.friendlyHTTPError(code: code, body: data, model: settings.model, provider: settings.provider)
+        } catch {
+            return "Could not reach \(settings.provider == "xai" ? "xAI" : settings.provider == "openai" ? "OpenAI" : "the API"). Check the internet and try Enter again."
+        }
+    }
+
+    static func friendlyAuthError(code: Int, body: Data, key: String, provider: String) -> String? {
+        let snippet = String(data: body, encoding: .utf8)?.lowercased() ?? ""
+        let looksBadKey = snippet.contains("incorrect api key")
+            || snippet.contains("invalid api key")
+            || snippet.contains("invalid_api_key")
+            || snippet.contains("unauthorized")
+            || snippet.contains("authentication")
+            || snippet.contains("invalid x-api-key")
+            || code == 401
+            || (code == 400 && snippet.contains("incorrect"))
+        guard looksBadKey else { return nil }
+
+        let kind = keyKind(key)
+        if kind == .openai && provider == "xai" {
+            return "This key looks like OpenAI (it starts with sk-), but Ask is set to Grok. Open Settings → Provider → OpenAI, paste the key again, press Enter. Or paste an xAI key from console.x.ai."
+        }
+        if kind == .xai && provider == "openai" {
+            return "This key looks like xAI (it starts with xai-), but Ask is set to OpenAI. Open Settings → Provider → xAI (Grok), paste the key again, press Enter."
+        }
+        let host = provider == "xai" ? "xAI" : provider == "openai" ? "OpenAI" : "The API"
+        let whereFrom = provider == "xai"
+            ? "https://console.x.ai"
+            : provider == "openai" ? "https://platform.openai.com/api-keys" : "your API host"
+        let tail = keyTail(key)
+        let tailBit = tail.isEmpty ? "" : " The locked-in key ends with …\(tail)."
+        return "\(host) rejected this key.\(tailBit) A partial paste can lock in a broken key. Open Settings → Clear key → paste it once more from \(whereFrom) → press Enter."
+    }
+
+    static func friendlyHTTPError(code: Int, body: Data, model: String, provider: String) -> String {
+        let snippet = String(data: body, encoding: .utf8) ?? ""
+        let low = snippet.lowercased()
+        if low.contains("model") && (low.contains("not found") || low.contains("does not exist") || low.contains("invalid")) {
+            return "The model “\(model)” is not available on this key. Pick another model in Settings."
+        }
+        if code == 429 {
+            return "The API said too many requests. Wait a moment and try Ask again."
+        }
+        if code == 402 || low.contains("credit") || low.contains("quota") || low.contains("billing") {
+            return "This key has no credit / quota left on \(provider == "xai" ? "xAI" : "the provider")."
+        }
+        return "Ask failed (\(code)). \(snippet.prefix(120))"
     }
 
     static func chapterWasSilent(_ text: String) -> Bool {
