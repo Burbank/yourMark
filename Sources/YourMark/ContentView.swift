@@ -936,24 +936,41 @@ struct EnginePanel: View {
                 Text("A scan is a picture of a page. OCRmyPDF and Apple Live Text only read words — they do not rebuild tables or columns. For scans, yourMark uses IBM Docling (layout, TableFormer, figures). That takes a little longer. Normal PDFs still go to Microsoft MarkItDown. If Docling is missing, we fall back to OCRmyPDF / Live Text and keep page pictures.")
                     .foregroundStyle(.secondary)
                 LabeledContent("Docling") {
-                    Text(OcrService.doclingPath() ?? "Installed on first scan via uv")
-                        .textSelection(.enabled)
+                    Text(model.doclingPath == nil ? "Not installed yet" : "Installed and ready")
                 }
-                Button("Install Docling (layout models)") {
+                if let path = model.doclingPath {
+                    Text(path)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                        .foregroundStyle(.secondary)
+                }
+                Button(model.doclingPath == nil ? "Install Docling (layout models)" : "Reinstall Docling") {
                     Task { await model.installDocling() }
                 }
                 .disabled(model.installingEngine)
-                Text("OCR for scans and graphic PDFs. Install from this app, not Terminal.")
+                Text(model.doclingPath == nil
+                     ? "Needed for scans and PDFs with tables or pictures. Install from this app, not Terminal."
+                     : "Docling is installed on this Mac and ready. Scanned PDFs will use it. Press Reinstall only if conversion of scans starts failing.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 LabeledContent("OCRmyPDF fallback") {
-                    Text(OcrService.ocrmypdfPath() ?? "Not installed — Apple Live Text")
-                        .textSelection(.enabled)
+                    Text(model.ocrmypdfPath == nil ? "Not installed — Apple Live Text" : "Installed and ready")
                 }
-                Button("Install OCRmyPDF via Homebrew") {
+                if let path = model.ocrmypdfPath {
+                    Text(path)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                        .foregroundStyle(.secondary)
+                }
+                Button(model.ocrmypdfPath == nil ? "Install OCRmyPDF via Homebrew" : "Reinstall OCRmyPDF") {
                     Task { await model.installOcrmypdf() }
                 }
                 .disabled(model.installingEngine)
+                Text(model.ocrmypdfPath == nil
+                     ? "Optional backup. Without it, this Mac can still read scans with Apple Live Text."
+                     : "OCRmyPDF is installed on this Mac as a backup if Docling cannot run. Press Reinstall only if something stops working.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Converted files") {
                 Picker("Save Markdown", selection: Binding(
@@ -1013,6 +1030,7 @@ struct EnginePanel: View {
         .scrollContentBackground(.hidden)
         .background(deck.page)
         .foregroundStyle(deck.ink)
+        .onAppear { model.refreshOCRTools() }
     }
 }
 
