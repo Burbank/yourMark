@@ -74,7 +74,9 @@ yourMark on the left. MarkEdit on the right. Press Edit; what you save there sho
 
 ## Install
 
-**Everyone:** download the disk image, drag **yourMark** onto **Applications** (follow the arrow), then open it. First launch installs Microsoft MarkItDown.
+### Mac version, most complete
+
+Download the disk image, drag **yourMark** onto **Applications** (follow the arrow), then open it. First launch installs Microsoft MarkItDown.
 
 **Homebrew (optional):**
 
@@ -85,7 +87,9 @@ brew install --cask yourmark
 
 **From source:** `./Scripts/Install.command`
 
-**Windows (early):** [Download yourMark.exe](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe). No library, bookmarks, or Ask. Same Microsoft converter.
+### Windows (early)
+
+[Download yourMark.exe](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe). No library, bookmarks, or Ask. Same Microsoft converter.
 
 1. Double-click **yourMark.exe**. You do not need Python.
 2. If Windows says **Windows protected your PC**, click **More info** → **Run anyway**.
