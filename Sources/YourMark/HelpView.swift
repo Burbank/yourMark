@@ -30,7 +30,7 @@ struct HelpView: View {
         ),
         (
             "Picture links",
-            "In the reader, a picture is a blue link — not the photo itself. Rest the pointer on the link: a small preview appears. Move away and it goes. Click the link: Finder opens with that picture file selected, in the figures folder. Pictures are not loaded while you scroll, so the window should not freeze."
+            "In the reader, a picture is a blue link — not the photo itself. Rest the pointer on the link: a preview appears (size is the photo slider next to text size). Move away and it goes. Click the link: Finder opens with that picture file selected, in the figures folder. Pictures are not loaded while you scroll, so the window should not freeze."
         ),
         (
             "Bookmarks",
@@ -46,7 +46,7 @@ struct HelpView: View {
         ),
         (
             "Reading",
-            "The right pane is a reader. A / slider / A changes size. Settings → Reader picks the font. Rendered vs Plain. Edit opens MarkEdit. Finder shows the file."
+            "The right pane is a reader. A / slider / A changes text size. The photo slider next to it changes the hover picture preview (default is large). Settings → Reader picks the font. Rendered vs Plain. Edit opens MarkEdit. Finder shows the file."
         ),
         (
             "MarkEdit",

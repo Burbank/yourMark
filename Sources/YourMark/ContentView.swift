@@ -624,6 +624,7 @@ struct LibraryPanel: View {
     @AppStorage("splitLibrary") private var libFrac = 0.20
     @AppStorage("splitMarks") private var marksFrac = 0.15
     @AppStorage("previewPointSize") private var previewPointSize = 16.0
+    @AppStorage("figurePreviewSize") private var figurePreviewSize = 600.0
     @AppStorage("previewRendered") private var previewRendered = true
 
     var body: some View {
@@ -791,6 +792,22 @@ struct LibraryPanel: View {
             }
             .buttonStyle(.plain)
             .help("Larger text")
+            Image(systemName: "photo")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(deck.muted)
+                .help("Picture preview size")
+            Slider(value: $figurePreviewSize, in: 240...900, step: 20)
+                .frame(width: 88)
+                .controlSize(.mini)
+                .help("Picture preview size when you hover a figure link. Default is large.")
+            Button {
+                figurePreviewSize = min(900, figurePreviewSize + 40)
+            } label: {
+                Image(systemName: "plus.magnifyingglass")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.plain)
+            .help("Larger picture preview")
             Button(previewRendered ? "Rendered" : "Plain") {
                 previewRendered.toggle()
             }
@@ -833,7 +850,7 @@ struct LibraryPanel: View {
     private func markdownLine(_ line: String) -> some View {
         let size = CGFloat(previewPointSize)
         if let img = markdownImage(line, base: model.previewBaseURL) {
-            FigureLink(url: img.url, alt: img.alt)
+            FigureLink(url: img.url, alt: img.alt, previewSize: figurePreviewSize)
         } else if !previewRendered {
             Text(line.isEmpty ? " " : line)
                 .font(.system(size: size, design: .monospaced))
@@ -975,6 +992,7 @@ private struct FigureLink: View {
     @Environment(\.deck) private var deck
     let url: URL
     let alt: String
+    var previewSize: Double = 600
     @State private var hovering = false
     @State private var hoverTask: Task<Void, Never>?
 
@@ -1000,9 +1018,9 @@ private struct FigureLink: View {
                 }
             }
             .popover(isPresented: $hovering, arrowEdge: .trailing) {
-                HoverThumb(url: url, caption: alt)
+                HoverThumb(url: url, caption: alt, previewSize: previewSize)
             }
-            .help("Hover for a small preview. Click to show this picture in Finder.")
+            .help("Hover for a preview. Click to show this picture in Finder.")
             .padding(.vertical, 2)
     }
 }
@@ -1010,7 +1028,10 @@ private struct FigureLink: View {
 private struct HoverThumb: View {
     let url: URL
     let caption: String
+    var previewSize: Double = 600
     @State private var image: NSImage?
+
+    private var box: CGFloat { CGFloat(max(240, min(previewSize, 900))) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1018,32 +1039,33 @@ private struct HoverThumb: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: 280, maxHeight: 200)
+                    .frame(maxWidth: box, maxHeight: box * 0.75)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             } else {
                 Text("Preview…")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .frame(width: 160, height: 48)
+                    .frame(width: 200, height: 56)
             }
             Text(caption.isEmpty ? url.lastPathComponent : caption)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
-                .frame(maxWidth: 280, alignment: .leading)
+                .frame(maxWidth: box, alignment: .leading)
         }
         .padding(10)
-        .task(id: url) {
-            if let cached = PreviewImageCache.shared.image(for: url) {
+        .task(id: "\(url.path)-\(Int(box))") {
+            let pixel = Int(min(1400, box * 1.5))
+            if let cached = PreviewImageCache.shared.image(for: url, pixel: pixel) {
                 image = cached
                 return
             }
             let data = await Task.detached(priority: .utility) {
-                PreviewImageCache.thumbnailData(url, maxPixel: 400)
+                PreviewImageCache.thumbnailData(url, maxPixel: CGFloat(pixel))
             }.value
             guard !Task.isCancelled else { return }
             if let data, let loaded = NSImage(data: data) {
-                PreviewImageCache.shared.store(loaded, for: url)
+                PreviewImageCache.shared.store(loaded, for: url, pixel: pixel)
                 image = loaded
             }
         }
@@ -1053,17 +1075,23 @@ private struct HoverThumb: View {
 
 private final class PreviewImageCache: @unchecked Sendable {
     static let shared = PreviewImageCache()
-    private let cache = NSCache<NSURL, NSImage>()
+    private let cache = NSCache<NSString, NSImage>()
     private init() {
-        cache.countLimit = 8
-        cache.totalCostLimit = 4 * 1024 * 1024
+        cache.countLimit = 6
+        cache.totalCostLimit = 8 * 1024 * 1024
     }
 
-    func image(for url: URL) -> NSImage? { cache.object(forKey: url as NSURL) }
+    private func key(_ url: URL, pixel: Int) -> NSString {
+        "\(url.path)#\(pixel)" as NSString
+    }
 
-    func store(_ img: NSImage, for url: URL) {
+    func image(for url: URL, pixel: Int) -> NSImage? {
+        cache.object(forKey: key(url, pixel: pixel))
+    }
+
+    func store(_ img: NSImage, for url: URL, pixel: Int) {
         let cost = Int(max(1, img.size.width * img.size.height * 4))
-        cache.setObject(img, forKey: url as NSURL, cost: min(cost, 2_000_000))
+        cache.setObject(img, forKey: key(url, pixel: pixel), cost: min(cost, 4_000_000))
     }
 
     /// Copy the file (do not mmap it). A mapped JPEG that is rewritten while
