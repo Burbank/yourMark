@@ -240,43 +240,60 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
   async function renderPageJpeg(page, scale) {
     const vp = page.getViewport({ scale: scale || 1.25 });
     const canvas = document.createElement("canvas");
-    canvas.width = Math.floor(vp.width);
-    canvas.height = Math.floor(vp.height);
+    canvas.width = Math.max(1, Math.floor(vp.width));
+    canvas.height = Math.max(1, Math.floor(vp.height));
     const ctx = canvas.getContext("2d", { alpha: false });
-    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    const task = page.render({ canvasContext: ctx, viewport: vp });
+    if (task && task.promise) await task.promise;
     return canvas;
   }
 
+  async function startOcrWorker() {
+    if (!window.Tesseract || typeof Tesseract.createWorker !== "function") return null;
+    try {
+      return await Tesseract.createWorker("eng", 1, {
+        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js",
+        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.0/tesseract-core.wasm.js",
+        langPath: "https://tessdata.projectnaptha.com/4.0.0",
+      });
+    } catch {
+      return null;
+    }
+  }
+
   async function ocrScan(pdf, onStatus) {
-    const n = Math.min(pdf.numPages, 40);
+    const n = Math.min(pdf.numPages || 1, 40);
     const parts = [
-      "> This PDF is a **scan** (a picture of each page). This tab is reading the words with OCR. The Mac app does this better, with IBM Docling.",
+      "> This PDF is a **scan** (a picture of each page). This tab reads the words here. The Mac app does this better.",
       "",
     ];
-    let worker = null;
-    if (window.Tesseract && Tesseract.createWorker) {
-      onStatus("Starting OCR in this tab…");
-      worker = await Tesseract.createWorker("eng");
-    }
+    onStatus("Scan — preparing OCR…");
+    const worker = await startOcrWorker();
     for (let i = 1; i <= n; i++) {
-      onStatus("Scan — OCR page " + i + " of " + n + "…");
-      const page = await pdf.getPage(i);
-      const canvas = await renderPageJpeg(page, worker ? 1.4 : 1.1);
-      const jpeg = canvas.toDataURL("image/jpeg", 0.72);
-      parts.push("## Page " + i, "", `![Page ${i}](${jpeg})`, "");
-      if (worker) {
-        try {
-          const { data } = await worker.recognize(canvas);
-          const text = (data && data.text ? data.text : "").trim();
-          if (text) parts.push(text, "");
-        } catch {
-          parts.push("_Could not read this page._", "");
+      onStatus("Scan — page " + i + " of " + n + "…");
+      try {
+        const page = await pdf.getPage(i);
+        const canvas = await renderPageJpeg(page, worker ? 1.35 : 1.15);
+        const jpeg = canvas.toDataURL("image/jpeg", 0.7);
+        parts.push("## Page " + i, "", "![Page " + i + "](" + jpeg + ")", "");
+        if (worker) {
+          try {
+            const result = await worker.recognize(canvas);
+            const text = result && result.data && result.data.text ? String(result.data.text).trim() : "";
+            if (text) parts.push(text, "");
+          } catch {
+            parts.push("_Could not read the words on this page._", "");
+          }
         }
+      } catch {
+        parts.push("## Page " + i, "", "_Could not draw this page._", "");
       }
     }
-    if (worker) await worker.terminate();
-    if (!window.Tesseract) {
-      parts.push("_Install nothing — the Mac app OCRs scans properly. This tab kept the page pictures._", "");
+    if (worker && typeof worker.terminate === "function") {
+      try { await worker.terminate(); } catch (_) {}
+    }
+    if (!worker) {
+      parts.push("_This browser could not start OCR. Page pictures are kept. The Mac app will read the words._", "");
     }
     return parts.join("\n");
   }
@@ -299,46 +316,67 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
     }
   }
 
+  function pdfBytes(buf) {
+    const src = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+    const copy = new Uint8Array(src.byteLength);
+    copy.set(src);
+    return copy;
+  }
+
+  async function openPdf(buf) {
+    if (!window.pdfjsLib || typeof pdfjsLib.getDocument !== "function") {
+      throw new Error("PDF reader did not load. Refresh this page.");
+    }
+    const data = pdfBytes(buf);
+    try {
+      return await pdfjsLib.getDocument({ data, verbosity: 0 }).promise;
+    } catch (err) {
+      try {
+        return await pdfjsLib.getDocument({ data: pdfBytes(buf), disableWorker: true, verbosity: 0 }).promise;
+      } catch {
+        throw err;
+      }
+    }
+  }
+
   async function convertPdf(buf, name, onStatus) {
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    const pdf = await openPdf(buf);
     const pages = [];
-    const n = Math.min(pdf.numPages, 400);
+    const n = Math.min(pdf.numPages || 1, 400);
     let letters = 0;
     for (let i = 1; i <= n; i++) {
       const page = await pdf.getPage(i);
-      const tc = await page.getTextContent();
-      const lines = itemsToLines(tc && tc.items);
+      let lines = [];
+      try {
+        const tc = await page.getTextContent();
+        const items = tc && Array.isArray(tc.items) ? tc.items : [];
+        lines = itemsToLines(items);
+      } catch {
+        lines = [];
+      }
       letters += lines.join(" ").replace(/[^a-zA-Z]/g, "").length;
       pages.push(lines);
     }
     const scan = n > 0 && letters < n * 40;
     if (scan) {
-      onStatus && onStatus("Scan detected — OCR first…");
-      const md = await ocrScan(pdf, onStatus || (() => {}));
+      onStatus && onStatus("Scan detected — reading the page pictures…");
+      const md = await ocrScan(pdf, onStatus || function () {});
       return { markdown: md, bookmarks: bookmarksFrom(md, []), name };
     }
     const pictures = [];
     for (let i = 1; i <= n; i++) {
-      try {
-        const page = await pdf.getPage(i);
-        pictures.push(await imagesOnPage(page));
-      } catch {
-        pictures.push([]);
-      }
+      pictures.push([]);
     }
     const chrome = state.settings.stripChrome ? chromeSet(pages) : new Set();
     const parts = [];
     pages.forEach((lines, i) => {
-      const body = lines
+      const body = (lines || [])
         .filter((l) => !chrome.has(norm(l)))
         .filter((l) => !/^\s*\d+\s*$/.test(l))
         .map(headingize);
-      if (!body.length && !(pictures[i] && pictures[i].length)) return;
-      parts.push(`<!-- page ${i + 1} -->`, "");
-      parts.push(...body, "");
-      (pictures[i] || []).forEach((src, k) => {
-        parts.push(`![Figure p${i + 1}-${k + 1}](${src})`, "");
-      });
+      if (!body.length) return;
+      parts.push("<!-- page " + (i + 1) + " -->", "");
+      parts.push.apply(parts, body.concat([""]));
     });
     let md = parts.join("\n").trim();
     if (!md) md = "_No selectable text in this PDF. Scans need OCR — try again, or the Mac app._";
@@ -410,6 +448,14 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
         .join("");
   }
 
+  function mdToHtml(md) {
+    try {
+      if (window.marked && typeof marked.parse === 'function') return marked.parse(md);
+      if (typeof marked === 'function') return marked(md);
+    } catch (e) {}
+    return String(md).replace(/</g, '&' + 'lt;');
+  }
+
   function renderReader() {
     const f = currentFile();
     $("reader-title").textContent = f ? f.title : "";
@@ -422,7 +468,7 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
       return;
     }
     $("md-src").textContent = f.markdown;
-    const html = marked.parse(f.markdown);
+    const html = mdToHtml(f.markdown);
     $("md-view").innerHTML = DOMPurify.sanitize(html, { ADD_TAGS: ["img"], ADD_ATTR: ["src", "alt"] });
     $("md-view").hidden = !state.rendered;
     $("md-src").hidden = state.rendered;
@@ -431,7 +477,14 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
   }
 
   function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&", "<": "<", ">": ">", '"': """, "'": "&#39;" }[c]));
+    const map = {
+      '&': '&' + 'amp;',
+      '<': '&' + 'lt;',
+      '>': '&' + 'gt;',
+      '"': '&' + 'quot;',
+      "'": '&' + '#39;'
+    };
+    return String(s).replace(/[&<>"']/g, function (c) { return map[c]; });
   }
 
   function showTab(tab) {
@@ -492,7 +545,8 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
       row.innerHTML = `<span>✓ ${escapeHtml(title)}</span><button data-open="${item.id}">Open</button>`;
       showTab("library");
     } catch (err) {
-      row.textContent = "Could not read " + file.name + " — " + (err.message || err);
+      const msg = err && err.message ? err.message : String(err);
+      row.textContent = "ERROR · " + msg;
     }
   }
 
