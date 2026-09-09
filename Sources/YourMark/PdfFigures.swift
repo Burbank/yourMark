@@ -78,38 +78,45 @@ enum PdfFigures {
                 }
             }
 
-            var files: [String] = []
-            for (n, img) in sink.images.enumerated() {
-                let seen = fingerprintCount[img.fp, default: 0]
-                // Repeating chrome (header logos). With "remove headers" on, skip them.
-                let logoCap = stripChrome ? 1 : 12
-                if seen >= logoCap { continue }
-                fingerprintCount[img.fp] = seen + 1
-                if stripChrome, seen >= 1 { continue }
-                let name = String(format: "p%04d-%d.%@", i, n + 1, img.ext)
-                do {
-                    try img.data.write(to: figDir.appendingPathComponent(name), options: .atomic)
-                    files.append(name)
-                    extracted += 1
-                } catch { continue }
-            }
-
             let chars = (pdfDoc?.page(at: i - 1)?.string ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .count
+            let box = page.getBoxRect(.mediaBox)
+            let pageArea = max(1, abs(box.width * box.height))
+            // A scan is a photograph of the whole page. Do not save that photo
+            // as a "figure" — OCR is supposed to turn it into words.
+            let looksLikeScan = chars < 120 && sink.hasLargeImage
+
+            var files: [String] = []
+            if !looksLikeScan {
+                for (n, img) in sink.images.enumerated() {
+                    let seen = fingerprintCount[img.fp, default: 0]
+                    let logoCap = stripChrome ? 1 : 12
+                    if seen >= logoCap { continue }
+                    fingerprintCount[img.fp] = seen + 1
+                    if stripChrome, seen >= 1 { continue }
+                    let imgArea = CGFloat(max(img.wide, 1) * max(img.tall, 1))
+                    if chars < 200, imgArea > pageArea * 0.35 { continue }
+                    let name = String(format: "p%04d-%d.%@", i, n + 1, img.ext)
+                    do {
+                        try img.data.write(to: figDir.appendingPathComponent(name), options: .atomic)
+                        files.append(name)
+                        extracted += 1
+                    } catch { continue }
+                }
+            }
+
             let bytes = contentLength(page)
-            // Full-page JPEGs are photographs of the whole page (text + figure).
-            // Users see those as screenshots, not original pictures. Only draw a
-            // page when it is a diagram with no extracted image and almost no text.
+            // Vector diagram: little text, no photo of the page, lots of drawing.
             let needsPageDraw =
-                files.isEmpty
+                !looksLikeScan
+                && files.isEmpty
                 && chars < 160
                 && (
                     sink.hasUndecodedImage
                     || sink.hasLargeForm
                     || (sink.hasForm && bytes > 3500)
-                    || sink.hasLargeImage
-                    || bytes > 2500
+                    || bytes > 8000
                 )
             if needsPageDraw, let name = rasterize(page, index: i, into: figDir) {
                 files.append(name)
