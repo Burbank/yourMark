@@ -3,13 +3,13 @@
   const GUIDE_ID = "guide";
   const GUIDE = `# Getting started with yourMark
 
-This is the **browser** version — simpler. Files stay in this tab. Nothing is uploaded.
+This site is a **browser preview**. Files stay in this tab. Nothing is uploaded. The browser version does **not** include OCR.
 
-The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is the complete one: Microsoft MarkItDown, pictures next to the file, OCR for scans, and Ask with your own key.
+The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for PDFs with graphics — it includes OCR and layout. Scans, tables, and figures stay intact there.
 
 ## Convert
 
-Open **Convert** and drop a PDF or a Word file. If the PDF is a **scan** (a photograph of the page), this tab cannot read it — you will see a short note, and the Mac app will do the OCR. Repeating headers and footers can be dropped in Settings.
+Open **Convert** and drop a PDF that already has selectable text. If the PDF is a **scan** (a photograph of the page), you will see a short note. Use the Mac app for that.
 
 ## Bookmarks
 
@@ -306,9 +306,9 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
       "",
       "**" + String(name).replace(/[#*_]/g, "") + "** looks like a photograph of " + pageWord + ", not selectable text.",
       "",
-      "This browser version **cannot read scans**. It only copies words that are already in the file. Nothing was uploaded.",
+      "This site is a **browser preview**. It does **not** include OCR. It only copies words that are already in the file. Nothing was uploaded.",
       "",
-      "The **Mac app** reads the picture and turns it into words (OCR). Download it, then drop the same PDF there.",
+      "The **Mac app** is better for PDFs with graphics — OCR and layout. Scans, tables, and figures stay intact there.",
       "",
       "[Download the Mac app](https://github.com/Burbank/yourMark/releases/latest)",
       "",
@@ -562,7 +562,7 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
       if (rec.scan) {
         row.className = "job notice";
         row.innerHTML =
-          "<span>This PDF is a scan — a photograph of the page. This tab cannot read that. Use the Mac app for OCR.</span>" +
+          "<span>This PDF is a scan — a photograph of the page. This browser preview does not include OCR. Use the Mac app for scans, tables, and figures.</span>" +
           '<a href="https://github.com/Burbank/yourMark/releases/latest" target="_blank" rel="noopener">Get the Mac app</a>';
         showTab("library");
         return;
@@ -572,7 +572,7 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
     } catch (err) {
       row.className = "job notice";
       row.innerHTML =
-        "<span>Could not read this file here. If it is a scan (a picture of the page), use the Mac app. Ordinary PDFs with selectable text work in this tab.</span>" +
+        "<span>Could not read this file here. This site is a browser preview and does not include OCR. The Mac app is better for scans, tables, and figures.</span>" +
         '<a href="https://github.com/Burbank/yourMark/releases/latest" target="_blank" rel="noopener">Get the Mac app</a>';
     }
   }

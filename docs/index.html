@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>yourMark — simpler browser version</title>
-  <meta name="description" content="Simpler yourMark in the browser. Drop a PDF; it stays in this tab. The Mac app is the complete version." />
+  <title>yourMark — browser preview (no OCR)</title>
+  <meta name="description" content="Browser preview of yourMark. No OCR. The Mac app is better for PDFs with graphics — scans, tables, and figures stay intact there." />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,7 +18,7 @@
         <img src="icon.png" width="32" height="32" alt="" />
         <div>
           <strong>yourMark</strong>
-          <span class="sub">simpler · in this browser</span>
+          <span class="sub">browser preview · no OCR</span>
         </div>
       </div>
       <nav class="tabs">
@@ -35,9 +35,10 @@
     </header>
 
     <p class="banner">
-      This is a <strong>simpler</strong> version. Files never leave this tab.
+      This site is a <strong>browser preview</strong>.
       The <a href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.41.dmg">Mac app</a>
-      is the complete one (Microsoft MarkItDown, pictures, OCR).
+      is better for PDFs with graphics — it includes OCR and layout. Scans, tables, and figures stay intact there.
+      The <strong>browser</strong> version does not include OCR.
       <a href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe">Windows (early)</a>.
     </p>
 
@@ -70,7 +71,7 @@
     <section id="view-convert" class="pane" hidden>
       <div class="kicker">CONVERT</div>
       <h2>Drop a PDF</h2>
-      <p class="lede">Drop a PDF or Word file on this window. Words already in the file are read here — nothing is uploaded. If the PDF is a scan (a photograph of the page), this tab will tell you; the Mac app does the OCR.</p>
+      <p class="lede">This site is a browser preview. Drop a PDF with selectable text and it stays in this tab — nothing is uploaded. The Mac app is better for PDFs with graphics: OCR and layout. Scans, tables, and figures stay intact there. The browser version does not include OCR.</p>
       <div class="drop" id="drop">
         <p><strong>Drop PDFs or Word here</strong></p>
         <p class="muted">Or choose files. Markdown is saved in this browser.</p>
@@ -153,8 +154,8 @@
         <button id="help-close">Close</button>
       </header>
       <div class="help-grid">
-        <article><h3>This tab</h3><p>A simpler yourMark. Drop a PDF; words stay in this browser. Nothing is uploaded.</p></article>
-        <article><h3>Mac app</h3><p>The complete version. Microsoft MarkItDown, pictures next to the file, OCR for scans, Ask with your key.</p></article>
+        <article><h3>This tab</h3><p>A browser preview. Drop a PDF with selectable text. Nothing is uploaded. The browser version does not include OCR.</p></article>
+        <article><h3>Mac app</h3><p>Better for PDFs with graphics. OCR and layout. Scans, tables, and figures stay intact there.</p></article>
         <article><h3>Convert</h3><p>Drop a PDF or Word file. Repeating headers can be dropped in Settings. Numbered titles become headings.</p></article>
         <article><h3>Library</h3><p>Cards on the left. Bookmarks in the middle — the PDF outline when it has one. Click to jump.</p></article>
         <article><h3>Ask</h3><p>Answers come from the open chapter, in this tab. A real model needs the Mac app; browsers often block the key.</p></article>
