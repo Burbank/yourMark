@@ -66,14 +66,21 @@
       background: var(--card);
       border: 2px solid var(--line);
       border-radius: 14px;
-      overflow: hidden;
+      overflow: visible;
     }
-    figure img { display: block; width: 100%; height: auto; }
+    figure img { display: block; width: 100%; max-width: 100%; height: auto; }
+    figure .shot {
+      overflow: hidden;
+      border-radius: 12px 12px 0 0;
+      line-height: 0;
+    }
     figcaption {
       padding: .7rem 1rem .85rem;
       font-size: .92rem;
       color: var(--muted);
       border-top: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 0 0 12px 12px;
     }
     section.card {
       background: var(--card);
@@ -111,7 +118,15 @@
     }
     .grid4 figure { margin: 0; }
     .grid4 figcaption { font-size: .8rem; padding: .5rem .65rem .6rem; }
-    figure.hero { margin-bottom: 1.15rem; }
+    figure.hero { margin: 2.25rem 0 1.5rem; }
+    figure img {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+    }
+    .shots h2 { margin: 0 0 1rem; }
+    .shots { margin: 2rem 0 1.5rem; }
     .opt-list { margin: .4rem 0 1rem; padding-left: 1.15rem; }
     .opt-list li + li { margin-top: .35rem; }
     .looks { color: var(--muted); margin: 0 0 1rem; }
@@ -169,33 +184,45 @@
       <ul class="opt-list">
         <li><strong>Convert</strong> — drop a PDF, Word, slides, or Excel. The words are written on this Mac.</li>
         <li><strong>Library</strong> — file on the left, bookmarks in the middle, the text on the right. Ask a chapter at the bottom if you add a key.</li>
-        <li><strong>Settings</strong> — colours, an optional AI key, and extra help for scanned pages.</li>
+        <li><strong>Settings</strong> — Bright, Dim, or System colours in the header; an optional AI key; extra help for scanned pages.</li>
       </ul>
-      <p class="looks">Colours: <strong>Bright</strong> (paper), <strong>Dim</strong> (a night desk), or <strong>System</strong> (follow the Mac). Switch any time in the header — then scroll for pictures of the window.</p>
     </section>
 
-    <figure class="hero">
-      <img src="shots/library-dim.jpg" alt="yourMark library at night: files on the left, bookmarks in the middle, Markdown on the right" width="1483" height="1078" />
-      <figcaption>Library at night — files, bookmarks, and the text. Ask a chapter underneath. Bookmarks jump like Preview.</figcaption>
-    </figure>
+    <div class="shots">
+      <h2>Pictures of the window</h2>
+      <figure class="hero">
+        <div class="shot">
+          <img src="shots/library-dim.jpg" alt="yourMark library at night: files on the left, bookmarks in the middle, Markdown on the right" />
+        </div>
+        <figcaption>Library at night — files, bookmarks, and the text. Ask a chapter underneath. Bookmarks jump like Preview.</figcaption>
+      </figure>
 
-    <div class="grid4">
-      <figure>
-        <img src="shots/library-bright.jpg" alt="Library in Bright" width="1477" height="1068" loading="lazy" />
-        <figcaption>Library · Bright — same three columns on paper.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/convert-dim.jpg" alt="Convert in Dim" width="1479" height="1073" loading="lazy" />
-        <figcaption>Convert · Dim — drop a PDF. Conversion stays on this Mac.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/convert-bright.jpg" alt="Convert in Bright" width="1482" height="1075" loading="lazy" />
-        <figcaption>Convert · Bright — this 787 handbook kept 595 bookmarks from the PDF itself.</figcaption>
-      </figure>
-      <figure>
-        <img src="shots/settings-dim.jpg" alt="Settings in Dim" width="1478" height="1070" loading="lazy" />
-        <figcaption>Settings — paste a key, press Enter, it is locked. Docling is only for scans.</figcaption>
-      </figure>
+      <div class="grid4">
+        <figure>
+          <div class="shot">
+            <img src="shots/library-bright.jpg" alt="Library in Bright" loading="lazy" />
+          </div>
+          <figcaption>Library · Bright — same three columns on paper.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot">
+            <img src="shots/convert-dim.jpg" alt="Convert in Dim" loading="lazy" />
+          </div>
+          <figcaption>Convert — drop a PDF. Nothing is uploaded.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot">
+            <img src="shots/convert-bright.jpg" alt="Convert in Bright" loading="lazy" />
+          </div>
+          <figcaption>Convert · Bright — this 787 handbook kept 595 bookmarks from the PDF itself.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot">
+            <img src="shots/settings-dim.jpg" alt="Settings in Dim" loading="lazy" />
+          </div>
+          <figcaption>Settings — paste a key, press Enter. Extra tools are only for scans.</figcaption>
+        </figure>
+      </div>
     </div>
 
     <section class="card">
