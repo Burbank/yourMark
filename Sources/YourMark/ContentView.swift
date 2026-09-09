@@ -833,8 +833,7 @@ struct LibraryPanel: View {
     private func markdownLine(_ line: String) -> some View {
         let size = CGFloat(previewPointSize)
         if let img = markdownImage(line, base: model.previewBaseURL) {
-            FigureChip(url: img.url, alt: img.alt)
-                .padding(.vertical, 4)
+            FigureLink(url: img.url, alt: img.alt)
         } else if !previewRendered {
             Text(line.isEmpty ? " " : line)
                 .font(.system(size: size, design: .monospaced))
@@ -971,82 +970,83 @@ private func markdownImage(_ line: String, base: URL?) -> (alt: String, url: URL
     return (alt, url)
 }
 
-/// A named pointer to a file in figures/. Pictures are not decoded while you
-/// scroll — tap Show for a small preview, or Finder for the original.
-private struct FigureChip: View {
+/// A hyperlink in the reader. Nothing is decoded until the pointer rests on it.
+private struct FigureLink: View {
     @Environment(\.deck) private var deck
     let url: URL
     let alt: String
-    @State private var show = false
+    @State private var hovering = false
+    @State private var hoverTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "photo")
-                    .foregroundStyle(deck.cyan)
-                Text(alt.isEmpty ? url.lastPathComponent : alt)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(deck.ink)
-                    .lineLimit(2)
-                Spacer(minLength: 8)
-                Button(show ? "Hide" : "Show") { show.toggle() }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundStyle(deck.cyan)
-                Button("Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([url])
+        Text(alt.isEmpty ? url.lastPathComponent : alt)
+            .font(.system(size: 13, weight: .semibold))
+            .underline()
+            .foregroundStyle(deck.cyan)
+            .onTapGesture {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
+            .onHover { inside in
+                hoverTask?.cancel()
+                if inside {
+                    hoverTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 280_000_000)
+                        guard !Task.isCancelled else { return }
+                        hovering = true
+                    }
+                } else {
+                    hovering = false
                 }
-                .buttonStyle(.plain)
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
             }
-            .padding(8)
-            .background(RoundedRectangle(cornerRadius: 8).fill(deck.field))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: deck.border))
-            if show {
-                PreviewPicture(url: url)
+            .popover(isPresented: $hovering, arrowEdge: .trailing) {
+                HoverThumb(url: url, caption: alt)
             }
-        }
+            .help("Hover for a preview. Click to show the file in Finder.")
+            .padding(.vertical, 2)
     }
 }
 
-/// Decode off the main thread and cache a small thumbnail. Loading full JPEGs
-/// in the view body is what froze the window after a large convert finished.
-private struct PreviewPicture: View {
+private struct HoverThumb: View {
     let url: URL
+    let caption: String
     @State private var image: NSImage?
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 6) {
             if let image {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxHeight: 240)
+                    .frame(maxWidth: 280, maxHeight: 200)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             } else {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.gray.opacity(0.12))
-                    .frame(maxWidth: .infinity, minHeight: 120, maxHeight: 120)
+                Text("Preview…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 160, height: 48)
             }
+            Text(caption.isEmpty ? url.lastPathComponent : caption)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .frame(maxWidth: 280, alignment: .leading)
         }
+        .padding(10)
         .task(id: url) {
-            guard FileManager.default.isReadableFile(atPath: url.path) else {
-                image = nil
-                return
-            }
             if let cached = PreviewImageCache.shared.image(for: url) {
                 image = cached
                 return
             }
             let data = await Task.detached(priority: .utility) {
-                PreviewImageCache.thumbnailData(url)
+                PreviewImageCache.thumbnailData(url, maxPixel: 400)
             }.value
-            guard FileManager.default.isReadableFile(atPath: url.path) else { return }
+            guard !Task.isCancelled else { return }
             if let data, let loaded = NSImage(data: data) {
                 PreviewImageCache.shared.store(loaded, for: url)
                 image = loaded
             }
         }
+        .onDisappear { image = nil }
     }
 }
 
@@ -1054,8 +1054,8 @@ private final class PreviewImageCache: @unchecked Sendable {
     static let shared = PreviewImageCache()
     private let cache = NSCache<NSURL, NSImage>()
     private init() {
-        cache.countLimit = 24
-        cache.totalCostLimit = 16 * 1024 * 1024
+        cache.countLimit = 8
+        cache.totalCostLimit = 4 * 1024 * 1024
     }
 
     func image(for url: URL) -> NSImage? { cache.object(forKey: url as NSURL) }
@@ -1067,13 +1067,13 @@ private final class PreviewImageCache: @unchecked Sendable {
 
     /// Copy the file (do not mmap it). A mapped JPEG that is rewritten while
     /// you scroll is a SIGBUS. Then build a small thumbnail, never the full page.
-    static func thumbnailData(_ url: URL, maxPixel: CGFloat = 720) -> Data? {
+    static func thumbnailData(_ url: URL, maxPixel: CGFloat = 400) -> Data? {
         autoreleasepool { thumbnailDataLocked(url, maxPixel: maxPixel) }
     }
 
     private static func thumbnailDataLocked(_ url: URL, maxPixel: CGFloat) -> Data? {
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue ?? 0
-        guard size > 32, size < 12_000_000 else { return nil }
+        guard size > 32, size < 8_000_000 else { return nil }
         guard let fileData = try? Data(contentsOf: url, options: [.uncached]), fileData.count > 32 else {
             return nil
         }
