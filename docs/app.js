@@ -9,7 +9,7 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is the comple
 
 ## Convert
 
-Open **Convert** and drop a PDF or a Word file. If the PDF is a **scan** (a picture of the page), this tab runs OCR first. Repeating headers and footers can be dropped in Settings.
+Open **Convert** and drop a PDF or a Word file. If the PDF is a **scan** (a photograph of the page), this tab cannot read it — you will see a short note, and the Mac app will do the OCR. Repeating headers and footers can be dropped in Settings.
 
 ## Bookmarks
 
@@ -298,6 +298,23 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
     return parts.join("\n");
   }
 
+  function scanNotice(name, pages) {
+    const n = pages || 1;
+    const pageWord = n === 1 ? "1 page" : n + " pages";
+    return [
+      "# This PDF is a scan",
+      "",
+      "**" + String(name).replace(/[#*_]/g, "") + "** looks like a photograph of " + pageWord + ", not selectable text.",
+      "",
+      "This browser version **cannot read scans**. It only copies words that are already in the file. Nothing was uploaded.",
+      "",
+      "The **Mac app** reads the picture and turns it into words (OCR). Download it, then drop the same PDF there.",
+      "",
+      "[Download the Mac app](https://github.com/Burbank/yourMark/releases/latest)",
+      "",
+    ].join("\n");
+  }
+
   async function outlineOf(pdf) {
     try {
       const tree = await pdf.getOutline();
@@ -359,9 +376,9 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
     }
     const scan = n > 0 && letters < n * 40;
     if (scan) {
-      onStatus && onStatus("Scan detected — reading the page pictures…");
-      const md = await ocrScan(pdf, onStatus || function () {});
-      return { markdown: md, bookmarks: bookmarksFrom(md, []), name };
+      onStatus && onStatus("This PDF is a scan.");
+      const md = scanNotice(name, n);
+      return { markdown: md, bookmarks: bookmarksFrom(md, []), name, scan: true };
     }
     const pictures = [];
     for (let i = 1; i <= n; i++) {
@@ -542,11 +559,21 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
       await dbPut(item);
       state.files.unshift(item);
       state.current = item.id;
+      if (rec.scan) {
+        row.className = "job notice";
+        row.innerHTML =
+          "<span>This PDF is a scan — a photograph of the page. This tab cannot read that. Use the Mac app for OCR.</span>" +
+          '<a href="https://github.com/Burbank/yourMark/releases/latest" target="_blank" rel="noopener">Get the Mac app</a>';
+        showTab("library");
+        return;
+      }
       row.innerHTML = `<span>✓ ${escapeHtml(title)}</span><button data-open="${item.id}">Open</button>`;
       showTab("library");
     } catch (err) {
-      const msg = err && err.message ? err.message : String(err);
-      row.textContent = "ERROR · " + msg;
+      row.className = "job notice";
+      row.innerHTML =
+        "<span>Could not read this file here. If it is a scan (a picture of the page), use the Mac app. Ordinary PDFs with selectable text work in this tab.</span>" +
+        '<a href="https://github.com/Burbank/yourMark/releases/latest" target="_blank" rel="noopener">Get the Mac app</a>';
     }
   }
 

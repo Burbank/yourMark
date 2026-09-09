@@ -198,7 +198,17 @@ body {
   background: var(--field);
   display: flex;
   justify-content: space-between;
-  gap: .5rem;
+  align-items: center;
+  gap: .75rem;
+}
+.job.notice {
+  border-color: var(--navy);
+  background: var(--panel);
+}
+.job.notice a {
+  color: var(--navy);
+  font-weight: 700;
+  white-space: nowrap;
 }
 .settings h2 { font-size: 1rem; margin: 1.3rem 0 .45rem; }
 .row-set {
