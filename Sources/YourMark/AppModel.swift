@@ -871,7 +871,7 @@ final class AppModel {
                         }
                         let bookmarks = await loadBookmarks(original)
                         let (url, located) = await finalizeMarkdown(output, original: original, bookmarks: bookmarks)
-                        let pictures = 0
+                        let pictures = await PdfFigures.materializeEmbedded(markdownURL: url)
                         await finishJob(jobID: jobID, markdown: url, original: original, usedOCR: true, pictures: pictures, bookmarks: located)
                         continue
                     }
@@ -951,6 +951,7 @@ final class AppModel {
                     await service.enrichPDF(markdown: url, pdf: original, script: script)
                     let bookmarks = await loadBookmarks(original)
                     let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
+                    _ = await PdfFigures.materializeEmbedded(markdownURL: final)
                     pictures = 0
                     if !usedOCR {
                         pictures = await PdfFigures.embed(
@@ -1176,23 +1177,15 @@ final class AppModel {
             text = cut + "\n\n_Preview shows the start of this large file. Open it in Finder for the rest._\n"
         }
         let rawLines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var imageCount = 0
-        var droppedImages = false
         var lines: [String] = []
         lines.reserveCapacity(min(rawLines.count, 8_000))
         for line in rawLines {
-            if isPreviewImageLine(line) {
-                imageCount += 1
-                if imageCount > 8 {
-                    droppedImages = true
-                    continue
-                }
+            if line.contains("data:image") {
+                lines.append("_A picture is stored as a file in the figures folder (Finder)._")
+                continue
             }
             lines.append(line)
             if lines.count >= 4_500 { break }
-        }
-        if droppedImages {
-            lines.append("_Further pictures are in the figures folder in this convert folder. Open it in Finder to see them all._")
         }
         var headings: [ManualBookmark] = []
         var used = Set<String>()
@@ -1217,11 +1210,6 @@ final class AppModel {
             sections = [PreviewSection(id: 0, lines: ["Select a converted file."])]
         }
         return PreviewPack(text: text, lines: lines, headings: headings, sections: sections, base: base)
-    }
-
-    nonisolated private static func isPreviewImageLine(_ line: String) -> Bool {
-        let t = line.trimmingCharacters(in: .whitespaces)
-        return t.hasPrefix("![") && t.contains("](")
     }
 
     func jumpToBookmark(_ bookmark: ManualBookmark) {

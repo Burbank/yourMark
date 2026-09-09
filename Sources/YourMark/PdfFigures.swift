@@ -97,7 +97,7 @@ enum PdfFigures {
                     if stripChrome, seen >= 1 { continue }
                     let imgArea = CGFloat(max(img.wide, 1) * max(img.tall, 1))
                     if chars < 200, imgArea > pageArea * 0.35 { continue }
-                    let name = String(format: "p%04d-%d.%@", i, n + 1, img.ext)
+                    let name = String(format: "figure-%03d.%@", extracted + files.count + 1, img.ext)
                     do {
                         try img.data.write(to: figDir.appendingPathComponent(name), options: .atomic)
                         files.append(name)
@@ -149,7 +149,10 @@ enum PdfFigures {
         pdfDoc: PDFDocument?
     ) -> String {
         func block(_ page: Int, _ files: [String]) -> [String] {
-            files.map { "![Figure, page \(page + 1)](\(folder)/\($0))" }
+            files.enumerated().map { idx, name in
+                let n = figureNumber(from: name)
+                return "![Figure \(n) · page \(page + 1)](\(folder)/\(name))"
+            }
         }
 
         var remaining = pageFiles
@@ -223,6 +226,67 @@ enum PdfFigures {
             }
         }
         return out.joined(separator: "\n")
+    }
+
+    private static func figureNumber(from name: String) -> String {
+        let digits = name.filter(\.isNumber)
+        if let n = Int(digits.prefix(4)), n > 0 { return "\(n)" }
+        return name
+    }
+
+    /// Turn data-URI pictures into files in figures/, so the Markdown stays
+    /// small for the reader and for AI. Returns how many files were written.
+    @discardableResult
+    static func materializeEmbedded(markdownURL: URL) async -> Int {
+        await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .utility).async {
+                cont.resume(returning: materializeLocked(markdownURL))
+            }
+        }
+    }
+
+    private static func materializeLocked(_ markdownURL: URL) -> Int {
+        guard var text = try? String(contentsOf: markdownURL, encoding: .utf8),
+              text.contains("data:image") else { return 0 }
+        let figDir = markdownURL.deletingLastPathComponent()
+            .appendingPathComponent(folderName, isDirectory: true)
+        try? FileManager.default.createDirectory(at: figDir, withIntermediateDirectories: true)
+        var n = existingFigureCount(figDir)
+        var written = 0
+        let pattern = #"!\[[^\]]*\]\(data:image\/([A-Za-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)\)"#
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return 0 }
+        while written < 400 {
+            let ns = text as NSString
+            let full = NSRange(location: 0, length: ns.length)
+            guard let match = re.firstMatch(in: text, range: full), match.numberOfRanges >= 3 else { break }
+            let mime = ns.substring(with: match.range(at: 1)).lowercased()
+            let b64 = ns.substring(with: match.range(at: 2))
+                .replacingOccurrences(of: "\\s", with: "", options: .regularExpression)
+            guard let data = Data(base64Encoded: b64, options: [.ignoreUnknownCharacters]), data.count > 32,
+                  let range = Range(match.range, in: text) else {
+                if let range = Range(match.range, in: text) {
+                    text.removeSubrange(range)
+                } else {
+                    break
+                }
+                continue
+            }
+            n += 1
+            let ext = mime.contains("png") ? "png" : (mime.contains("webp") ? "webp" : "jpg")
+            let name = String(format: "figure-%03d.%@", n, ext)
+            try? data.write(to: figDir.appendingPathComponent(name), options: .atomic)
+            text.replaceSubrange(range, with: "![Figure \(n)](\(folderName)/\(name))")
+            written += 1
+        }
+        try? text.write(to: markdownURL, atomically: true, encoding: .utf8)
+        return written
+    }
+
+    private static func existingFigureCount(_ dir: URL) -> Int {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        return names.filter {
+            $0.hasPrefix("figure-") || $0.hasPrefix("p0") || $0.hasPrefix("page-")
+        }.count
     }
 
     private static func distinctive(_ raw: String?) -> String? {
