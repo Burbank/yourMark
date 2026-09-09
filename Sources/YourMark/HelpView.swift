@@ -26,7 +26,7 @@ struct HelpView: View {
         ),
         (
             "Pictures",
-            "Pictures live in a figures folder next to the Markdown. The file only points at them (Figure 3 · page 2), so it stays small for you and for AI. The reader shows a label — tap Show for a thumbnail. Finder opens the original. We do not paste photographs of whole text pages, and we do not put huge pictures inside the Markdown."
+            "Pictures live in a figures folder next to the Markdown. The file only points at them (Figure 3 · page 2), so it stays small for you and for AI. In the reader those are links — rest the pointer on one for a small preview. Click to open Finder. Pictures are not loaded while you scroll, so the window should not freeze."
         ),
         (
             "Bookmarks",
