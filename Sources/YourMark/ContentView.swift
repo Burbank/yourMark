@@ -263,7 +263,7 @@ private struct CrashReportSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("yourMark closed unexpectedly")
                 .font(.title2.weight(.bold))
-            Text("macOS saved a crash report. If you send it to GitHub, we can see the stack and try to fix it. Nothing is uploaded until you press Send. API keys and documents stay on this Mac. The report is copied so you can paste it if the GitHub form is short.")
+            Text("macOS saved a crash report. Copy it and send it however you like — you do not need a GitHub account. Nothing leaves this Mac until you choose. API keys and documents are not included.")
                 .foregroundStyle(deck.muted)
                 .fixedSize(horizontal: false, vertical: true)
             if let summary = model.pendingCrash?.summary {
@@ -276,11 +276,14 @@ private struct CrashReportSheet: View {
                 Spacer()
                 Button("Not now") { model.skipCrashSheet() }
                     .keyboardShortcut(.cancelAction)
-                Button("Send to GitHub") { model.sendPendingCrash() }
+                Button("Copy report") { model.copyPendingCrash() }
                     .buttonStyle(.borderedProminent)
                     .tint(deck.btn)
                     .keyboardShortcut(.defaultAction)
             }
+            Button("I have a GitHub account") { model.sendPendingCrash() }
+                .buttonStyle(.plain)
+                .foregroundStyle(deck.muted)
         }
         .padding(28)
         .frame(width: 520)
@@ -1239,14 +1242,14 @@ struct EnginePanel: View {
                 }
             }
             Section("Crash reports") {
-                Toggle("Offer to send crash reports to GitHub", isOn: Binding(
+                Toggle("Offer to send crash reports", isOn: Binding(
                     get: { model.offerCrashReports },
                     set: { model.setOfferCrashReports($0) }
                 ))
-                Text("If yourMark closed unexpectedly, we can open a GitHub issue with the macOS report. Nothing is sent unless you press Send. No API keys or documents are included.")
+                Text("If yourMark closed unexpectedly, we can copy the macOS report. Paste it in a message — you do not need a GitHub account. Nothing is sent unless you choose.")
                     .foregroundStyle(.secondary)
                 if CrashReports.latestAny() != nil {
-                    Button("Send last crash report") { model.sendLastCrash() }
+                    Button("Copy last crash report") { model.sendLastCrash() }
                 }
             }
             if model.settingsFocus == "ocr" {

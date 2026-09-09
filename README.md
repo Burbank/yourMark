@@ -4,49 +4,43 @@
   <img src="docs/icon.png" width="112" height="112" alt="yourMark">
 </p>
 
-Native **macOS** SwiftUI wrapper around [Microsoft MarkItDown](https://github.com/microsoft/markitdown). Convert PDFs, Word, PowerPoint, Excel, pictures, and ZIP archives to Markdown **on this Mac**.
+A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, and ask questions about. The file never leaves this computer.
 
-**[Download yourMark-0.3.36.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.36.dmg)** · [All releases](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Use it in the browser](https://burbank.github.io/yourMark/)
+**[Download yourMark-0.3.37.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.37.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Same page in a browser](https://burbank.github.io/yourMark/)
 
-## Why Markdown
+## Why Markdown?
 
-A PDF is a picture of a page. Markdown is the words, in order, as plain text you can search and edit.
+A PDF is a picture of a page. Markdown is the words, in order.
 
-That is why it works so well with AI. A model can read a chapter, quote it, and tell you when the file is silent — instead of guessing at columns or a scan. Paste one heading into Grok or ChatGPT, keep notes in Obsidian, or search a whole course. Tables stay tables. Headings stay an outline.
+That is why it works so well with AI. A model can read a chapter, quote it, and say when the file is silent — instead of guessing at a scan. Paste a heading into Grok or ChatGPT, keep notes, or search a whole course. Tables stay tables. Headings stay an outline.
 
 Keep the original PDF. Markdown is the working copy.
 
-## Edit the file
+## A look inside
 
-yourMark is a **reader**. To change the Markdown, press **Edit** in the pane — that opens [MarkEdit](https://github.com/MarkEdit-app/MarkEdit), a free native Mac editor ([MIT](https://github.com/MarkEdit-app/MarkEdit/blob/main/LICENSE)). Install it once (`brew install --cask markedit`, or their DMG). First launch of yourMark offers that download. Saves in MarkEdit show up here.
+The window has three places:
 
-## A look around — pick your rooms and your look
+- **Convert** — drop a PDF, Word, slides, or Excel. The words are written on this Mac.
+- **Library** — file on the left, bookmarks in the middle, the text on the right. Ask a chapter at the bottom if you add a key.
+- **Settings** — colours, an optional AI key, and extra help for scanned pages.
 
-yourMark is a Mac window, not a terminal. Three rooms, three looks. If this already feels like something you would open, it is probably for you.
-
-**Rooms**
-
-- **Convert** — drop a PDF, Word, slides, or Excel. Microsoft MarkItDown writes the words on this computer.
-- **Library** — file on the left, bookmarks in the middle, Markdown on the right. Ask a chapter at the bottom with your own key.
-- **Settings** — lock a Grok or OpenAI key once. Extra tools for scans (Docling) are optional.
-
-**Looks** — **Bright** (paper), **Dim** (a night desk), or **System** (follow macOS). Switch any time in the header.
+Colours: **Bright** (paper), **Dim** (a night desk), or **System** (follow the Mac). Switch any time in the header.
 
 <p align="center">
-  <img src="docs/shots/library-dim.jpg" alt="Library in Dim: files on the left, bookmarks in the middle, Markdown on the right, Ask a chapter at the bottom">
+  <img src="docs/shots/library-dim.jpg" alt="yourMark library at night: files on the left, bookmarks in the middle, Markdown on the right">
 </p>
 
-<p align="center"><strong>Library · Dim</strong> — the window you live in. File, bookmarks, Markdown. Ask a chapter underneath. Bookmarks jump like Preview.</p>
+<p align="center"><strong>Library at night</strong> — files, bookmarks, and the text. Ask a chapter underneath. Bookmarks jump like Preview.</p>
 
 <table>
 <tr>
 <td width="25%" valign="top">
 <img src="docs/shots/library-bright.jpg" alt="Library in Bright" />
-<p><strong>Library · Bright</strong> — same three columns on paper.</p>
+<p><strong>Library · Bright</strong> — the same three columns on paper.</p>
 </td>
 <td width="25%" valign="top">
 <img src="docs/shots/convert-dim.jpg" alt="Convert in Dim" />
-<p><strong>Convert · Dim</strong> — drop a PDF. Conversion stays on this Mac.</p>
+<p><strong>Convert</strong> — drop a PDF. Nothing is uploaded.</p>
 </td>
 <td width="25%" valign="top">
 <img src="docs/shots/convert-bright.jpg" alt="Convert in Bright" />
@@ -54,68 +48,73 @@ yourMark is a Mac window, not a terminal. Three rooms, three looks. If this alre
 </td>
 <td width="25%" valign="top">
 <img src="docs/shots/settings-dim.jpg" alt="Settings in Dim" />
-<p><strong>Settings</strong> — paste a key, press Enter, it is tested and locked. Docling is only for scans.</p>
+<p><strong>Settings</strong> — paste a key, press Enter. Extra tools are only for scans.</p>
 </td>
 </tr>
 </table>
 
-The GUI never vendors the converter. It finds `markitdown` on this Mac; **Upgrade Engine** pulls the current PyPI release.
+yourMark is the window. [Microsoft MarkItDown](https://github.com/microsoft/markitdown) does the converting, on this Mac. If Microsoft publishes an update, yourMark can install it for you.
 
-**Requires:** macOS 14+. Open the disk image and **drag yourMark onto Applications** (follow the arrow). Do not keep working from the disk — if you do, yourMark will offer to copy itself into Applications so ejecting the disk is safe. First launch installs Microsoft MarkItDown from PyPI if it is missing. Building from source needs Xcode.
+Needs **macOS 14** or later. Open the disk and **drag yourMark onto Applications** (follow the arrow). Do not keep working from the disk — if you do, yourMark will copy itself into Applications so ejecting is safe. The first launch installs MarkItDown if it is missing.
 
-If macOS says it could not verify the app: click **Done** (not Move to Bin), then open **If Apple blocks it** on the disk (a help page in Safari, not a program), or right-click yourMark → Open. That warning is Gatekeeper (not notarized yet) — not malware.
+If Apple says it could not verify the app: click **Done** (not Move to Bin), then open **If Apple blocks it** on the disk — a help page in Safari, not a program — or right-click yourMark → Open. That warning is normal until the app is notarized. It is not malware.
 
 ---
 
-## What conversion actually keeps
+## Changing the text
 
-| You asked | Honest result |
-|-----------|----------------|
-| **Tables** | Yes when the PDF has a real table (GFM). Colours / merged cells flatten. |
-| **Pictures** | Embedded photos from the PDF, linked next to that page. Full-page photographs of text pages are not added (those look like screenshots). Word/PPTX/photos use MarkItDown’s own images. Convert puts the Markdown and a `figures` folder together in a little folder named after the file. |
-| **Headers / footers** | **Remove headers and footers** in Settings (on by default) drops repeating page titles, page numbers, dates, and header logos. Chapter headings like 8.1 stay. |
-| **Outline** | The PDF’s own bookmarks (same tree as Preview.app) are written in as Markdown headings. Numbered titles (8.1, 8.1.1) become headings too. MarkItDown does not emit them. |
-| **Other files** | Word, PowerPoint, Excel, HTML, EPUB, CSV, JSON, XML, Outlook mail, RTF, ZIP (each file inside), and photos (JPEG/PNG/GIF/WebP, with EXIF when ExifTool is installed). |
+yourMark is a **reader**. To change the file, press **Edit**. That opens [MarkEdit](https://github.com/MarkEdit-app/MarkEdit), a free Mac editor. Get it from Settings if it is not installed. You do not need a GitHub account. Saves in MarkEdit show up here.
+
+---
+
+## What you get
+
+| You asked | What you actually get |
+|-----------|------------------------|
+| **Tables** | Yes, when the PDF has a real table. Colours and merged cells become plain cells. |
+| **Pictures** | The photos that were inside the PDF, next to that page. We do not add photographs of whole text pages. The Markdown and a `figures` folder sit together in a little folder named after the file. |
+| **Headers / footers** | **Remove headers and footers** in Settings (on by default) drops repeating page titles, page numbers, dates, and header logos. Chapter titles like 8.1 stay. |
+| **Bookmarks** | The same outline Preview shows becomes headings in the Markdown. Numbered titles (8.1, 8.1.1) become headings too. |
+| **Other files** | Word, PowerPoint, Excel, web pages, EPUB, CSV, mail, RTF, ZIP (each file inside), and photos. |
 
 ---
 
 ## Install
 
-**Everyone:** download the DMG, drag **yourMark** onto **Applications** (follow the arrow), then open it. First launch installs Microsoft MarkItDown.
+**Everyone:** download the disk image, drag **yourMark** onto **Applications** (follow the arrow), then open it. First launch installs Microsoft MarkItDown.
 
 **Homebrew (optional):**
 
 ```sh
 brew tap Burbank/yourMark
 brew install --cask yourmark
-uv tool install 'markitdown[all]'
 ```
 
-**From source:** `./Scripts/Install.command` or `./Scripts/build-app.sh`
+**From source:** `./Scripts/Install.command`
 
 ---
 
 ### If Apple blocks the app
 
-This build is not notarized, so macOS often shows **“yourMark.app” Not Opened** and offers **Move to Bin**. That is Gatekeeper, not malware.
+This build is not notarized yet, so macOS often shows **“yourMark.app” Not Opened** and offers **Move to Bin**. That is Apple being careful — not a virus.
 
 <p align="center">
-  <img src="docs/shots/not-opened.png" width="340" alt="macOS dialog: yourMark.app Not Opened. Apple could not verify yourMark.app is free of malware. Buttons: Done, Move to Bin.">
+  <img src="docs/shots/not-opened.png" width="340" alt="macOS dialog: yourMark.app Not Opened. Click Done, not Move to Bin.">
 </p>
 
 1. Click **Done** — not **Move to Bin**.
 2. Apple menu → **System Settings**.
 3. Sidebar → **Privacy & Security**.
-4. Scroll to **Security** (near the bottom of that pane).
+4. Scroll to **Security**.
 5. Next to *“yourMark.app” was blocked to protect your Mac*, click **Open Anyway**.
-6. Confirm **Open Anyway** on the next dialog.
+6. Confirm **Open Anyway**.
 
 <p align="center">
-  <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Security. Allow applications from: App Store & Known Developers. yourMark.app was blocked to protect your Mac — Open Anyway.">
+  <img src="docs/shots/open-anyway.png" width="720" alt="System Settings → Privacy & Security → Open Anyway">
 </p>
 
-You can also right-click yourMark → **Open**, or open **If Apple blocks it** on the disk image (a help page in Safari with a button into System Settings).
+You can also right-click yourMark → **Open**, or open **If Apple blocks it** on the disk (a page in Safari with a button into Settings).
 
 ## License
 
-MIT wrapper. MarkItDown is MIT from Microsoft.
+yourMark is MIT. MarkItDown is MIT, from Microsoft. Not an official Microsoft product.

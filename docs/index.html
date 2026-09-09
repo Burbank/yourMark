@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>yourMark — a Mac window for Microsoft MarkItDown</title>
-  <meta name="description" content="yourMark is a Mac app that sits in front of Microsoft MarkItDown. Drop a PDF, get Markdown with bookmarks, tables, and Ask a chapter. Conversion stays on this Mac." />
+  <title>yourMark — PDFs to Markdown on this Mac</title>
+  <meta name="description" content="yourMark is a Mac app that turns PDFs into Markdown you can search and ask about. The file never leaves this computer." />
   <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
   <meta property="og:title" content="yourMark" />
-  <meta property="og:description" content="A Mac window for Microsoft MarkItDown — PDFs to Markdown, locally." />
+  <meta property="og:description" content="Turn PDFs into Markdown on this Mac." />
   <meta property="og:image" content="og.jpg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -134,52 +134,49 @@
       <h1>yourMark</h1>
     </div>
     <p class="lede">
-      A simple Mac window in front of <strong>Microsoft MarkItDown</strong>.
-      Drop a PDF (or Word, slides, a spreadsheet, a photo, a ZIP). Get Markdown you can search,
-      bookmark, and ask — on this computer, not in the cloud.
+      A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into
+      <strong>Markdown</strong>. That is ordinary text you can search, copy, and ask
+      questions about. The file never leaves this computer.
     </p>
     <div class="row">
-      <a class="btn primary" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.36.dmg">Download yourMark-0.3.36.dmg</a>
+      <a class="btn primary" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.37.dmg">Download yourMark-0.3.37.dmg</a>
       <a class="btn ghost" href="https://github.com/microsoft/markitdown">MarkItDown (Microsoft)</a>
     </div>
-    <p class="lede" style="margin-top:0">Open the disk and <strong>drag yourMark onto Applications</strong> (follow the arrow). If macOS says the app is not opened: click Done, then open <strong>If Apple blocks it</strong> on the disk (a help page in Safari, not a program) → Open Anyway.</p>
+    <p class="lede" style="margin-top:0">Open the disk and <strong>drag yourMark onto Applications</strong> (follow the arrow). If Apple says the app is not opened: click Done, then open <strong>If Apple blocks it</strong> on the disk (a help page in Safari) → Open Anyway.</p>
 
     <section class="card">
-      <h2>Why Markdown</h2>
+      <h2>Why Markdown?</h2>
       <p>
-        A PDF is a picture of a page. Markdown is the words, in order, as plain text you can search and edit.
-        That is why it works so well with AI. A model can read a chapter, quote it, and tell you when the file is silent.
-        Keep the original PDF. Markdown is the working copy.
+        A PDF is a picture of a page. Markdown is the words, in order.
+        That is why it works so well with AI. A model can read a chapter, quote it,
+        and say when the file is silent. Keep the original PDF. Markdown is the working copy.
       </p>
     </section>
 
     <section class="card">
-      <h2>Edit the file — MarkEdit</h2>
+      <h2>Changing the text</h2>
       <p>
-        yourMark is a reader. To change the Markdown, press <strong>Edit</strong> in the pane.
-        That opens <a href="https://github.com/MarkEdit-app/MarkEdit">MarkEdit</a>, a free native Mac editor (MIT).
-        Install it once (<code>brew install --cask markedit</code>, or their DMG). First launch of yourMark offers that download.
+        yourMark is a reader. To change the file, press <strong>Edit</strong>.
+        That opens <a href="https://github.com/MarkEdit-app/MarkEdit">MarkEdit</a>, a free Mac editor.
+        Get it from Settings if it is not installed. You do not need a GitHub account.
         Saves in MarkEdit show up here.
       </p>
     </section>
 
     <section class="card">
-      <h2>A look around — rooms and looks</h2>
-      <p>
-        yourMark is a Mac window, not a terminal. Three rooms, three looks.
-        If this already feels like something you would open, it is probably for you.
-      </p>
+      <h2>A look inside</h2>
+      <p>The window has three places:</p>
       <ul class="opt-list">
-        <li><strong>Convert</strong> — drop a PDF, Word, slides, or Excel. Microsoft MarkItDown writes the words on this computer.</li>
-        <li><strong>Library</strong> — file on the left, bookmarks in the middle, Markdown on the right. Ask a chapter at the bottom with your own key.</li>
-        <li><strong>Settings</strong> — lock a Grok or OpenAI key once. Extra tools for scans (Docling) are optional.</li>
+        <li><strong>Convert</strong> — drop a PDF, Word, slides, or Excel. The words are written on this Mac.</li>
+        <li><strong>Library</strong> — file on the left, bookmarks in the middle, the text on the right. Ask a chapter at the bottom if you add a key.</li>
+        <li><strong>Settings</strong> — colours, an optional AI key, and extra help for scanned pages.</li>
       </ul>
-      <p class="looks"><strong>Looks:</strong> Bright (paper), Dim (a night desk), or System (follow macOS). Switch any time in the header.</p>
+      <p class="looks">Colours: <strong>Bright</strong> (paper), <strong>Dim</strong> (a night desk), or <strong>System</strong> (follow the Mac). Switch any time in the header — then scroll for pictures of the window.</p>
     </section>
 
     <figure class="hero">
-      <img src="shots/library-dim.jpg" alt="Library in Dim: files on the left, bookmarks in the middle, Markdown on the right, Ask a chapter at the bottom" width="1483" height="1078" />
-      <figcaption>Library · Dim — the window you live in. File, bookmarks, Markdown. Ask a chapter underneath. Bookmarks jump like Preview.</figcaption>
+      <img src="shots/library-dim.jpg" alt="yourMark library at night: files on the left, bookmarks in the middle, Markdown on the right" width="1483" height="1078" />
+      <figcaption>Library at night — files, bookmarks, and the text. Ask a chapter underneath. Bookmarks jump like Preview.</figcaption>
     </figure>
 
     <div class="grid4">
@@ -204,15 +201,13 @@
     <section class="card">
       <h2>What this is</h2>
       <p>
-        Students, notes, research papers, handbooks — anything you would rather
-        <em>search</em> than scroll. yourMark is the place you drop the file.
-        It is <strong>not</strong> the converter itself.
+        Handbooks, notes, papers — anything you would rather search than scroll.
+        Drop the file here. Nothing is uploaded.
       </p>
       <p>
-        The conversion is <a class="inline" href="https://github.com/microsoft/markitdown">Microsoft MarkItDown</a>,
-        an open-source tool (MIT). yourMark finds that program on your Mac,
-        runs it locally, then shows the result: outline, tables, pictures in
-        reading order, and Ask a chapter.
+        The converting is done by
+        <a class="inline" href="https://github.com/microsoft/markitdown">Microsoft MarkItDown</a>,
+        a free open-source tool. yourMark is the window: library, bookmarks, pictures, and Ask a chapter.
       </p>
     </section>
 
@@ -245,21 +240,14 @@ cd yourMark && ./Scripts/Install.command</pre>
     </section>
 
     <section class="card credit">
-      <h2>Credit — what the code actually does</h2>
+      <h2>Who does what</h2>
       <p>
-        <strong>yourMark is a placeholder GUI.</strong>
-        It does not contain Microsoft’s converter and it does not reimplement it.
-        When you convert a file, yourMark shells out to
-        <a class="inline" href="https://github.com/microsoft/markitdown">markitdown</a>
-        on this Mac. Tables and most of the Markdown come from that engine.
-        Pictures in a digital PDF are pulled into a figures folder next to the
-        Markdown after convert — MarkItDown itself does not keep PDF images.
-        If Microsoft ships a new release, use <strong>Upgrade Engine</strong> in the app
-        (or <code>uv tool upgrade markitdown</code>) — you get their update, not a fork.
+        yourMark is the window. Microsoft MarkItDown turns the file into Markdown, on this Mac.
+        Pictures from a digital PDF are saved next to that file after convert.
+        If Microsoft publishes an update, yourMark can install it for you.
       </p>
       <p>
-        <strong>yourMark adds:</strong> the window, library, bookmarks from the PDF outline,
-        pictures from the PDF, drag-and-drop, and Ask (your key, your provider).
+        yourMark adds the library, bookmarks from the PDF, drag-and-drop, and Ask (your key).
         Keep the original PDF. Markdown is for search and questions.
       </p>
       <p>
@@ -269,7 +257,7 @@ cd yourMark && ./Scripts/Install.command</pre>
     </section>
 
     <footer>
-      Free. Local. Not an official Microsoft product — a thin wrapper around one.
+      Free. Stays on this Mac. Not an official Microsoft product.
     </footer>
   </div>
 </body>
