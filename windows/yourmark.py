@@ -9,10 +9,12 @@ Frozen as yourMark.exe so Windows users do not need Python.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
 import threading
+import webbrowser
 from pathlib import Path
 
 KINDS = [
@@ -20,6 +22,8 @@ KINDS = [
     ("PDF", "*.pdf"),
     ("All files", "*.*"),
 ]
+
+MARKTEXT_PAGE = "https://github.com/marktext/marktext/releases/latest"
 
 
 def app_dir() -> Path:
@@ -29,6 +33,28 @@ def app_dir() -> Path:
     if (here / "markitdown_convert.py").exists():
         return here
     return here.parent / "Resources"
+
+
+def find_marktext() -> Path | None:
+    which = shutil.which("MarkText") or shutil.which("marktext")
+    if which:
+        return Path(which)
+    roots = [
+        os.environ.get("LOCALAPPDATA", ""),
+        os.environ.get("PROGRAMFILES", ""),
+        os.environ.get("PROGRAMFILES(X86)", ""),
+    ]
+    for root in roots:
+        if not root:
+            continue
+        for rel in (
+            Path("Programs") / "MarkText" / "MarkText.exe",
+            Path("MarkText") / "MarkText.exe",
+        ):
+            cand = Path(root) / rel
+            if cand.is_file():
+                return cand
+    return None
 
 
 def convert_one(src: Path, log) -> Path:
@@ -91,9 +117,10 @@ def run_gui() -> int:
         def __init__(self) -> None:
             super().__init__()
             self.title("yourMark for Windows (early)")
-            self.geometry("560x420")
-            self.minsize(480, 360)
+            self.geometry("580x500")
+            self.minsize(500, 420)
             self.files: list[Path] = []
+            self.last_md: Path | None = None
 
             pad = {"padx": 16, "pady": 6}
             ttk.Label(
@@ -103,18 +130,46 @@ def run_gui() -> int:
                 justify="left",
             ).pack(anchor="w", **pad)
 
+            ttk.Label(
+                self,
+                text="yourMark is a reader. MarkEdit is Mac-only. On Windows, a good\n"
+                "free open-source editor is MarkText. Get it once, then open the .md there.",
+                justify="left",
+            ).pack(anchor="w", **pad)
+
             btns = ttk.Frame(self)
             btns.pack(fill="x", **pad)
             ttk.Button(btns, text="Choose files…", command=self.choose).pack(side="left")
             ttk.Button(btns, text="Convert", command=self.start).pack(side="left", padx=8)
             ttk.Button(btns, text="Clear list", command=self.clear).pack(side="left")
+            self.edit_btn = ttk.Button(btns, text="Get MarkText", command=self.marktext)
+            self.edit_btn.pack(side="left", padx=8)
+            self.refresh_edit_btn()
 
-            self.listbox = tk.Listbox(self, height=8)
+            self.listbox = tk.Listbox(self, height=7)
             self.listbox.pack(fill="both", expand=True, padx=16, pady=4)
 
             self.status = tk.Text(self, height=7, wrap="word")
             self.status.pack(fill="both", expand=False, padx=16, pady=(4, 16))
             self.log("Ready. Choose a PDF, then Convert.")
+
+        def refresh_edit_btn(self) -> None:
+            if find_marktext():
+                self.edit_btn.configure(text="Open in MarkText")
+            else:
+                self.edit_btn.configure(text="Get MarkText")
+
+        def marktext(self) -> None:
+            exe = find_marktext()
+            if exe and self.last_md and self.last_md.is_file():
+                subprocess.Popen([str(exe), str(self.last_md)])
+                return
+            if exe:
+                subprocess.Popen([str(exe)])
+                return
+            webbrowser.open(MARKTEXT_PAGE)
+            self.log("Opened MarkText download. Install it, then press Open in MarkText.")
+            self.refresh_edit_btn()
 
         def log(self, msg: str) -> None:
             self.status.insert("end", msg + "\n")
@@ -145,6 +200,10 @@ def run_gui() -> int:
                 for src in list(self.files):
                     last = convert_one(src, self.log)
                 self.log("Done.")
+                self.last_md = last
+                self.refresh_edit_btn()
+                if last:
+                    self.log("To change the Markdown, open it in MarkText (Get MarkText if you do not have it).")
                 if last and sys.platform == "win32" and shutil.which("explorer"):
                     subprocess.Popen(["explorer", "/select,", str(last)])
             except Exception as exc:

@@ -8,6 +8,8 @@ Windows may say **Windows protected your PC** (SmartScreen). That is the same ki
 
 Choose files, then **Convert**. A folder opens with the `.md`.
 
+yourMark is a **reader**. MarkEdit is Mac-only. On Windows, use **[MarkText](https://github.com/marktext/marktext)** — free, open source, with a Windows installer. The exe has a **Get MarkText** button (it becomes **Open in MarkText** once installed).
+
 ## If you prefer Python
 
 ```bat

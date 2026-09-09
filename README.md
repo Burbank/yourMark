@@ -90,6 +90,7 @@ brew install --cask yourmark
 1. Double-click **yourMark.exe**. You do not need Python.
 2. If Windows says **Windows protected your PC**, click **More info** → **Run anyway**.
 3. Choose a PDF (or Word, slides, Excel), then **Convert**. A folder opens with the Markdown.
+4. To edit, use [MarkText](https://github.com/marktext/marktext) (free, open source). MarkEdit is Mac-only. The exe has a **Get MarkText** button.
 
 More in [`windows/`](windows/README.md).
 
