@@ -32,15 +32,23 @@ If Apple says it could not verify the app: click **Done** (not Move to Bin), the
 
 ## Pictures of the window
 
-![yourMark library at night: files on the left, bookmarks in the middle, Markdown on the right](docs/shots/library-dim.jpg)
+<br>
 
-*Library at night — files, bookmarks, and the text. Ask a chapter underneath. Bookmarks jump like Preview.*
+<img src="docs/shots/library-dim.jpg" width="880" alt="yourMark library at night: files on the left, bookmarks in the middle, Markdown on the right">
 
-| ![Library in Bright](docs/shots/library-bright.jpg) | ![Convert in Dim](docs/shots/convert-dim.jpg) |
+<br>
+
+Library at night — files, bookmarks, and the text. Ask a chapter underneath. Bookmarks jump like Preview.
+
+<br>
+
+| <img src="docs/shots/library-bright.jpg" width="420" alt="Library in Bright"> | <img src="docs/shots/convert-dim.jpg" width="420" alt="Convert in Dim"> |
 | --- | --- |
-| *Library · Bright — the same three columns on paper.* | *Convert — drop a PDF. Nothing is uploaded.* |
-| ![Convert in Bright](docs/shots/convert-bright.jpg) | ![Settings in Dim](docs/shots/settings-dim.jpg) |
-| *Convert · Bright — this 787 handbook kept 595 bookmarks from the PDF itself.* | *Settings — paste a key, press Enter. Extra tools are only for scans.* |
+| Library · Bright — the same three columns on paper. | Convert — drop a PDF. Nothing is uploaded. |
+| <img src="docs/shots/convert-bright.jpg" width="420" alt="Convert in Bright"> | <img src="docs/shots/settings-dim.jpg" width="420" alt="Settings in Dim"> |
+| Convert · Bright — this 787 handbook kept 595 bookmarks from the PDF itself. | Settings — paste a key, press Enter. Extra tools are only for scans. |
+
+<br>
 
 ## Changing the text
 
