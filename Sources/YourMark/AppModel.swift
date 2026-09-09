@@ -446,7 +446,7 @@ final class AppModel {
 
     ## Library cards
 
-    Swipe a card left to delete, or right-click for Open, Show in Finder, and Delete. **Show in Finder** selects the file. If you change that file, the library updates. Drag to rearrange.
+    Swipe a card left to delete, or right-click for Open, Show in Finder, and Delete. **Show in Finder** opens the folder with the new Markdown and pictures, not the original PDF. If you change that Markdown, the library updates. Drag to rearrange.
 
     ## Ask chapter
 
@@ -1290,12 +1290,13 @@ final class AppModel {
     }
 
     func revealLibrary(_ item: LibraryItem) {
-        var urls: [URL] = []
-        if !item.sourcePath.isEmpty {
-            urls.append(URL(fileURLWithPath: item.sourcePath))
+        let md = URL(fileURLWithPath: item.markdownPath)
+        guard FileManager.default.fileExists(atPath: md.path) else {
+            errorMessage = "That Markdown file is not on disk anymore."
+            return
         }
-        urls.append(URL(fileURLWithPath: item.markdownPath))
-        NSWorkspace.shared.activateFileViewerSelecting(urls)
+        // The convert folder — Markdown and pictures — not the original PDF.
+        reveal(md)
     }
 
     func pickOutputFolder() {
