@@ -14,7 +14,6 @@ STAGE="$ROOT/dist/dmg"
 
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist" 2>/dev/null || echo "0.0.0")
 DMG="$ROOT/dist/yourMark-$VERSION.dmg"
-LATEST="$ROOT/dist/yourMark.dmg"
 RW="$ROOT/dist/yourMark.rw.dmg"
 BG="$ROOT/Resources/dmg-background.png"
 [[ -f "$BG" ]] || { echo "missing $BG" >&2; exit 1; }
@@ -47,7 +46,7 @@ First launch installs Microsoft MarkItDown from PyPI (internet once).
 Keep the original PDF. Markdown is the working copy.
 TXT
 
-rm -f "$DMG" "$LATEST" "$RW"
+rm -f "$DMG" "$RW"
 
 make_plain() {
   ln -sf /Applications "$STAGE/Applications"
@@ -142,6 +141,4 @@ else
 fi
 
 [[ -f "$DMG" ]] || { echo "DMG was not created" >&2; exit 1; }
-cp -f "$DMG" "$LATEST"
 echo "✓ DMG: $DMG"
-echo "✓ also: $LATEST"
