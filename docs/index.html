@@ -3,292 +3,170 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>yourMark — PDFs to Markdown on this Mac</title>
-  <meta name="description" content="yourMark is a Mac app that turns PDFs into Markdown you can search and ask about. The file never leaves this computer." />
-  <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+  <title>yourMark — simpler browser version</title>
+  <meta name="description" content="Simpler yourMark in the browser. Drop a PDF; it stays in this tab. The Mac app is the complete version." />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
-  <meta property="og:title" content="yourMark" />
-  <meta property="og:description" content="Turn PDFs into Markdown on this Mac." />
-  <meta property="og:image" content="og.jpg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --navy: #003d7a;
-      --cyan: #00a1e4;
-      --ink: #2d271f;
-      --paper: #e7dcc6;
-      --card: #f7f1e4;
-      --line: #c2b195;
-      --muted: #5c5346;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
-      color: var(--ink);
-      background: var(--paper);
-      line-height: 1.5;
-    }
-    .wrap { max-width: 52rem; margin: 0 auto; padding: 2rem 1.15rem 3.5rem; }
-    .kicker {
-      font-family: ui-monospace, Menlo, monospace;
-      font-size: .68rem;
-      letter-spacing: .16em;
-      text-transform: uppercase;
-      color: #0077aa;
-    }
-    .brand {
-      display: flex; align-items: center; gap: .7rem;
-      margin: .45rem 0 0;
-    }
-    .mark {
-      width: 2.4rem; height: 2.4rem;
-      border-radius: 22%;
-      overflow: hidden;
-      background: transparent;
-    }
-    .mark img { width: 100%; height: 100%; display: block; }
-    h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); letter-spacing: -0.03em; margin: 0; }
-    .lede { font-size: 1.12rem; color: var(--muted); max-width: 40rem; margin: .85rem 0 0; }
-    .row { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.35rem 0 1.8rem; }
-    a.btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      min-height: 2.75rem; padding: 0 1.15rem;
-      border-radius: 8px; font: 700 1rem inherit; text-decoration: none;
-      border: 2px solid var(--navy);
-    }
-    a.btn.primary { background: var(--navy); color: #fff; }
-    a.btn.ghost { background: transparent; color: var(--navy); }
-    figure {
-      margin: 0 0 1.5rem;
-      background: var(--card);
-      border: 2px solid var(--line);
-      border-radius: 14px;
-      overflow: visible;
-    }
-    figure img { display: block; width: 100%; max-width: 100%; height: auto; }
-    figure .shot {
-      overflow: hidden;
-      border-radius: 12px 12px 0 0;
-      line-height: 0;
-    }
-    figcaption {
-      padding: .7rem 1rem .85rem;
-      font-size: .92rem;
-      color: var(--muted);
-      border-top: 1px solid var(--line);
-      background: var(--card);
-      border-radius: 0 0 12px 12px;
-    }
-    section.card {
-      background: var(--card);
-      border: 2px solid var(--line);
-      border-radius: 14px;
-      padding: 1.15rem 1.2rem 1.25rem;
-      margin-bottom: 1rem;
-    }
-    h2 { font-size: 1.2rem; margin: 0 0 .5rem; letter-spacing: -0.02em; }
-    ol { margin: .35rem 0 0; padding-left: 1.2rem; }
-    li + li { margin-top: .25rem; }
-    pre, code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .82rem; }
-    pre {
-      background: #efe6d4;
-      border-radius: 8px;
-      padding: .75rem .9rem;
-      overflow-x: auto;
-      white-space: pre-wrap;
-    }
-    .grid2 {
-      display: grid;
-      gap: 1rem;
-    }
-    @media (min-width: 720px) {
-      .grid2 { grid-template-columns: 1fr 1fr; }
-    }
-    .grid4 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: .7rem;
-      margin-bottom: 1.5rem;
-    }
-    @media (min-width: 720px) {
-      .grid4 { grid-template-columns: 1fr 1fr 1fr; }
-    }
-    .grid4 figure { margin: 0; }
-    .grid4 figcaption { font-size: .8rem; padding: .5rem .65rem .6rem; }
-    figure.hero { margin: 2.25rem 0 1.5rem; }
-    figure img {
-      display: block;
-      width: 100%;
-      max-width: 100%;
-      height: auto;
-    }
-    .shots { margin: 2.75rem 0 1.5rem; padding-top: 1.5rem; }
-    .shots h2 { margin: 0 0 1.25rem; }
-    .opt-list { margin: .4rem 0 1rem; padding-left: 1.15rem; }
-    .opt-list li + li { margin-top: .35rem; }
-    .looks { color: var(--muted); margin: 0 0 1rem; }
-    footer {
-      margin-top: 1.5rem;
-      padding-top: 1.2rem;
-      border-top: 2px solid var(--line);
-      color: var(--muted);
-      font-size: .95rem;
-    }
-    footer a, a.inline { color: var(--navy); }
-    .credit strong { color: var(--ink); }
-  </style>
+  <link rel="stylesheet" href="app.css" />
 </head>
 <body>
-  <div class="wrap">
-    <div class="kicker">Mac app · local files</div>
-    <div class="brand">
-      <span class="mark" aria-hidden="true"><img src="icon.png" alt="" /></span>
-      <h1>yourMark</h1>
-    </div>
-    <p class="lede">
-      A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into
-      <strong>Markdown</strong>. That is ordinary text you can search, copy, and ask
-      questions about. The file never leaves this computer.
-      See <a href="https://github.com/Burbank/yourMark/releases">All versions</a>
-      for an early Windows version as well.
+  <div id="app">
+    <header class="bar">
+      <div class="brand">
+        <img src="icon.png" width="32" height="32" alt="" />
+        <div>
+          <strong>yourMark</strong>
+          <span class="sub">simpler · in this browser</span>
+        </div>
+      </div>
+      <nav class="tabs">
+        <button data-tab="library" class="on">Library</button>
+        <button data-tab="convert">Convert</button>
+      </nav>
+      <div class="seg" id="theme-seg" title="Colours">
+        <button data-theme="system">SYSTEM</button>
+        <button data-theme="bright">BRIGHT</button>
+        <button data-theme="dim">DIM</button>
+      </div>
+      <button data-tab="settings" class="ghost" id="btn-settings">Settings</button>
+      <button class="ghost round" id="btn-help" title="Help">i</button>
+    </header>
+
+    <p class="banner">
+      This is a <strong>simpler</strong> version. Files never leave this tab.
+      The <a href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.37.dmg">Mac app</a>
+      is the complete one (Microsoft MarkItDown, pictures, OCR).
+      <a href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe">Windows (early)</a>.
     </p>
-    <div class="row">
-      <a class="btn primary" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.37.dmg">Download yourMark-0.3.37.dmg</a>
-      <a class="btn ghost" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe">Windows (early)</a>
-      <a class="btn ghost" href="https://github.com/microsoft/markitdown">MarkItDown (Microsoft)</a>
-    </div>
-    <p class="lede" style="margin-top:0">Open the disk and <strong>drag yourMark onto Applications</strong> (follow the arrow). If Apple says the app is not opened: click Done, then open <strong>If Apple blocks it</strong> on the disk (a help page in Safari) → Open Anyway.</p>
 
-    <section class="card">
-      <h2>Why Markdown?</h2>
-      <p>
-        A PDF is a picture of a page. Markdown is the words, in order.
-        That is why it works so well with AI. A model can read a chapter, quote it,
-        and say when the file is silent. Keep the original PDF. Markdown is the working copy.
-      </p>
-    </section>
-
-    <section class="card">
-      <h2>Changing the text</h2>
-      <p>
-        yourMark is a reader. To change the file, press <strong>Edit</strong>.
-        That opens <a href="https://github.com/MarkEdit-app/MarkEdit">MarkEdit</a>, a free Mac editor.
-        Get it from Settings if it is not installed. You do not need a GitHub account.
-        Saves in MarkEdit show up here.
-      </p>
-      <figure class="hero" style="margin: 1.25rem 0 0">
-        <div class="shot">
-          <img src="shots/markedit-side.jpg" alt="yourMark on the left, MarkEdit on the right, both showing Getting started with yourMark" />
+    <main id="view-library" class="stage">
+      <aside class="cards" id="cards"></aside>
+      <aside class="toc" id="toc"></aside>
+      <section class="reader">
+        <div class="reader-top">
+          <span id="reader-title">Getting started with yourMark</span>
+          <div class="reader-tools">
+            <span class="a-sm">A</span>
+            <input type="range" id="font-size" min="14" max="28" value="18" />
+            <span class="a-lg">A</span>
+            <button id="btn-rendered" class="on">Rendered</button>
+            <button id="btn-source">Source</button>
+            <button id="btn-download">Download</button>
+          </div>
         </div>
-        <figcaption>yourMark on the left. MarkEdit on the right. Press Edit; what you save there shows up here.</figcaption>
-      </figure>
+        <article id="md-view" class="md"></article>
+        <pre id="md-src" class="src" hidden></pre>
+      </section>
+    </main>
+
+    <footer class="ask" id="ask-bar">
+      <span class="ask-model" id="ask-model">Ask this chapter · stays in this tab</span>
+      <input id="ask-q" type="text" placeholder="What does this chapter say about…" />
+      <button id="btn-ask">Ask</button>
+    </footer>
+
+    <section id="view-convert" class="pane" hidden>
+      <div class="kicker">CONVERT</div>
+      <h2>Drop a PDF</h2>
+      <p class="lede">Drop a PDF or Word file on this window. Words are read here — nothing is uploaded. The Mac app uses Microsoft MarkItDown and keeps pictures better.</p>
+      <div class="drop" id="drop">
+        <p><strong>Drop PDFs or Word here</strong></p>
+        <p class="muted">Or choose files. Markdown is saved in this browser.</p>
+        <button id="btn-choose" class="primary">Choose files</button>
+        <input id="file-input" type="file" accept=".pdf,.docx,.md,.txt" multiple hidden />
+      </div>
+      <div id="jobs"></div>
     </section>
 
-    <section class="card">
-      <h2>A look inside</h2>
-      <p>The window has three places:</p>
-      <ul class="opt-list">
-        <li><strong>Convert</strong> — drop a PDF, Word, slides, or Excel. The words are written on this Mac.</li>
-        <li><strong>Library</strong> — file on the left, bookmarks in the middle, the text on the right. Ask a chapter at the bottom if you add a key.</li>
-        <li><strong>Settings</strong> — Bright, Dim, or System colours in the header; an optional AI key; extra help for scanned pages.</li>
-      </ul>
+    <section id="view-settings" class="pane settings" hidden>
+      <h2>This document</h2>
+      <label class="row-set">
+        <span>
+          <strong>Remove headers and footers</strong>
+          <em>Drops repeating page titles, page numbers, and header logos. Chapter headings stay. On by default.</em>
+        </span>
+        <input type="checkbox" id="opt-chrome" checked />
+      </label>
+
+      <h2>Reader</h2>
+      <label class="row-set">
+        <span>
+          <strong>Font</strong>
+          <em>Applies to the Markdown pane. Size is the A slider on the reader.</em>
+        </span>
+        <select id="opt-font">
+          <option value="Atkinson Hyperlegible">Atkinson Hyperlegible</option>
+          <option value="Georgia, serif">Georgia</option>
+          <option value="system-ui, sans-serif">System</option>
+          <option value="ui-monospace, Menlo, monospace">Mono</option>
+        </select>
+      </label>
+
+      <h2>Edit the file</h2>
+      <div class="box">
+        <p>yourMark is a reader. Download the Markdown, then open it in a free editor.</p>
+        <p><strong>Mac:</strong> <a href="https://github.com/MarkEdit-app/MarkEdit">MarkEdit</a> — the same editor the Mac app opens.</p>
+        <p><strong>Windows:</strong> <a href="https://github.com/marktext/marktext/releases/latest">MarkText</a> — free, open source.</p>
+        <button id="btn-get-editor" class="primary">Get the editor</button>
+      </div>
+
+      <h2>Ask AI</h2>
+      <div class="box">
+        <label class="row-set">
+          <span>Provider</span>
+          <select id="opt-provider">
+            <option value="openai">OpenAI</option>
+            <option value="xai">xAI</option>
+          </select>
+        </label>
+        <label class="row-set">
+          <span>API key</span>
+          <span class="key-row">
+            <input type="password" id="opt-key" placeholder="sk-… or xai-…" autocomplete="off" />
+            <button id="btn-lock-key">Enter</button>
+          </span>
+        </label>
+        <p class="muted" id="key-status">This browser often cannot call the model (a safety rule of the site). The Mac app can. A key here is only stored in this tab, for a test.</p>
+        <button id="btn-test-key">Test key</button>
+      </div>
+
+      <h2>Get the full app</h2>
+      <div class="box">
+        <p>Library, bookmarks, pictures, OCR, and Ask with your key work best on the Mac.</p>
+        <p>
+          <a class="btn-link" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.37.dmg">Download Mac disk</a>
+          ·
+          <a class="btn-link" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe">Windows exe</a>
+          ·
+          <a class="btn-link" href="https://github.com/Burbank/yourMark">GitHub</a>
+        </p>
+      </div>
     </section>
+  </div>
 
-    <div class="shots">
-      <h2>Pictures of the window</h2>
-      <figure class="hero">
-        <div class="shot">
-          <img src="shots/library-dim.jpg" alt="yourMark library at night: files on the left, bookmarks in the middle, Markdown on the right" />
-        </div>
-        <figcaption>Library at night — files, bookmarks, and the text. Ask a chapter underneath. Bookmarks jump like Preview.</figcaption>
-      </figure>
-
-      <div class="grid4">
-        <figure>
-          <div class="shot">
-            <img src="shots/library-bright.jpg" alt="Library in Bright" loading="lazy" />
-          </div>
-          <figcaption>Library · Bright — the same three columns on paper.</figcaption>
-        </figure>
-        <figure>
-          <div class="shot">
-            <img src="shots/convert-bright.jpg" alt="Convert — drop a PDF" loading="lazy" />
-          </div>
-          <figcaption>Convert — drop a PDF. Nothing is uploaded.</figcaption>
-        </figure>
-        <figure>
-          <div class="shot">
-            <img src="shots/settings-dim.jpg" alt="Settings" loading="lazy" />
-          </div>
-          <figcaption>Settings — headers, font, MarkEdit, and your key.</figcaption>
-        </figure>
+  <div id="help" class="modal" hidden>
+    <div class="help-card">
+      <header>
+        <h2>Help</h2>
+        <button id="help-close">Close</button>
+      </header>
+      <div class="help-grid">
+        <article><h3>This tab</h3><p>A simpler yourMark. Drop a PDF; words stay in this browser. Nothing is uploaded.</p></article>
+        <article><h3>Mac app</h3><p>The complete version. Microsoft MarkItDown, pictures next to the file, OCR for scans, Ask with your key.</p></article>
+        <article><h3>Convert</h3><p>Drop a PDF or Word file. Repeating headers can be dropped in Settings. Numbered titles become headings.</p></article>
+        <article><h3>Library</h3><p>Cards on the left. Bookmarks in the middle — the PDF outline when it has one. Click to jump.</p></article>
+        <article><h3>Ask</h3><p>Answers come from the open chapter, in this tab. A real model needs the Mac app; browsers often block the key.</p></article>
+        <article><h3>Edit</h3><p>Download the Markdown. Mac: MarkEdit. Windows: MarkText. Both are free and open source.</p></article>
       </div>
     </div>
-
-    <section class="card">
-      <h2>What this is</h2>
-      <p>
-        Handbooks, notes, papers — anything you would rather search than scroll.
-        Drop the file here. Nothing is uploaded.
-      </p>
-      <p>
-        The converting is done by
-        <a class="inline" href="https://github.com/microsoft/markitdown">Microsoft MarkItDown</a>,
-        a free open-source tool. yourMark is the window: library, bookmarks, pictures, and Ask a chapter.
-      </p>
-    </section>
-
-    <figure>
-      <img src="shots/ask.jpg" alt="Ask strip under a chapter, with a question field and Ask button" width="1280" height="800" loading="lazy" />
-      <figcaption>Ask a chapter — answers come from that section of the file. Paste your own xAI or OpenAI key in Settings if you want a real model; otherwise a short demo is enough to try it.</figcaption>
-    </figure>
-
-    <section class="card">
-      <h2>Install (no Terminal)</h2>
-      <ol>
-        <li>Download the disk image.</li>
-        <li>Drag <strong>yourMark</strong> onto <strong>Applications</strong> (follow the arrow).</li>
-        <li>If macOS says it could not verify the app, click <strong>Done</strong> (not Move to Bin). Then open <strong>If Apple blocks it</strong> on the disk (a help page in Safari) — or Apple menu → System Settings → <strong>Privacy & Security</strong> → scroll to <strong>Security</strong> → <strong>Open Anyway</strong>.</li>
-        <li>First launch installs Microsoft MarkItDown itself (needs the internet once).</li>
-      </ol>
-      <p>
-        <img src="shots/open-anyway.png" width="709" height="248" alt="System Settings → Privacy & Security: yourMark.app was blocked to protect your Mac. Open Anyway." />
-      </p>
-    </section>
-
-    <section class="card">
-      <h2>Homebrew or Terminal (optional)</h2>
-      <p>Only if you already live in a terminal:</p>
-      <pre>brew tap Burbank/yourMark
-brew install --cask yourmark
-uv tool install 'markitdown[all]'</pre>
-      <pre>git clone https://github.com/Burbank/yourMark.git
-cd yourMark && ./Scripts/Install.command</pre>
-    </section>
-
-    <section class="card credit">
-      <h2>Who does what</h2>
-      <p>
-        yourMark is the window. Microsoft MarkItDown turns the file into Markdown, on this Mac.
-        Pictures from a digital PDF are saved next to that file after convert.
-        If Microsoft publishes an update, yourMark can install it for you.
-      </p>
-      <p>
-        yourMark adds the library, bookmarks from the PDF, drag-and-drop, and Ask (your key).
-        Keep the original PDF. Markdown is for search and questions.
-      </p>
-      <p>
-        MarkItDown is MIT, by Microsoft.
-        yourMark is MIT, by <a class="inline" href="https://github.com/Burbank/yourMark">Burbank</a>.
-      </p>
-    </section>
-
-    <footer>
-      Free. Stays on this Mac. Not an official Microsoft product.
-    </footer>
   </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/13.0.3/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.7/purify.min.js"></script>
+  <script src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
