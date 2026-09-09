@@ -85,7 +85,7 @@ brew install --cask yourmark
 
 **From source:** `./Scripts/Install.command`
 
-**Windows (early):** a small companion lives in [`windows/`](windows/README.md). It uses the same Microsoft converter. It is not the Mac window yet — no library, bookmarks, or Ask.
+**Windows (early):** [Download yourMark.exe](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe) — convert only, no library yet. Windows may warn that it is unrecognized; **More info** → **Run anyway**. Details in [`windows/`](windows/README.md).
 
 
 ### If Apple blocks the app
