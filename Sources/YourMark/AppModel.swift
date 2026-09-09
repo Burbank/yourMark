@@ -436,6 +436,10 @@ final class AppModel {
 
     Settings → **Remove headers and footers** (on by default) drops the repeating page title, page number, date, and header logos.
 
+    ## Picture links
+
+    Pictures are files in the figures folder. The Markdown only points at them. In the reader, rest the pointer on a blue link for a small preview. Click the link: Finder opens with that picture selected.
+
     ## Bookmarks
 
     The Bookmarks pane is the PDF outline when the file has one, otherwise headings. Click to jump, like Preview.

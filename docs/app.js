@@ -1,35 +1,22 @@
 /* simpler yourMark — files stay in this tab */
 (() => {
   const GUIDE_ID = "guide";
+  const GUIDE_CARDS = [
+    ["Browser preview", "This site is a preview. Files stay in this tab. Nothing is uploaded. The browser version does not include OCR."],
+    ["Mac app", "Better for PDFs with graphics — OCR and layout. Scans, tables, and figures stay intact there."],
+    ["Convert", "Drop a PDF that already has selectable text. A scan (a photograph of the page) gets a short note. Use the Mac app for that."],
+    ["Library", "Cards on the left. Click to open. The × removes a file from this browser only."],
+    ["Bookmarks", "The middle pane is the PDF outline when the file has one, otherwise headings. Click to jump."],
+    ["Ask", "The answer is taken from the open chapter, in this tab. A real model needs the Mac app."],
+    ["Edit", "Download, then open in MarkEdit (Mac) or MarkText (Windows). Both are free."],
+    ["Themes", "Bright, Dim, or System in the header. Font and size are in Settings."],
+  ];
+
   const GUIDE = `# Getting started with yourMark
 
-This site is a **browser preview**. Files stay in this tab. Nothing is uploaded. The browser version does **not** include OCR.
+This site is a **browser preview**. The browser version does **not** include OCR.
 
-The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for PDFs with graphics — it includes OCR and layout. Scans, tables, and figures stay intact there.
-
-## Convert
-
-Open **Convert** and drop a PDF that already has selectable text. If the PDF is a **scan** (a photograph of the page), you will see a short note. Use the Mac app for that.
-
-## Bookmarks
-
-The middle pane is the PDF outline when the file has one, otherwise headings. Click to jump, like Preview.
-
-## Library cards
-
-Click a card to open it. The × removes it from this browser only.
-
-## Ask chapter
-
-Type a question. The answer is taken from the open chapter, in this tab. A real model needs the Mac app — browsers often block the API key.
-
-## Edit
-
-Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit-app/MarkEdit) (Mac) or [MarkText](https://github.com/marktext/marktext) (Windows). Both are free.
-
-## Themes
-
-**Bright**, **Dim**, or **System** in the header. Font and size are in Settings and on the reader.
+The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for PDFs with graphics — OCR and layout. Scans, tables, and figures stay intact there.
 `;
 
   pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -485,8 +472,16 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
       return;
     }
     $("md-src").textContent = f.markdown;
-    const html = mdToHtml(f.markdown);
-    $("md-view").innerHTML = DOMPurify.sanitize(html, { ADD_TAGS: ["img"], ADD_ATTR: ["src", "alt"] });
+    if (f.id === GUIDE_ID && state.rendered) {
+      $("md-view").innerHTML = GUIDE_CARDS.map(
+        ([h, p]) => `<article><h3>${h}</h3><p>${p}</p></article>`
+      ).join("");
+      $("md-view").classList.add("help-grid");
+    } else {
+      $("md-view").classList.remove("help-grid");
+      const html = mdToHtml(f.markdown);
+      $("md-view").innerHTML = DOMPurify.sanitize(html, { ADD_TAGS: ["img"], ADD_ATTR: ["src", "alt"] });
+    }
     $("md-view").hidden = !state.rendered;
     $("md-src").hidden = state.rendered;
     $("btn-rendered").classList.toggle("on", state.rendered);
