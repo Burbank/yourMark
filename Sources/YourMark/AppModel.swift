@@ -1185,7 +1185,7 @@ final class AppModel {
         for line in rawLines {
             if isPreviewImageLine(line) {
                 imageCount += 1
-                if imageCount > 18 {
+                if imageCount > 8 {
                     droppedImages = true
                     continue
                 }
@@ -1337,10 +1337,6 @@ final class AppModel {
         for item in library {
             if !item.markdownPath.isEmpty {
                 paths.append(item.markdownPath)
-                let folder = URL(fileURLWithPath: item.markdownPath).deletingLastPathComponent()
-                paths.append(folder.path)
-                let figures = folder.appendingPathComponent("figures", isDirectory: true).path
-                paths.append(figures)
             }
             if !item.sourcePath.isEmpty {
                 paths.append(item.sourcePath)
@@ -1370,11 +1366,7 @@ final class AppModel {
             }
             guard let item = self.library.first(where: { $0.id == self.selectedLibraryID }) else { return }
             let md = item.markdownPath
-            let folder = URL(fileURLWithPath: md).deletingLastPathComponent().path
-            let figures = folder + "/figures"
-            let related = path == md || path == folder || path == figures
-                || path.hasPrefix(figures + "/")
-            guard related else { return }
+            guard path == md else { return }
             guard FileManager.default.isReadableFile(atPath: md) else { return }
             self.fileNotice = "Updated from disk"
             self.selectLibrary(item, show: false)
