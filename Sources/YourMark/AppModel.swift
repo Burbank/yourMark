@@ -871,12 +871,7 @@ final class AppModel {
                         }
                         let bookmarks = await loadBookmarks(original)
                         let (url, located) = await finalizeMarkdown(output, original: original, bookmarks: bookmarks)
-                        let pictures = await PdfFigures.embed(
-                            markdownURL: url,
-                            sourcePDF: original,
-                            stripChrome: stripChrome,
-                            onStatus: onOCR
-                        )
+                        let pictures = 0
                         await finishJob(jobID: jobID, markdown: url, original: original, usedOCR: true, pictures: pictures, bookmarks: located)
                         continue
                     }
@@ -956,12 +951,15 @@ final class AppModel {
                     await service.enrichPDF(markdown: url, pdf: original, script: script)
                     let bookmarks = await loadBookmarks(original)
                     let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
-                    pictures = await PdfFigures.embed(
-                        markdownURL: final,
-                        sourcePDF: original,
-                        stripChrome: stripChrome,
-                        onStatus: onFig
-                    )
+                    pictures = 0
+                    if !usedOCR {
+                        pictures = await PdfFigures.embed(
+                            markdownURL: final,
+                            sourcePDF: original,
+                            stripChrome: stripChrome,
+                            onStatus: onFig
+                        )
+                    }
                     await finishJob(
                         jobID: jobID,
                         markdown: final,

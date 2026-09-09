@@ -286,15 +286,10 @@ dst.write_text(md, encoding="utf-8")
     ) async {
         guard markdownLooksEmpty(markdownURL) else { return }
         guard let doc = PDFDocument(url: sourcePDF), doc.pageCount > 0 else { return }
-        onStatus("Keeping page pictures so diagrams stay visible…")
-
-        let figDir = markdownURL.deletingLastPathComponent()
-            .appendingPathComponent(PdfFigures.folderName, isDirectory: true)
-        try? FileManager.default.createDirectory(at: figDir, withIntermediateDirectories: true)
+        onStatus("Reading the words on each page with Live Text…")
 
         var parts: [String] = [
-            "> This PDF was a scan (no text layer). yourMark ran OCR, then Microsoft MarkItDown.",
-            "> Page pictures are kept so tables, arrows, and diagrams still show.",
+            "> This PDF was a scan (no text layer). yourMark ran OCR. Page photographs are not added — the words are the file.",
             "",
         ]
 
@@ -303,13 +298,9 @@ dst.write_text(md, encoding="utf-8")
             onStatus("OCR page \(i + 1) of \(count)…")
             guard let page = doc.page(at: i) else { continue }
             let heading = pageHeading(page, index: i)
+            let text = await liveText(page)
             parts.append("## \(heading)")
             parts.append("")
-            if let file = savePageImage(page, index: i, into: figDir) {
-                parts.append("![\(heading)](\(PdfFigures.folderName)/\(file))")
-                parts.append("")
-            }
-            let text = await liveText(page)
             if !text.isEmpty {
                 parts.append(text)
                 parts.append("")
