@@ -4,7 +4,7 @@
   <img src="docs/icon.png" width="112" height="112" alt="yourMark">
 </p>
 
-A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, and ask questions about. The file never leaves this computer.
+A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, and ask questions about. The file never leaves this computer. See [All versions](https://github.com/Burbank/yourMark/releases) for an early Windows version as well.
 
 **[Download yourMark-0.3.37.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.37.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Same page in a browser](https://burbank.github.io/yourMark/)
 
