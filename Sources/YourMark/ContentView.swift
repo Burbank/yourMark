@@ -987,6 +987,7 @@ private struct FigureLink: View {
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             }
             .onHover { inside in
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
                 hoverTask?.cancel()
                 if inside {
                     hoverTask = Task { @MainActor in
@@ -1001,7 +1002,7 @@ private struct FigureLink: View {
             .popover(isPresented: $hovering, arrowEdge: .trailing) {
                 HoverThumb(url: url, caption: alt)
             }
-            .help("Hover for a preview. Click to show the file in Finder.")
+            .help("Hover for a small preview. Click to show this picture in Finder.")
             .padding(.vertical, 2)
     }
 }

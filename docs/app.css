@@ -266,8 +266,22 @@ select { font: inherit; background: var(--page); color: var(--ink); border: 1px 
 }
 .help-grid h3 { margin: 0 0 .3rem; font-size: 1rem; }
 .help-grid p { margin: 0; color: var(--muted); font-size: .92rem; max-width: 22rem; }
+.md.help-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .7rem;
+  padding: 1rem 1.1rem 2rem;
+}
+.md.help-grid article {
+  border: 1px solid var(--line);
+  background: var(--field);
+  border-radius: 10px;
+  padding: .75rem .85rem;
+}
+.md.help-grid h3 { margin: 0 0 .35rem; font-size: 1rem; }
+.md.help-grid p { margin: 0; color: var(--muted); font-size: .92rem; max-width: 22rem; }
 @media (max-width: 900px) {
   .stage { grid-template-columns: 8.5rem 7.5rem 1fr; }
-  .help-grid { grid-template-columns: 1fr; }
+  .help-grid, .md.help-grid { grid-template-columns: 1fr; }
   .brand .sub { display: none; }
 }
