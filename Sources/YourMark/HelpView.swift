@@ -30,7 +30,7 @@ struct HelpView: View {
         ),
         (
             "Picture links",
-            "In the reader, a picture is a blue link — not the photo itself. Rest the pointer on the link: a preview appears (size is the photo slider next to text size). Move away and it goes. Click the link: Finder opens with that picture file selected, in the figures folder. Pictures are not loaded while you scroll, so the window should not freeze."
+            "In the reader, a picture is a blue link — not the photo itself. Rest the pointer on the link: a preview appears in the reader (the photo slider next to text size sets how big). Click the link: Finder opens with that picture file selected. Pictures are not loaded while you scroll."
         ),
         (
             "Bookmarks",

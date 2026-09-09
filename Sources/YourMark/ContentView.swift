@@ -626,6 +626,7 @@ struct LibraryPanel: View {
     @AppStorage("previewPointSize") private var previewPointSize = 16.0
     @AppStorage("figurePreviewSize") private var figurePreviewSize = 600.0
     @AppStorage("previewRendered") private var previewRendered = true
+    @State private var figureHover: FigureHover?
 
     var body: some View {
         GeometryReader { geo in
@@ -764,6 +765,17 @@ struct LibraryPanel: View {
                     withAnimation { proxy.scrollTo(target, anchor: .top) }
                 }
             }
+            .overlay(alignment: .topTrailing) {
+                if let figureHover {
+                    HoverThumb(
+                        url: figureHover.url,
+                        caption: figureHover.alt,
+                        previewSize: figurePreviewSize
+                    )
+                    .padding(16)
+                    .allowsHitTesting(false)
+                }
+            }
         }
     }
 
@@ -850,7 +862,7 @@ struct LibraryPanel: View {
     private func markdownLine(_ line: String) -> some View {
         let size = CGFloat(previewPointSize)
         if let img = markdownImage(line, base: model.previewBaseURL) {
-            FigureLink(url: img.url, alt: img.alt, previewSize: figurePreviewSize)
+            FigureLink(url: img.url, alt: img.alt, hover: $figureHover)
         } else if !previewRendered {
             Text(line.isEmpty ? " " : line)
                 .font(.system(size: size, design: .monospaced))
@@ -987,13 +999,18 @@ private func markdownImage(_ line: String, base: URL?) -> (alt: String, url: URL
     return (alt, url)
 }
 
-/// A hyperlink in the reader. Nothing is decoded until the pointer rests on it.
+private struct FigureHover: Equatable {
+    let url: URL
+    let alt: String
+}
+
+/// A hyperlink in the reader. The picture is drawn in the reader overlay, not
+/// in a system popover — those ignore our size and hug a tiny NSImage.
 private struct FigureLink: View {
     @Environment(\.deck) private var deck
     let url: URL
     let alt: String
-    var previewSize: Double = 600
-    @State private var hovering = false
+    @Binding var hover: FigureHover?
     @State private var hoverTask: Task<Void, Never>?
 
     var body: some View {
@@ -1002,6 +1019,7 @@ private struct FigureLink: View {
             .underline()
             .foregroundStyle(deck.cyan)
             .onTapGesture {
+                hover = nil
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             }
             .onHover { inside in
@@ -1009,53 +1027,58 @@ private struct FigureLink: View {
                 hoverTask?.cancel()
                 if inside {
                     hoverTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 280_000_000)
+                        try? await Task.sleep(nanoseconds: 220_000_000)
                         guard !Task.isCancelled else { return }
-                        hovering = true
+                        hover = FigureHover(url: url, alt: alt)
                     }
                 } else {
-                    hovering = false
+                    hover = nil
                 }
             }
-            .popover(isPresented: $hovering, arrowEdge: .trailing) {
-                HoverThumb(url: url, caption: alt, previewSize: previewSize)
-            }
-            .help("Hover for a preview. Click to show this picture in Finder.")
             .padding(.vertical, 2)
     }
 }
 
 private struct HoverThumb: View {
+    @Environment(\.deck) private var deck
     let url: URL
     let caption: String
-    var previewSize: Double = 600
+    var previewSize: Double
     @State private var image: NSImage?
 
-    private var box: CGFloat { CGFloat(max(240, min(previewSize, 900))) }
+    private var box: CGFloat { CGFloat(max(280, min(previewSize, 900))) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: box, maxHeight: box * 0.75)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-            } else {
-                Text("Preview…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 200, height: 56)
+        VStack(alignment: .leading, spacing: 8) {
+            Group {
+                if let image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    ZStack {
+                        Rectangle().fill(deck.field)
+                        Text("Preview…")
+                            .font(.caption)
+                            .foregroundStyle(deck.muted)
+                    }
+                }
             }
+            .frame(width: box, height: box * 0.75)
+            .clipped()
             Text(caption.isEmpty ? url.lastPathComponent : caption)
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(deck.muted)
                 .lineLimit(2)
-                .frame(maxWidth: box, alignment: .leading)
+                .frame(width: box, alignment: .leading)
         }
-        .padding(10)
+        .padding(12)
+        .frame(width: box + 24)
+        .background(RoundedRectangle(cornerRadius: 10).fill(deck.panel))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(deck.line, lineWidth: deck.border))
+        .shadow(color: .black.opacity(0.28), radius: 16, y: 6)
         .task(id: "\(url.path)-\(Int(box))") {
-            let pixel = Int(min(1400, box * 1.5))
+            let pixel = Int(min(1800, box * 2))
             if let cached = PreviewImageCache.shared.image(for: url, pixel: pixel) {
                 image = cached
                 return
