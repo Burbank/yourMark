@@ -906,7 +906,47 @@ final class AppModel {
                             }
                         }
                     }
-                    if usedOCR, OcrService.markdownLooksEmpty(url) {
+                    let pages = await PdfWork.runAsync { OcrService.pageCount(of: original) }
+                    let thin = OcrService.markdownLooksThin(url, pageCount: max(pages, 1))
+                    if ocrEnabled, thin, !usedOCR {
+                        // MarkItDown saw no text layer. OCR first, then convert again.
+                        jobs[index].needsOCR = true
+                        jobs[index].detail = "Scan detected — OCR first, then convert"
+                        statusText = "This PDF is a scan (picture of the page). Running OCR…"
+                        let onOCR: @Sendable (String) -> Void = { msg in
+                            Task { @MainActor in
+                                self.statusText = msg
+                                if let i = self.jobs.firstIndex(where: { $0.id == jobID }) {
+                                    self.jobs[i].detail = msg
+                                }
+                            }
+                        }
+                        if await OcrService.layoutMarkdown(
+                            from: original,
+                            to: output,
+                            ocr: true,
+                            onStatus: onOCR
+                        ) {
+                            usedOCR = true
+                            UserDefaults.standard.set(true, forKey: "doclingReady")
+                        } else {
+                            let prepared = try await OcrService.searchablePDF(from: original, force: true, onStatus: onOCR)
+                            usedOCR = true
+                            if prepared.didOCR || prepared.url != original {
+                                _ = try await service.convert(
+                                    input: prepared.url,
+                                    output: output,
+                                    script: Bundle.main.url(forResource: "markitdown_convert", withExtension: "py"),
+                                    llmKey: "",
+                                    llmBase: askBaseURL,
+                                    llmModel: askModel
+                                )
+                            }
+                        }
+                    }
+                    if usedOCR, OcrService.markdownLooksThin(url, pageCount: max(pages, 1)) {
+                        await OcrService.enrichMarkdown(markdownURL: url, sourcePDF: original, onStatus: onFig)
+                    } else if usedOCR, OcrService.markdownLooksEmpty(url) {
                         await OcrService.enrichMarkdown(markdownURL: url, sourcePDF: original, onStatus: onFig)
                     }
                     statusText = "Cleaning headers and headings…"

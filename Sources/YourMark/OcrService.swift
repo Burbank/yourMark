@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import Foundation
 import PDFKit
 import Vision
@@ -46,15 +47,73 @@ enum OcrService {
         guard let doc = PDFDocument(url: url), doc.pageCount > 0 else {
             return PdfProfile(needsOCR: false, looksGraphic: false)
         }
-        let sample = min(doc.pageCount, 6)
+        // Sample cover, a middle page, and the end — a text-rich cover
+        // must not hide 20 scanned pages behind it.
+        let last = doc.pageCount - 1
+        var idxs = [0, min(1, last), last / 2, (last * 3) / 4, last]
+        if doc.pageCount > 8 { idxs.append(2) }
+        let sample = Array(Set(idxs)).sorted().filter { $0 >= 0 && $0 < doc.pageCount }
+
         var chars = 0
-        for i in 0..<sample {
-            chars += (doc.page(at: i)?.string ?? "")
+        var scanPages = 0
+        for i in sample {
+            guard let page = doc.page(at: i) else { continue }
+            let kit = (page.string ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .count
+            chars += kit
+            // PDFKit on recent macOS can "see" words on a photograph of a page.
+            // MarkItDown/pdfminer cannot — it only reads a real text layer.
+            // Count Tj/TJ operators so a scan is not mistaken for a digital PDF.
+            if textOperatorCount(page) < 2 {
+                scanPages += 1
+            }
         }
-        let avg = chars / max(sample, 1)
-        return PdfProfile(needsOCR: chars < sample * 48, looksGraphic: avg < 320)
+        let avg = chars / max(sample.count, 1)
+        let mostlyPictures = scanPages * 2 >= sample.count
+        let fewLetters = chars < sample.count * 48
+        return PdfProfile(needsOCR: mostlyPictures || fewLetters, looksGraphic: mostlyPictures || avg < 320)
+    }
+
+    /// How many actual PDF text-drawing operators this page has (not Live Text).
+    private static func textOperatorCount(_ page: PDFPage) -> Int {
+        guard let cgPage = page.pageRef else { return 0 }
+        let stream = CGPDFContentStreamCreateWithPage(cgPage)
+        guard let table = CGPDFOperatorTableCreate() else {
+            CGPDFContentStreamRelease(stream)
+            return 0
+        }
+        var count = 0
+        let bump: CGPDFOperatorCallback = { _, info in
+            guard let info else { return }
+            info.assumingMemoryBound(to: Int.self).pointee += 1
+        }
+        for name in ["Tj", "TJ", "'", "\""] {
+            CGPDFOperatorTableSetCallback(table, name, bump)
+        }
+        withUnsafeMutablePointer(to: &count) { ptr in
+            let scanner = CGPDFScannerCreate(stream, table, UnsafeMutableRawPointer(ptr))
+            CGPDFScannerScan(scanner)
+            CGPDFScannerRelease(scanner)
+        }
+        CGPDFOperatorTableRelease(table)
+        CGPDFContentStreamRelease(stream)
+        return count
+    }
+
+    /// After MarkItDown: almost no real words for the number of pages.
+    static func markdownLooksThin(_ url: URL, pageCount: Int) -> Bool {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return true }
+        var body = text
+        body = body.replacingOccurrences(of: #"!\[[^\]]*\]\([^)]*\)"#, with: " ", options: .regularExpression)
+        body = body.replacingOccurrences(of: #"<!--[\s\S]*?-->"#, with: " ", options: .regularExpression)
+        body = body.replacingOccurrences(of: #"(?m)^#+\s*Page\s+\d+\s*$"#, with: " ", options: .regularExpression)
+        let letters = body.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
+        return letters < max(60, pageCount * 25)
+    }
+
+    static func pageCount(of url: URL) -> Int {
+        PDFDocument(url: url)?.pageCount ?? 0
     }
 
     static func ocrmypdfPath() -> String? {
@@ -187,15 +246,16 @@ dst.write_text(md, encoding="utf-8")
     /// Returns a PDF MarkItDown can read. Original file is never overwritten.
     static func searchablePDF(
         from url: URL,
+        force: Bool = false,
         onStatus: @escaping @Sendable (String) -> Void
     ) async throws -> (url: URL, didOCR: Bool) {
-        guard needsOCR(url) else { return (url, false) }
+        guard force || needsOCR(url) else { return (url, false) }
         if let exe = ocrmypdfPath() {
             onStatus("OCR with OCRmyPDF (Tesseract)…")
             let out = FileManager.default.temporaryDirectory
                 .appendingPathComponent("yourMark-ocr-\(UUID().uuidString).pdf")
             let args = [
-                "--skip-text",
+                force ? "--force-ocr" : "--skip-text",
                 "--optimize", "0",
                 "--output-type", "pdf",
                 "-l", "eng",

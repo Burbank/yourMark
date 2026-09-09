@@ -9,7 +9,7 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is the comple
 
 ## Convert
 
-Open **Convert** and drop a PDF or a Word file. Repeating headers and footers can be dropped in Settings. Numbered titles like 8.1 become headings.
+Open **Convert** and drop a PDF or a Word file. If the PDF is a **scan** (a picture of the page), this tab runs OCR first. Repeating headers and footers can be dropped in Settings.
 
 ## Bookmarks
 
@@ -151,12 +151,14 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
   }
 
   function itemsToLines(items) {
+    if (!items || !items.length) return [];
     const rows = new Map();
     for (const it of items) {
+      if (!it || !it.transform) continue;
       const y = Math.round((it.transform[5] || 0) / 3) * 3;
       const x = it.transform[4] || 0;
       const rec = rows.get(y) || [];
-      rec.push({ x, s: it.str });
+      rec.push({ x, s: it.str || "" });
       rows.set(y, rec);
     }
     return [...rows.entries()]
@@ -202,11 +204,15 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
   async function imagesOnPage(page) {
     const out = [];
     try {
+      if (!page || !page.objs || typeof page.objs.get !== "function") return out;
       const ops = await page.getOperatorList();
+      if (!ops || !ops.fnArray) return out;
       const names = new Set();
+      const paintImg = pdfjsLib.OPS && pdfjsLib.OPS.paintImageXObject;
+      const paintX = pdfjsLib.OPS && pdfjsLib.OPS.paintXObject;
       for (let i = 0; i < ops.fnArray.length; i++) {
         const fn = ops.fnArray[i];
-        if (fn === pdfjsLib.OPS.paintImageXObject || fn === pdfjsLib.OPS.paintXObject) {
+        if (fn === paintImg || fn === paintX) {
           const n = ops.argsArray[i] && ops.argsArray[i][0];
           if (typeof n === "string") names.add(n);
         }
@@ -231,6 +237,50 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
     return out;
   }
 
+  async function renderPageJpeg(page, scale) {
+    const vp = page.getViewport({ scale: scale || 1.25 });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.floor(vp.width);
+    canvas.height = Math.floor(vp.height);
+    const ctx = canvas.getContext("2d", { alpha: false });
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    return canvas;
+  }
+
+  async function ocrScan(pdf, onStatus) {
+    const n = Math.min(pdf.numPages, 40);
+    const parts = [
+      "> This PDF is a **scan** (a picture of each page). This tab is reading the words with OCR. The Mac app does this better, with IBM Docling.",
+      "",
+    ];
+    let worker = null;
+    if (window.Tesseract && Tesseract.createWorker) {
+      onStatus("Starting OCR in this tab…");
+      worker = await Tesseract.createWorker("eng");
+    }
+    for (let i = 1; i <= n; i++) {
+      onStatus("Scan — OCR page " + i + " of " + n + "…");
+      const page = await pdf.getPage(i);
+      const canvas = await renderPageJpeg(page, worker ? 1.4 : 1.1);
+      const jpeg = canvas.toDataURL("image/jpeg", 0.72);
+      parts.push("## Page " + i, "", `![Page ${i}](${jpeg})`, "");
+      if (worker) {
+        try {
+          const { data } = await worker.recognize(canvas);
+          const text = (data && data.text ? data.text : "").trim();
+          if (text) parts.push(text, "");
+        } catch {
+          parts.push("_Could not read this page._", "");
+        }
+      }
+    }
+    if (worker) await worker.terminate();
+    if (!window.Tesseract) {
+      parts.push("_Install nothing — the Mac app OCRs scans properly. This tab kept the page pictures._", "");
+    }
+    return parts.join("\n");
+  }
+
   async function outlineOf(pdf) {
     try {
       const tree = await pdf.getOutline();
@@ -249,20 +299,32 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
     }
   }
 
-  async function convertPdf(buf, name) {
+  async function convertPdf(buf, name, onStatus) {
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     const pages = [];
-    const pictures = [];
     const n = Math.min(pdf.numPages, 400);
+    let letters = 0;
     for (let i = 1; i <= n; i++) {
       const page = await pdf.getPage(i);
       const tc = await page.getTextContent();
-      const lines = itemsToLines(tc.items);
+      const lines = itemsToLines(tc && tc.items);
+      letters += lines.join(" ").replace(/[^a-zA-Z]/g, "").length;
       pages.push(lines);
-      if (pictures.length < 40) {
-        const imgs = await imagesOnPage(page);
-        pictures.push(imgs);
-      } else pictures.push([]);
+    }
+    const scan = n > 0 && letters < n * 40;
+    if (scan) {
+      onStatus && onStatus("Scan detected — OCR first…");
+      const md = await ocrScan(pdf, onStatus || (() => {}));
+      return { markdown: md, bookmarks: bookmarksFrom(md, []), name };
+    }
+    const pictures = [];
+    for (let i = 1; i <= n; i++) {
+      try {
+        const page = await pdf.getPage(i);
+        pictures.push(await imagesOnPage(page));
+      } catch {
+        pictures.push([]);
+      }
     }
     const chrome = state.settings.stripChrome ? chromeSet(pages) : new Set();
     const parts = [];
@@ -271,15 +333,15 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
         .filter((l) => !chrome.has(norm(l)))
         .filter((l) => !/^\s*\d+\s*$/.test(l))
         .map(headingize);
-      if (!body.length && !pictures[i].length) return;
+      if (!body.length && !(pictures[i] && pictures[i].length)) return;
       parts.push(`<!-- page ${i + 1} -->`, "");
       parts.push(...body, "");
-      pictures[i].forEach((src, k) => {
+      (pictures[i] || []).forEach((src, k) => {
         parts.push(`![Figure p${i + 1}-${k + 1}](${src})`, "");
       });
     });
     let md = parts.join("\n").trim();
-    if (!md) md = "_No selectable text in this PDF. Scans need the Mac app (OCR)._";
+    if (!md) md = "_No selectable text in this PDF. Scans need OCR — try again, or the Mac app._";
     const outline = await outlineOf(pdf);
     return { markdown: md, bookmarks: bookmarksFrom(md, outline), name };
   }
@@ -409,7 +471,7 @@ Press **Download**, then open the file in [MarkEdit](https://github.com/MarkEdit
       const buf = await file.arrayBuffer();
       const ext = file.name.split(".").pop().toLowerCase();
       let rec;
-      if (ext === "pdf") rec = await convertPdf(buf, file.name);
+      if (ext === "pdf") rec = await convertPdf(buf, file.name, (msg) => { row.textContent = msg; });
       else if (ext === "docx") rec = await convertDocx(buf, file.name);
       else if (ext === "md" || ext === "txt") {
         const text = new TextDecoder().decode(buf);
