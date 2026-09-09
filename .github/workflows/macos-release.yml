@@ -47,3 +47,4 @@ jobs:
             gh release create "$TAG" dist/yourMark-*.dmg dist/yourMark.dmg --title "yourMark $TAG" --notes "$NOTES"
           fi
           gh release edit "$TAG" --latest
+          bash Scripts/prune-releases.sh
