@@ -1,0 +1,45 @@
+name: Windows smoke
+
+on:
+  push:
+    paths:
+      - "windows/**"
+      - ".github/workflows/windows-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  convert:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install MarkItDown
+        run: python -m pip install "markitdown[pdf]"
+      - name: Make a tiny PDF
+        shell: python
+        run: |
+          from pathlib import Path
+          Path("hello.pdf").write_bytes(
+              b"%PDF-1.4\n"
+              b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+              b"2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n"
+              b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
+              b"4 0 obj<</Length 44>>stream\n"
+              b"BT /F1 18 Tf 40 70 Td (Windows smoke) Tj ET\n"
+              b"endstream\nendobj\n"
+              b"5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
+              b"xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n"
+              b"0000000058 00000 n \n0000000115 00000 n \n0000000274 00000 n \n"
+              b"0000000392 00000 n \ntrailer<</Size 6/Root 1 0 R>>\nstartxref\n466\n%%EOF\n"
+          )
+          print(Path("hello.pdf").stat().st_size)
+
+      - name: Convert without a window
+        run: python windows/yourmark.py --cli hello.pdf
+      - name: Check Markdown
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "hello/hello.md")) { throw "missing hello/hello.md" }
+          Get-Content "hello/hello.md"
