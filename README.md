@@ -85,7 +85,13 @@ brew install --cask yourmark
 
 **From source:** `./Scripts/Install.command`
 
-**Windows (early):** [Download yourMark.exe](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe) — convert only, no library yet. Windows may warn that it is unrecognized; **More info** → **Run anyway**. Details in [`windows/`](windows/README.md).
+**Windows (early):** [Download yourMark.exe](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe). No library, bookmarks, or Ask. Same Microsoft converter.
+
+1. Double-click **yourMark.exe**. You do not need Python.
+2. If Windows says **Windows protected your PC**, click **More info** → **Run anyway**.
+3. Choose a PDF (or Word, slides, Excel), then **Convert**. A folder opens with the Markdown.
+
+More in [`windows/`](windows/README.md).
 
 
 ### If Apple blocks the app

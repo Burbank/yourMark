@@ -40,7 +40,7 @@ jobs:
             echo "Not a tag; skipping release upload"
             exit 0
           fi
-          NOTES="Drag yourMark onto Applications (follow the arrow). If macOS blocks it: Done, then Privacy and Security Settings on the disk, then Open Anyway. First launch installs Microsoft MarkItDown from PyPI."
+          NOTES="$(cat docs/release-notes.md)"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/yourMark-*.dmg dist/yourMark.dmg --clobber
           else
