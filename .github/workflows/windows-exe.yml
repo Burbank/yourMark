@@ -33,8 +33,11 @@ jobs:
             --icon yourmark.ico `
             --add-data "markitdown_convert.py;." `
             --collect-all markitdown `
+            --collect-all magika `
+            --collect-all pdfminer `
             --hidden-import pdfminer `
             --hidden-import pdfminer.high_level `
+            --hidden-import magika `
             yourmark.py
           dir dist
       - uses: actions/upload-artifact@v4
@@ -42,27 +45,35 @@ jobs:
           name: yourMark-windows
           path: windows/dist/yourMark.exe
       - name: Smoke convert with the exe
-        shell: pwsh
+        shell: python
         run: |
-          python -c @"
           from pathlib import Path
-          Path('hello.pdf').write_bytes(
-              b'%PDF-1.4\n'
-              b'1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n'
-              b'2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n'
-              b'3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n'
-              b'4 0 obj<</Length 44>>stream\n'
-              b'BT /F1 18 Tf 40 70 Td (Windows smoke) Tj ET\n'
-              b'endstream\nendobj\n'
-              b'5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n'
-              b'xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n'
-              b'0000000058 00000 n \n0000000115 00000 n \n0000000274 00000 n \n'
-              b'0000000392 00000 n \ntrailer<</Size 6/Root 1 0 R>>\nstartxref\n466\n%%EOF\n'
+          import subprocess, sys, time
+          Path("hello.pdf").write_bytes(
+              b"%PDF-1.4\n"
+              b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+              b"2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n"
+              b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 144]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
+              b"4 0 obj<</Length 44>>stream\n"
+              b"BT /F1 18 Tf 40 70 Td (Windows smoke) Tj ET\n"
+              b"endstream\nendobj\n"
+              b"5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
+              b"xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n"
+              b"0000000058 00000 n \n0000000115 00000 n \n0000000274 00000 n \n"
+              b"0000000392 00000 n \ntrailer<</Size 6/Root 1 0 R>>\nstartxref\n466\n%%EOF\n"
           )
-          "@
-          & .\windows\dist\yourMark.exe --cli hello.pdf
-          if (-not (Test-Path "hello\hello.md")) { throw "missing hello/hello.md" }
-          Get-Content "hello\hello.md"
+          exe = Path("windows/dist/yourMark.exe")
+          r = subprocess.run([str(exe), "--cli", "hello.pdf"], timeout=120)
+          md = Path("hello/hello.md")
+          # Windowed onefile may return before the worker finishes.
+          for _ in range(30):
+              if md.exists() and md.stat().st_size > 0:
+                  break
+              time.sleep(1)
+          if not md.exists():
+              sys.exit(f"missing {md} (exe exit {r.returncode})")
+          print(md.read_text(encoding="utf-8", errors="replace"))
+
       - name: Attach to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
