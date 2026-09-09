@@ -6,7 +6,7 @@
 
 A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, and ask questions about. The file never leaves this computer. See [All versions](https://github.com/Burbank/yourMark/releases) for an early Windows version as well.
 
-**[Download yourMark-0.3.39.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.39.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Test a simpler version in your browser](https://burbank.github.io/yourMark/)
+**[Download yourMark-0.3.40.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.40.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Test a simpler version in your browser](https://burbank.github.io/yourMark/)
 
 ## Why Markdown?
 
