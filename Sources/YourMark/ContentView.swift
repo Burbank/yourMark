@@ -1594,6 +1594,9 @@ struct EnginePanel: View {
         .scrollContentBackground(.hidden)
         .background(deck.page)
         .foregroundStyle(deck.ink)
+        .overlay(alignment: .bottomTrailing) {
+            VersionStamp()
+        }
         .onAppear { model.refreshOCRTools() }
     }
 }

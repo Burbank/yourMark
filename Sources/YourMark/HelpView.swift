@@ -103,5 +103,21 @@ struct HelpView: View {
             .foregroundStyle(deck.ink)
         }
         .background(deck.page)
+        .overlay(alignment: .bottomTrailing) {
+            VersionStamp()
+        }
+    }
+}
+
+struct VersionStamp: View {
+    @Environment(\.deck) private var deck
+
+    var body: some View {
+        Text("yourMark \(AppUpdates.currentVersion)")
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundStyle(deck.muted)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .allowsHitTesting(false)
     }
 }
