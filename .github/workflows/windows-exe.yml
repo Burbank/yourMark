@@ -81,14 +81,19 @@ jobs:
         run: |
           set -euo pipefail
           EXE=windows/dist/yourMark.exe
+          VER=$(grep -A1 CFBundleShortVersionString Scripts/build-app.sh | tail -n1 | sed -n 's/.*<string>\([^<]*\)<\/string>.*/\1/p')
+          VER=${VER:-0.0.0}
+          cp "$EXE" "windows/dist/yourMark-${VER}.exe"
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF_NAME}"
-            gh release upload "$TAG" "$EXE" --clobber
           else
             TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
-            if [[ -n "$TAG" ]]; then
-              gh release upload "$TAG" "$EXE" --clobber
-            else
-              echo "No release yet; artifact only"
-            fi
           fi
+          if [[ -z "$TAG" ]]; then
+            echo "No release yet; artifact only"
+            exit 0
+          fi
+          # Latest gets the simple name; every kept release also gets a versioned exe.
+          gh release upload "$TAG" "$EXE" "windows/dist/yourMark-${VER}.exe" --clobber
+          echo "Uploaded yourMark.exe and yourMark-${VER}.exe to $TAG"
+
