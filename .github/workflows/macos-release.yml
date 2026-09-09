@@ -29,7 +29,6 @@ jobs:
           name: yourMark-dmg
           path: |
             dist/yourMark-*.dmg
-            dist/yourMark.dmg
       - name: Attach to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -42,9 +41,9 @@ jobs:
           fi
           NOTES="$(cat docs/release-notes.md)"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/yourMark-*.dmg dist/yourMark.dmg --clobber
+            gh release upload "$TAG" dist/yourMark-*.dmg --clobber
           else
-            gh release create "$TAG" dist/yourMark-*.dmg dist/yourMark.dmg --title "yourMark $TAG" --notes "$NOTES"
+            gh release create "$TAG" dist/yourMark-*.dmg --title "yourMark $TAG" --notes "$NOTES"
           fi
           gh release edit "$TAG" --latest
           bash Scripts/prune-releases.sh
