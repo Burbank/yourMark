@@ -54,6 +54,16 @@ Library at night — files, bookmarks, and the text. Ask a chapter underneath. B
 
 yourMark is a **reader**. To change the file, press **Edit**. That opens [MarkEdit](https://github.com/MarkEdit-app/MarkEdit), a free Mac editor. Get it from Settings if it is not installed. You do not need a GitHub account. Saves in MarkEdit show up here.
 
+<br>
+
+<img src="docs/shots/markedit-side.jpg" width="880" alt="yourMark on the left, MarkEdit on the right, both showing Getting started with yourMark">
+
+<br>
+
+yourMark on the left. MarkEdit on the right. Press Edit; what you save there shows up here.
+
+<br>
+
 ## What you get
 
 | You asked | What you actually get |
