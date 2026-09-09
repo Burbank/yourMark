@@ -219,7 +219,7 @@ except Exception:
     pass
 opts.generate_picture_images = True
 try:
-    opts.images_scale = 1.4
+    opts.images_scale = 1.2
 except Exception:
     pass
 
@@ -235,12 +235,21 @@ conv = DocumentConverter(
 )
 result = conv.convert(str(src))
 dst.parent.mkdir(parents=True, exist_ok=True)
+art = dst.parent / "figures"
+art.mkdir(parents=True, exist_ok=True)
 try:
     from docling_core.types.doc import ImageRefMode
-    md = result.document.export_to_markdown(image_mode=ImageRefMode.EMBEDDED)
+    try:
+        result.document.save_as_markdown(
+            filename=str(dst),
+            image_mode=ImageRefMode.REFERENCED,
+            artifacts_dir=art,
+        )
+    except TypeError:
+        md = result.document.export_to_markdown(image_mode=ImageRefMode.REFERENCED)
+        dst.write_text(md, encoding="utf-8")
 except Exception:
-    md = result.document.export_to_markdown()
-dst.write_text(md, encoding="utf-8")
+    dst.write_text(result.document.export_to_markdown(), encoding="utf-8")
 """#
 
     /// Returns a PDF MarkItDown can read. Original file is never overwritten.

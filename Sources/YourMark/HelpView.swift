@@ -26,7 +26,7 @@ struct HelpView: View {
         ),
         (
             "Pictures",
-            "Embedded photos are saved next to the Markdown. We do not insert photographs of whole text pages. Header logos drop when that setting is on. Pictures follow reading order."
+            "Pictures live in a figures folder next to the Markdown. The file only points at them (Figure 3 · page 2), so it stays small for you and for AI. The reader shows a label — tap Show for a thumbnail. Finder opens the original. We do not paste photographs of whole text pages, and we do not put huge pictures inside the Markdown."
         ),
         (
             "Bookmarks",

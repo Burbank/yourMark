@@ -833,15 +833,8 @@ struct LibraryPanel: View {
     private func markdownLine(_ line: String) -> some View {
         let size = CGFloat(previewPointSize)
         if let img = markdownImage(line, base: model.previewBaseURL) {
-            VStack(alignment: .leading, spacing: 4) {
-                PreviewPicture(url: img.url)
-                if !img.alt.isEmpty, previewRendered {
-                    Text(img.alt)
-                        .font(model.readerFont(size: max(10, size - 4)))
-                        .foregroundStyle(deck.muted)
-                }
-            }
-            .padding(.vertical, 6)
+            FigureChip(url: img.url, alt: img.alt)
+                .padding(.vertical, 4)
         } else if !previewRendered {
             Text(line.isEmpty ? " " : line)
                 .font(.system(size: size, design: .monospaced))
@@ -976,6 +969,44 @@ private func markdownImage(_ line: String, base: URL?) -> (alt: String, url: URL
         ? URL(fileURLWithPath: path)
         : base.appendingPathComponent(path)
     return (alt, url)
+}
+
+/// A named pointer to a file in figures/. Pictures are not decoded while you
+/// scroll — tap Show for a small preview, or Finder for the original.
+private struct FigureChip: View {
+    @Environment(\.deck) private var deck
+    let url: URL
+    let alt: String
+    @State private var show = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "photo")
+                    .foregroundStyle(deck.cyan)
+                Text(alt.isEmpty ? url.lastPathComponent : alt)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(deck.ink)
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                Button(show ? "Hide" : "Show") { show.toggle() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundStyle(deck.cyan)
+                Button("Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(deck.field))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: deck.border))
+            if show {
+                PreviewPicture(url: url)
+            }
+        }
+    }
 }
 
 /// Decode off the main thread and cache a small thumbnail. Loading full JPEGs
