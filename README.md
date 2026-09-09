@@ -69,6 +69,9 @@ brew install --cask yourmark
 
 **From source:** `./Scripts/Install.command`
 
+**Windows (early):** a small companion lives in [`windows/`](windows/README.md). It uses the same Microsoft converter. It is not the Mac window yet — no library, bookmarks, or Ask.
+
+
 ### If Apple blocks the app
 
 This build is not notarized yet, so macOS often shows **“yourMark.app” Not Opened** and offers **Move to Bin**. That is Apple being careful — not a virus.
