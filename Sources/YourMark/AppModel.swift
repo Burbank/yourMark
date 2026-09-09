@@ -236,6 +236,18 @@ final class AppModel {
         showCrashSheet = pendingCrash != nil
     }
 
+    func copyPendingCrash() {
+        guard let report = pendingCrash else {
+            showCrashSheet = false
+            return
+        }
+        CrashReports.copyLog(report)
+        CrashReports.markSent(report.id)
+        pendingCrash = nil
+        showCrashSheet = false
+        statusText = "Crash report copied — paste it in a message"
+    }
+
     func sendPendingCrash() {
         guard let report = pendingCrash else {
             showCrashSheet = false
@@ -271,8 +283,9 @@ final class AppModel {
 
     func sendLastCrash() {
         guard let report = CrashReports.latestAny() else { return }
-        pendingCrash = report
-        sendPendingCrash()
+        CrashReports.copyLog(report)
+        CrashReports.markSent(report.id)
+        statusText = "Crash report copied — paste it in a message"
     }
 
     func setPreviewFont(_ name: String) {

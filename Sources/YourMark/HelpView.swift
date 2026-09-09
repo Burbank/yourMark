@@ -54,7 +54,7 @@ struct HelpView: View {
         ),
         (
             "Crash reports",
-            "If yourMark closes unexpectedly, we can open a GitHub issue with the macOS report. You choose each time. Settings can turn the offer off. Nothing is sent in the background."
+            "If yourMark closes unexpectedly, we can copy the macOS report. Paste it in a message — no GitHub account needed. Settings can turn the offer off. Nothing is sent in the background."
         ),
     ]
 
