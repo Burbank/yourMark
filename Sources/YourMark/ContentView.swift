@@ -990,10 +990,12 @@ private struct PreviewPicture: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxHeight: 280)
+                    .frame(maxHeight: 240)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             } else {
-                Color.clear.frame(height: 8)
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.gray.opacity(0.12))
+                    .frame(maxWidth: .infinity, minHeight: 120, maxHeight: 120)
             }
         }
         .task(id: url) {
@@ -1021,26 +1023,36 @@ private final class PreviewImageCache: @unchecked Sendable {
     static let shared = PreviewImageCache()
     private let cache = NSCache<NSURL, NSImage>()
     private init() {
-        cache.countLimit = 40
-        cache.totalCostLimit = 40 * 1024 * 1024
+        cache.countLimit = 24
+        cache.totalCostLimit = 16 * 1024 * 1024
     }
 
     func image(for url: URL) -> NSImage? { cache.object(forKey: url as NSURL) }
 
     func store(_ img: NSImage, for url: URL) {
-        cache.setObject(img, forKey: url as NSURL, cost: Int(img.size.width * img.size.height))
+        let cost = Int(max(1, img.size.width * img.size.height * 4))
+        cache.setObject(img, forKey: url as NSURL, cost: min(cost, 2_000_000))
     }
 
-    static func thumbnailData(_ url: URL, maxPixel: CGFloat = 900) -> Data? {
-        guard FileManager.default.isReadableFile(atPath: url.path) else { return nil }
-        guard let fileData = try? Data(contentsOf: url), fileData.count > 32 else { return nil }
+    /// Copy the file (do not mmap it). A mapped JPEG that is rewritten while
+    /// you scroll is a SIGBUS. Then build a small thumbnail, never the full page.
+    static func thumbnailData(_ url: URL, maxPixel: CGFloat = 720) -> Data? {
+        autoreleasepool { thumbnailDataLocked(url, maxPixel: maxPixel) }
+    }
+
+    private static func thumbnailDataLocked(_ url: URL, maxPixel: CGFloat) -> Data? {
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue ?? 0
+        guard size > 32, size < 12_000_000 else { return nil }
+        guard let fileData = try? Data(contentsOf: url, options: [.uncached]), fileData.count > 32 else {
+            return nil
+        }
         let opts = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let src = CGImageSourceCreateWithData(fileData as CFData, opts) else { return nil }
         let thumb: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixel,
             kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceShouldCacheImmediately: false,
         ]
         guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, thumb as CFDictionary) else {
             return nil
@@ -1055,7 +1067,7 @@ private final class PreviewImageCache: @unchecked Sendable {
         CGImageDestinationAddImage(
             dest,
             cg,
-            [kCGImageDestinationLossyCompressionQuality: 0.72] as CFDictionary
+            [kCGImageDestinationLossyCompressionQuality: 0.7] as CFDictionary
         )
         guard CGImageDestinationFinalize(dest) else { return nil }
         return destData as Data
