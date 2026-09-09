@@ -2,7 +2,14 @@
 
 The Mac app is the real product. Windows cannot run that Swift window, so this folder is a **small companion**: drop a file, Microsoft MarkItDown writes Markdown on this PC.
 
-It does **not** yet have the library, bookmarks, pictures folder, Ask, or Settings from the Mac app. Those take weeks, not an afternoon.
+It does **not** yet have the library, bookmarks, pictures folder, Ask, or Settings from the Mac app.
+
+There is no Windows PC in the workshop, and no Windows simulator on the Mac. Convert is checked two ways:
+
+1. On Linux, with `--cli` (no window).
+2. On a real Windows machine at GitHub (`windows-latest`) every time this folder changes.
+
+The window itself (Tk) still needs a person on Windows to click around.
 
 ## What you need
 
@@ -14,14 +21,18 @@ py -m pip install "markitdown[all]"
 py yourmark.py
 ```
 
-3. Click **Choose files**, pick a PDF (or Word, slides, Excel). **Convert** writes a `.md` next to the file and opens that folder.
+Or without a window:
 
-First convert may take a minute while MarkItDown finishes installing.
+```bat
+py yourmark.py --cli handbook.pdf
+```
+
+**Convert** writes a `.md` in a folder next to the file.
 
 ## What this is not
 
 - Not a copy of the Mac window.
 - Not Docling / OCR for scans yet.
-- Not an `.exe` installer yet (that comes after this window is useful).
+- Not an `.exe` installer yet.
 
 The converter is the same [Microsoft MarkItDown](https://github.com/microsoft/markitdown) the Mac app uses.
