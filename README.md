@@ -42,11 +42,9 @@ Library at night — files, bookmarks, and the text. Ask a chapter underneath. B
 
 <br>
 
-| <img src="docs/shots/library-bright.jpg" width="420" alt="Library in Bright"> | <img src="docs/shots/convert-dim.jpg" width="420" alt="Convert in Dim"> |
-| --- | --- |
-| Library · Bright — the same three columns on paper. | Convert — drop a PDF. Nothing is uploaded. |
-| <img src="docs/shots/convert-bright.jpg" width="420" alt="Convert in Bright"> | <img src="docs/shots/settings-dim.jpg" width="420" alt="Settings in Dim"> |
-| Convert · Bright — this 787 handbook kept 595 bookmarks from the PDF itself. | Settings — paste a key, press Enter. Extra tools are only for scans. |
+| <img src="docs/shots/library-bright.jpg" width="280" alt="Library in Bright"> | <img src="docs/shots/convert-bright.jpg" width="280" alt="Convert — drop a PDF"> | <img src="docs/shots/settings-dim.jpg" width="280" alt="Settings"> |
+| --- | --- | --- |
+| Library · Bright — the same three columns on paper. | Convert — drop a PDF. Nothing is uploaded. | Settings — headers, font, MarkEdit, and your key. |
 
 <br>
 
