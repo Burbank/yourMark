@@ -139,10 +139,8 @@ def _with_title(markdown: str, title: str | None, source_name: str) -> str:
     )
 
 
-def main() -> int:
-    if len(sys.argv) < 3:
-        return 2
-    src, dst = Path(sys.argv[1]), Path(sys.argv[2])
+def convert_file(src: Path, dst: Path) -> int:
+    src, dst = Path(src), Path(dst)
     from markitdown import MarkItDown
 
     # Plugins are off in MarkItDown unless we turn them on. Official
@@ -191,6 +189,12 @@ def main() -> int:
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(text, encoding="utf-8")
     return 0 if dst.exists() and dst.stat().st_size > 0 else 1
+
+
+def main() -> int:
+    if len(sys.argv) < 3:
+        return 2
+    return convert_file(Path(sys.argv[1]), Path(sys.argv[2]))
 
 
 if __name__ == "__main__":

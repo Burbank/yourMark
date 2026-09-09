@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Small Windows window: pick files, run Microsoft MarkItDown, open the folder.
 
-This is not the Mac app. It reuses the same convert script so a PDF on
-Windows gets the same engine as yourMark on a Mac.
+Frozen as yourMark.exe so Windows users do not need Python.
 
-  py yourmark.py              → window (needs Tk)
-  py yourmark.py --cli FILE   → no window, just convert
+  yourMark.exe                 → window
+  yourMark.exe --cli FILE      → no window, just convert
 """
 from __future__ import annotations
 
@@ -16,11 +15,6 @@ import sys
 import threading
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-SCRIPT = ROOT / "markitdown_convert.py"
-if not SCRIPT.exists():
-    SCRIPT = ROOT.parent / "Resources" / "markitdown_convert.py"
-
 KINDS = [
     ("Documents", "*.pdf *.docx *.pptx *.xlsx *.html *.htm *.epub *.zip"),
     ("PDF", "*.pdf"),
@@ -28,25 +22,16 @@ KINDS = [
 ]
 
 
-def python_exe() -> str:
-    return sys.executable
+def app_dir() -> Path:
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS)
+    here = Path(__file__).resolve().parent
+    if (here / "markitdown_convert.py").exists():
+        return here
+    return here.parent / "Resources"
 
 
-def ensure_engine() -> str:
-    """Return a python that can `import markitdown`, installing if needed."""
-    py = python_exe()
-    check = subprocess.run(
-        [py, "-c", "import markitdown"],
-        capture_output=True,
-        text=True,
-    )
-    if check.returncode == 0:
-        return py
-    subprocess.check_call([py, "-m", "pip", "install", "markitdown[all]"])
-    return py
-
-
-def convert_one(py: str, src: Path, log) -> Path:
+def convert_one(src: Path, log) -> Path:
     src = src.expanduser().resolve()
     if not src.is_file():
         raise FileNotFoundError(src)
@@ -54,30 +39,33 @@ def convert_one(py: str, src: Path, log) -> Path:
     out_dir.mkdir(exist_ok=True)
     dest = out_dir / (src.stem + ".md")
     log(f"Converting {src.name}…")
-    if not SCRIPT.exists():
-        raise FileNotFoundError(f"Missing convert script: {SCRIPT}")
-    proc = subprocess.run(
-        [py, str(SCRIPT), str(src), str(dest)],
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        err = (proc.stderr or proc.stdout or "convert failed").strip()
-        raise RuntimeError(err[-1200:])
+    root = str(app_dir())
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    try:
+        import markitdown  # noqa: F401
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "markitdown[pdf]"])
+    import markitdown_convert as conv
+
+    rc = conv.convert_file(src, dest)
+    if rc:
+        raise RuntimeError("MarkItDown could not write that file.")
     log(f"Wrote {dest}")
     return dest
 
 
 def run_cli(paths: list[str]) -> int:
     def log(msg: str) -> None:
-        print(msg, flush=True)
+        try:
+            print(msg, flush=True)
+        except Exception:
+            pass
 
     try:
-        log("Checking Microsoft MarkItDown…")
-        py = ensure_engine()
         last = None
         for item in paths:
-            last = convert_one(py, Path(item), log)
+            last = convert_one(Path(item), log)
         log("Done.")
         if last and sys.platform == "win32" and shutil.which("explorer"):
             subprocess.Popen(["explorer", "/select,", str(last)])
@@ -94,7 +82,7 @@ def run_gui() -> int:
     except ImportError:
         print(
             "No window library (Tk) on this computer.\n"
-            "Use:  python yourmark.py --cli yourfile.pdf",
+            "Use:  yourMark.exe --cli yourfile.pdf",
             file=sys.stderr,
         )
         return 2
@@ -153,11 +141,9 @@ def run_gui() -> int:
 
         def run_jobs(self) -> None:
             try:
-                self.log("Checking Microsoft MarkItDown…")
-                py = ensure_engine()
                 last = None
                 for src in list(self.files):
-                    last = convert_one(py, src, self.log)
+                    last = convert_one(src, self.log)
                 self.log("Done.")
                 if last and sys.platform == "win32" and shutil.which("explorer"):
                     subprocess.Popen(["explorer", "/select,", str(last)])
@@ -176,7 +162,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.cli:
         if not args.files:
-            print("Usage: python yourmark.py --cli file.pdf", file=sys.stderr)
+            print("Usage: yourMark.exe --cli file.pdf", file=sys.stderr)
             return 2
         return run_cli(args.files)
     if args.files:

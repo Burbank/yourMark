@@ -1,38 +1,20 @@
 # yourMark for Windows — early
 
-The Mac app is the real product. Windows cannot run that Swift window, so this folder is a **small companion**: drop a file, Microsoft MarkItDown writes Markdown on this PC.
+**[Download yourMark.exe](https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe)** — double-click. No Python install.
 
-It does **not** yet have the library, bookmarks, pictures folder, Ask, or Settings from the Mac app.
+This is **not** the Mac app. It turns a PDF (or Word, slides, Excel) into Markdown on this PC. No library, bookmarks, Ask, or Settings yet.
 
-There is no Windows PC in the workshop, and no Windows simulator on the Mac. Convert is checked two ways:
+Windows may say **Windows protected your PC** (SmartScreen). That is the same kind of caution as Apple on a Mac — this build is not signed yet. Click **More info** → **Run anyway**.
 
-1. On Linux, with `--cli` (no window).
-2. On a real Windows machine at GitHub (`windows-latest`) every time this folder changes.
+Choose files, then **Convert**. A folder opens with the `.md`.
 
-The window itself (Tk) still needs a person on Windows to click around.
-
-## What you need
-
-1. [Python 3.12+](https://www.python.org/downloads/) — tick **Add python.exe to PATH**.
-2. A terminal in this folder:
+## If you prefer Python
 
 ```bat
-py -m pip install "markitdown[all]"
+py -m pip install "markitdown[pdf]"
 py yourmark.py
 ```
 
-Or without a window:
-
-```bat
-py yourmark.py --cli handbook.pdf
-```
-
-**Convert** writes a `.md` in a folder next to the file.
-
-## What this is not
-
-- Not a copy of the Mac window.
-- Not Docling / OCR for scans yet.
-- Not an `.exe` installer yet.
+Or without a window: `py yourmark.py --cli handbook.pdf`
 
 The converter is the same [Microsoft MarkItDown](https://github.com/microsoft/markitdown) the Mac app uses.
