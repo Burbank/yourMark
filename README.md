@@ -80,6 +80,12 @@ yourMark on the left. MarkEdit on the right. Press Edit; what you save there sho
 
 Download the disk image, drag **yourMark** onto **Applications** (follow the arrow), then open it. First launch installs Microsoft MarkItDown.
 
+<p align="center">
+  <img src="docs/shots/first-open.png" width="273" alt="macOS: yourMark.app is an app downloaded from the internet. Are you sure you want to open it? Apple checked it for malicious software and none was detected. Cancel or Open.">
+</p>
+
+The first open may show this. That is normal. Click **Open**. The dim line is Apple saying it already scanned the disk — yourMark is notarized.
+
 **Homebrew (optional):**
 
 ```sh
