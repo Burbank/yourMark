@@ -31,7 +31,7 @@ export CODESIGN_IDENTITY="Developer ID Application: …"
 
 `Scripts/build-app.sh` uses Developer ID when that identity is in the keychain; otherwise it stays ad-hoc. `Scripts/sign-and-notarize.sh` staples a ticket when notary credentials exist.
 
-Keep the “If Apple blocks it” page on the disk until a notarized build opens on a clean Mac.
+The GitHub disk from 0.3.47 on is Developer ID–signed and notarized. Keep the “If Apple blocks it” page on the disk for the rare leftover warning.
 
 ## 2. Mac App Store (second)
 
@@ -68,4 +68,4 @@ Category suggestion: **Productivity** or **Education**.
 - Import Developer ID into this keychain (only “Apple Development” is here today)
 - Add the GitHub secrets above
 - Create the App Store Connect listing
-- First notarized tag (`v0.3.47` or later) after secrets are in
+- First notarized GitHub tag is `v0.3.47`

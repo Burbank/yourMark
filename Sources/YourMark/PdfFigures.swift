@@ -408,7 +408,9 @@ private final class XSink {
     private func consume(_ object: CGPDFObjectRef) {
         visits += 1
         if visits > 8000 { return }
-        let key = Int(bitPattern: object)
+        let key = withUnsafeBytes(of: object) { raw -> Int in
+            raw.load(as: Int.self)
+        }
         if seen.contains(key) { return }
         seen.insert(key)
 

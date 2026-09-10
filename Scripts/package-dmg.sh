@@ -35,12 +35,9 @@ yourMark $VERSION
 ================
 
 1. Drag yourMark onto Applications (follow the arrow).
-2. If macOS blocks it: click Done (not Move to Bin).
-3. Open “If Apple blocks it” on this disk — that is a help page in Safari,
-   not a program. Safari may ask to open System Settings. Click Allow,
-   then Open Anyway.
+2. Open yourMark from Applications.
 
-You can also right-click yourMark → Open.
+This disk is signed and notarized by Apple.
 
 First launch installs Microsoft MarkItDown from PyPI (internet once).
 Keep the original PDF. Markdown is the working copy.

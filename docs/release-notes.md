@@ -1,6 +1,6 @@
 ### Mac version, most complete
 
-Drag yourMark onto Applications (follow the arrow). If macOS blocks it: Done, then Privacy and Security Settings on the disk, then Open Anyway. First launch installs Microsoft MarkItDown from PyPI.
+Drag yourMark onto Applications (follow the arrow). This disk is signed and notarized by Apple. First launch installs Microsoft MarkItDown from PyPI.
 
 ### Windows (early)
 

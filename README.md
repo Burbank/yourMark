@@ -6,7 +6,7 @@
 
 A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, and ask questions about. The file never leaves this computer. See [All versions](https://github.com/Burbank/yourMark/releases) for an early Windows version as well.
 
-**[Download yourMark-0.3.46.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.46.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Test a simpler version in your browser](https://burbank.github.io/yourMark/) (preview only — no OCR)
+**[Download yourMark-0.3.47.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.3.47.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md) · [Test a simpler version in your browser](https://burbank.github.io/yourMark/) (preview only — no OCR)
 
 ## Why Markdown?
 
@@ -28,7 +28,7 @@ yourMark is the window. [Microsoft MarkItDown](https://github.com/microsoft/mark
 
 Needs **macOS 14** or later. Open the disk and **drag yourMark onto Applications** (follow the arrow). Do not keep working from the disk — if you do, yourMark will copy itself into Applications so ejecting is safe. The first launch installs MarkItDown if it is missing.
 
-If Apple says it could not verify the app: click **Done** (not Move to Bin), then open **If Apple blocks it** on the disk — a help page in Safari, not a program — or right-click yourMark → Open. That warning is normal until the app is notarized. It is not malware.
+This Mac disk is signed and notarized by Apple. Open yourMark from Applications.
 
 [Privacy](https://burbank.github.io/yourMark/privacy.html) · [Apple distribution](docs/apple-distribution.md) (notarized GitHub disk and Mac App Store)
 
@@ -99,24 +99,6 @@ brew install --cask yourmark
 4. To edit, use [MarkText](https://github.com/marktext/marktext) (free, open source). MarkEdit is Mac-only. The exe has a **Get MarkText** button.
 
 More in [`windows/`](windows/README.md).
-
-
-### If Apple blocks the app
-
-This build is not notarized yet, so macOS often shows **“yourMark.app” Not Opened** and offers **Move to Bin**. That is Apple being careful — not a virus.
-
-![macOS dialog: yourMark.app Not Opened. Click Done, not Move to Bin.](docs/shots/not-opened.png)
-
-1. Click **Done** — not **Move to Bin**.
-2. Apple menu → **System Settings**.
-3. Sidebar → **Privacy & Security**.
-4. Scroll to **Security**.
-5. Next to *“yourMark.app” was blocked to protect your Mac*, click **Open Anyway**.
-6. Confirm **Open Anyway**.
-
-![System Settings → Privacy & Security → Open Anyway](docs/shots/open-anyway.png)
-
-You can also right-click yourMark → **Open**, or open **If Apple blocks it** on the disk (a page in Safari with a button into Settings).
 
 ## License
 
