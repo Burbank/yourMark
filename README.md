@@ -64,6 +64,8 @@ yourMark is a **reader**. To change the file, press **Edit**. That opens [MarkEd
 
 yourMark on the left. MarkEdit on the right. Press Edit; what you save there shows up here.
 
+When you are happy with it, right-click the folder that holds the Markdown and the pictures, compress it, and send that zip to your favourite AI.
+
 <br>
 
 ## What you get
