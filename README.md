@@ -52,11 +52,11 @@ Library at night — files, bookmarks, and the text. Ask a chapter underneath. B
 
 <br>
 
-<img src="docs/shots/figure-hover.png" width="880" alt="Reader: rest the pointer on a blue Figure link to see the picture; sliders in the header set text size and preview size">
+<img src="docs/shots/figure-hover.png" width="880" alt="Reader: hover over a blue Figure link to see the picture; use the slider to adjust the preview size">
 
 <br>
 
-Pictures are blue links, not the photo in the page. Rest the pointer on a link to see it. The slider next to the little photo sets how big that preview is. A / slider / A is only the text.
+Pictures are blue links, not the photo in the page. Hover over a link to see it. Use the slider to adjust the preview size.
 
 <br>
 
