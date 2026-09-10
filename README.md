@@ -30,6 +30,8 @@ Needs **macOS 14** or later. Open the disk and **drag yourMark onto Applications
 
 If Apple says it could not verify the app: click **Done** (not Move to Bin), then open **If Apple blocks it** on the disk — a help page in Safari, not a program — or right-click yourMark → Open. That warning is normal until the app is notarized. It is not malware.
 
+[Privacy](https://burbank.github.io/yourMark/privacy.html) · [Apple distribution](docs/apple-distribution.md) (notarized GitHub disk and Mac App Store)
+
 ## Pictures of the window
 
 <br>

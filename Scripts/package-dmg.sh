@@ -141,4 +141,9 @@ else
 fi
 
 [[ -f "$DMG" ]] || { echo "DMG was not created" >&2; exit 1; }
+
+if [[ -x "$ROOT/Scripts/sign-and-notarize.sh" ]]; then
+  "$ROOT/Scripts/sign-and-notarize.sh" "$DMG" || true
+fi
+
 echo "✓ DMG: $DMG"

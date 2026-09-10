@@ -1,6 +1,8 @@
-# Notarize yourMark (later)
+# Notarize yourMark
 
-The first-open “Apple could not verify” dialog is Gatekeeper. MarkEdit does not show it because those builds are **Developer ID–signed and notarized**. yourMark is still ad-hoc signed (`codesign --sign -`).
+Full steps for **GitHub DMG + Mac App Store** are in [apple-distribution.md](apple-distribution.md).
+
+The first-open “Apple could not verify” dialog is Gatekeeper. MarkEdit does not show it because those builds are **Developer ID–signed and notarized**. yourMark is still ad-hoc signed until those secrets are in the build.
 
 ## Already in hand (do not ask the developer to sign up again)
 

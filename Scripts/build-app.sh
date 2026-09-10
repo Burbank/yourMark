@@ -7,15 +7,26 @@ cd "$ROOT"
 APP_NAME="yourMark"
 EXEC_NAME="YourMark"
 BUILD_DIR="$ROOT/.build"
-APP_DIR="$ROOT/dist/${APP_NAME}.app"
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+APP_DIR="$WORK/${APP_NAME}.app"
+DIST_APP="$ROOT/dist/${APP_NAME}.app"
 CONTENTS="$APP_DIR/Contents"
 MACOS="$CONTENTS/MacOS"
 RESOURCES="$CONTENTS/Resources"
 INSTALL_APP="/Applications/${APP_NAME}.app"
 SKIP_INSTALL="${SKIP_INSTALL:-0}"
+DISTRIBUTION="${DISTRIBUTION:-direct}"
+if [[ "$DISTRIBUTION" != "mas" ]]; then
+  DISTRIBUTION="direct"
+fi
 
 echo "→ Building $EXEC_NAME (release)…"
-swift build -c release --product "$EXEC_NAME"
+if [[ "$DISTRIBUTION" == "mas" ]]; then
+  swift build -c release --product "$EXEC_NAME" -Xswiftc -DAPPSTORE
+else
+  swift build -c release --product "$EXEC_NAME"
+fi
 
 BIN="$BUILD_DIR/release/$EXEC_NAME"
 if [[ ! -x "$BIN" ]]; then
@@ -24,7 +35,6 @@ if [[ ! -x "$BIN" ]]; then
 fi
 
 echo "→ Assembling $APP_NAME.app…"
-rm -rf "$APP_DIR"
 mkdir -p "$MACOS" "$RESOURCES"
 cp "$BIN" "$MACOS/$EXEC_NAME"
 
@@ -36,6 +46,19 @@ if [[ -f "$ROOT/Resources/pdf_enrich.py" ]]; then
 fi
 if [[ -f "$ROOT/Resources/markitdown_convert.py" ]]; then
   cp "$ROOT/Resources/markitdown_convert.py" "$RESOURCES/markitdown_convert.py"
+fi
+if [[ -f "$ROOT/Resources/PrivacyInfo.xcprivacy" ]]; then
+  cp "$ROOT/Resources/PrivacyInfo.xcprivacy" "$RESOURCES/PrivacyInfo.xcprivacy"
+fi
+if [[ "$DISTRIBUTION" == "mas" ]]; then
+  ENGINE="$ROOT/Resources/BundledEngine"
+  if [[ ! -x "$ENGINE/bin/python3" && ! -x "$ENGINE/bin/python3.12" ]]; then
+    echo "→ Bundling Microsoft MarkItDown (once, ~400 MB)…"
+    chmod +x "$ROOT/Scripts/bundle-engine.sh"
+    "$ROOT/Scripts/bundle-engine.sh" "$ENGINE"
+  fi
+  echo "→ Copying bundled converter…"
+  ditto --norsrc --noextattr --noqtn "$ENGINE" "$RESOURCES/python"
 fi
 
 if [[ -f "$ROOT/Resources/AppIcon.png" ]]; then
@@ -77,16 +100,28 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.3.46</string>
+	<string>0.3.47</string>
 	<key>CFBundleVersion</key>
-	<string>58</string>${ICON_PLIST}
+	<string>59</string>${ICON_PLIST}
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
+	<key>YourMarkDistribution</key>
+	<string>${DISTRIBUTION}</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 Arie Duister. MIT License.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>yourMark writes converted Markdown where you choose, including Downloads.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>yourMark writes converted Markdown next to files you open, including Documents.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>yourMark writes converted Markdown next to files you open on the Desktop.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CFBundleDocumentTypes</key>
 	<array>
@@ -153,12 +188,43 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 PLIST
 
 echo -n 'APPL????' > "$CONTENTS/PkgInfo"
-# Ad-hoc until notarization. Developer already has Apple Developer Program
-# + Developer ID Application; when they ask, follow docs/notarize.md.
-codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1 || true
+# iCloud Drive leaves Finder info that codesign rejects.
+xattr -cr "$APP_DIR" >/dev/null 2>&1 || true
+
+ENTITLEMENTS="$ROOT/Resources/YourMark.${DISTRIBUTION}.entitlements"
+SIGN_ARGS=(--force --deep --sign -)
+if [[ "$DISTRIBUTION" == "mas" ]]; then
+  IDENTITY="${MAS_CODESIGN_IDENTITY:-}"
+else
+  IDENTITY="${CODESIGN_IDENTITY:-}"
+fi
+if [[ -z "${IDENTITY}" ]]; then
+  if [[ "$DISTRIBUTION" == "mas" ]]; then
+    IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/3rd Party Mac Developer Application|Apple Distribution/{print $2; exit}')
+  else
+    IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/{print $2; exit}')
+  fi
+fi
+if [[ -n "${IDENTITY}" ]]; then
+  echo "→ Signing as $IDENTITY ($DISTRIBUTION)…"
+  SIGN_ARGS=(--force --deep --options runtime --timestamp --sign "$IDENTITY")
+  if [[ -f "$ENTITLEMENTS" ]]; then
+    SIGN_ARGS+=(--entitlements "$ENTITLEMENTS")
+  fi
+else
+  echo "→ Ad-hoc sign (no Developer ID / Mac App Store identity in this keychain)"
+  if [[ -f "$ENTITLEMENTS" ]]; then
+    SIGN_ARGS+=(--entitlements "$ENTITLEMENTS")
+  fi
+fi
+codesign "${SIGN_ARGS[@]}" "$APP_DIR"
+
+mkdir -p "$ROOT/dist"
+rm -rf "$DIST_APP"
+ditto --norsrc --noextattr --noqtn "$APP_DIR" "$DIST_APP"
 
 if [[ "$SKIP_INSTALL" == "1" ]]; then
-  echo "✓ Built: $APP_DIR"
+  echo "✓ Built: $DIST_APP"
   exit 0
 fi
 
@@ -166,7 +232,7 @@ echo "→ Installing to $INSTALL_APP…"
 osascript -e 'tell application "yourMark" to quit' >/dev/null 2>&1 || true
 sleep 0.4
 rm -rf "$INSTALL_APP"
-cp -R "$APP_DIR" "$INSTALL_APP"
-codesign --force --deep --sign - "$INSTALL_APP" >/dev/null 2>&1 || true
+ditto --norsrc --noextattr --noqtn "$APP_DIR" "$INSTALL_APP"
+codesign "${SIGN_ARGS[@]}" "$INSTALL_APP"
 
 echo "✓ Installed: $INSTALL_APP"

@@ -1,4 +1,6 @@
 .build/
 dist/
-*.xcodeproj
+Resources/BundledEngine/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
 .DS_Store
