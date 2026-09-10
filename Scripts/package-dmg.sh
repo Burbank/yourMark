@@ -1,5 +1,6 @@
 #!/bin/zsh
 # Build yourMark.app and wrap it in a versioned drag-to-Applications DMG.
+# Front of the disk: the app and Applications only. No Gatekeeper help files.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,87 +17,54 @@ VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/C
 DMG="$ROOT/dist/yourMark-$VERSION.dmg"
 RW="$ROOT/dist/yourMark.rw.dmg"
 BG="$ROOT/Resources/dmg-background.png"
-[[ -f "$BG" ]] || { echo "missing $BG" >&2; exit 1; }
+swift "$ROOT/Scripts/make-dmg-background.swift" "$BG"
 
 rm -rf "$STAGE"
-mkdir -p "$STAGE/Support"
-cp -R "$APP" "$STAGE/yourMark.app"
-# Do not put .command files on the disk. Gatekeeper treats them as unsigned
-# programs and shows “Move to Bin” — the same scare as the app itself.
-# Do not use a .webloc to GitHub Pages either — that 404s if Pages is off.
-# A local HTML file opens in Safari from this disk. No internet needed.
-cp "$ROOT/Resources/If Apple blocks it.html" "$STAGE/If Apple blocks it.html"
-cp "$ROOT/Resources/Open Anyway.html" "$STAGE/Support/Open Anyway.html"
-if [[ -f "$ROOT/docs/shots/open-anyway.png" ]]; then
-  cp "$ROOT/docs/shots/open-anyway.png" "$STAGE/Support/Open Anyway looks like this.png"
-fi
-cat > "$STAGE/Support/Read me first.txt" <<TXT
-yourMark $VERSION
-================
-
-1. Drag yourMark onto Applications (follow the arrow).
-2. Open yourMark from Applications.
-
-This disk is signed and notarized by Apple.
-
-First launch installs Microsoft MarkItDown from PyPI (internet once).
-Keep the original PDF. Markdown is the working copy.
-TXT
+mkdir -p "$STAGE"
+ditto --norsrc --noextattr --noqtn "$APP" "$STAGE/yourMark.app"
+ln -sf /Applications "$STAGE/Applications"
+mkdir -p "$STAGE/.background"
+cp "$BG" "$STAGE/.background/background.png"
 
 rm -f "$DMG" "$RW"
 
-make_plain() {
-  ln -sf /Applications "$STAGE/Applications"
-  hdiutil create \
-    -volname "yourMark $VERSION" \
-    -srcfolder "$STAGE" \
-    -ov -format UDZO \
-    -imagekey zlib-level=9 \
-    "$DMG"
-}
+hdiutil create \
+  -volname "yourMark" \
+  -srcfolder "$STAGE" \
+  -ov -format UDRW \
+  "$RW"
 
-layout_osascript() {
-  mkdir -p "$STAGE/.background"
-  cp "$BG" "$STAGE/.background/background.png"
-  [[ -L "$STAGE/Applications" ]] || ln -sf /Applications "$STAGE/Applications"
-  hdiutil create \
-    -volname "yourMark" \
-    -srcfolder "$STAGE" \
-    -ov -format UDRW \
-    "$RW"
-  MOUNT=$(hdiutil attach -readwrite -noverify -noautoopen "$RW")
-  DEV=$(echo "$MOUNT" | awk '/^\/dev\/disk/ { print $1; exit }')
-  VOL="/Volumes/yourMark"
-  for _ in {1..25}; do
-    [[ -d "$VOL/yourMark.app" ]] && break
-    sleep 0.4
-  done
-  command -v SetFile >/dev/null && SetFile -a V "$VOL/.background" || true
-  osascript <<'APPLESCRIPT'
+MOUNT=$(hdiutil attach -readwrite -noverify -noautoopen "$RW")
+DEV=$(echo "$MOUNT" | awk '/^\/dev\/disk/ { print $1; exit }')
+VOL="/Volumes/yourMark"
+for _ in {1..25}; do
+  [[ -d "$VOL/yourMark.app" ]] && break
+  sleep 0.4
+done
+
+chflags hidden "$VOL/.background" || true
+command -v SetFile >/dev/null && SetFile -a V "$VOL/.background" || true
+
+osascript <<'APPLESCRIPT'
 tell application "Finder"
   tell disk "yourMark"
     open
     set current view of container window to icon view
     set toolbar visible of container window to false
     set statusbar visible of container window to false
-    set bounds of container window to {200, 120, 860, 660}
+    set bounds of container window to {200, 160, 920, 600}
     set theViewOptions to the icon view options of container window
     set arrangement of theViewOptions to not arranged
-    set icon size of theViewOptions to 128
+    set icon size of theViewOptions to 192
+    set text size of theViewOptions to 14
     try
       set background picture of theViewOptions to file ".background:background.png"
     end try
     delay 1
-    set position of item "yourMark.app" to {165, 175}
-    set position of item "Applications" to {495, 175}
+    set position of item "yourMark.app" to {180, 230}
+    set position of item "Applications" to {540, 230}
     try
-      set position of item "If Apple blocks it.html" to {165, 365}
-    end try
-    try
-      set position of item "Support" to {495, 365}
-    end try
-    try
-      set the extension hidden of item "If Apple blocks it.html" to true
+      set the extension hidden of item "yourMark.app" to true
     end try
     close
     open
@@ -105,37 +73,12 @@ tell application "Finder"
   end tell
 end tell
 APPLESCRIPT
-  sync
-  hdiutil detach "$DEV" || hdiutil detach "$VOL" -force || true
-  sleep 1
-  hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -o "$DMG"
-  rm -f "$RW"
-}
 
-if command -v create-dmg >/dev/null 2>&1 || (command -v brew >/dev/null 2>&1 && brew install create-dmg); then
-  if create-dmg \
-      --volname "yourMark $VERSION" \
-      --background "$BG" \
-      --window-pos 200 120 \
-      --window-size 660 540 \
-      --icon-size 128 \
-      --icon "yourMark.app" 165 175 \
-      --app-drop-link 495 175 \
-      --icon "If Apple blocks it.html" 165 365 \
-      --icon "Support" 495 365 \
-      --hide-extension "yourMark.app" \
-      --hide-extension "If Apple blocks it.html" \
-      --no-internet-enable \
-      "$DMG" \
-      "$STAGE"; then
-    :
-  else
-    echo "create-dmg failed — trying Finder layout" >&2
-    layout_osascript || make_plain
-  fi
-else
-  layout_osascript || make_plain
-fi
+sync
+hdiutil detach "$DEV" || hdiutil detach "$VOL" -force || true
+sleep 1
+hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -o "$DMG"
+rm -f "$RW"
 
 [[ -f "$DMG" ]] || { echo "DMG was not created" >&2; exit 1; }
 

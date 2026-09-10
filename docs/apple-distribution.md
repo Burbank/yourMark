@@ -31,7 +31,7 @@ export CODESIGN_IDENTITY="Developer ID Application: …"
 
 `Scripts/build-app.sh` uses Developer ID when that identity is in the keychain; otherwise it stays ad-hoc. `Scripts/sign-and-notarize.sh` staples a ticket when notary credentials exist.
 
-The GitHub disk from 0.3.47 on is Developer ID–signed and notarized. Keep the “If Apple blocks it” page on the disk for the rare leftover warning.
+The GitHub disk from 0.3.47 on is Developer ID–signed and notarized. From 0.3.48 the disk is only the app and Applications — no Gatekeeper help files.
 
 ## 2. Mac App Store (second)
 
