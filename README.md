@@ -52,7 +52,7 @@ Library at night — files, bookmarks, and the text. Ask a chapter underneath. B
 
 <br>
 
-<img src="docs/shots/figure-link.png" width="880" alt="Reader: rest the pointer on a blue Figure link to see the picture; sliders in the header set text size and preview size">
+<img src="docs/shots/figure-hover.png" width="880" alt="Reader: rest the pointer on a blue Figure link to see the picture; sliders in the header set text size and preview size">
 
 <br>
 
