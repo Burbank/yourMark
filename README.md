@@ -52,6 +52,14 @@ Library at night — files, bookmarks, and the text. Ask a chapter underneath. B
 
 <br>
 
+<img src="docs/shots/figure-link.png" width="880" alt="Reader: a blue Figure link, bookmarks on the left, text size and picture sliders in the header">
+
+<br>
+
+Pictures are blue links, not the photo in the page. Rest the pointer on a link to see it. The slider next to the little photo sets how big that preview is. A / slider / A is only the text.
+
+<br>
+
 ## Changing the text
 
 yourMark is a **reader**. To change the file, press **Edit**. That opens [MarkEdit](https://github.com/MarkEdit-app/MarkEdit), a free Mac editor. Get it from Settings if it is not installed. You do not need a GitHub account. Saves in MarkEdit show up here.
