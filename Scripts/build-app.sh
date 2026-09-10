@@ -100,9 +100,9 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.3.49</string>
+	<string>0.4.0</string>
 	<key>CFBundleVersion</key>
-	<string>61</string>${ICON_PLIST}
+	<string>62</string>${ICON_PLIST}
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>YourMarkDistribution</key>
@@ -123,6 +123,19 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<string>yourMark writes converted Markdown next to files you open on the Desktop.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.burbank.yourmark</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>yourmark</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

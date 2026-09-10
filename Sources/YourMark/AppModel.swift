@@ -692,7 +692,7 @@ final class AppModel {
     }
 
     func openIncoming(_ urls: [URL]) {
-        let allowed = urls.filter { ConvertibleKind.allows($0) }
+        let allowed = urls.flatMap(IncomingURLs.files(from:)).filter { ConvertibleKind.allows($0) }
         guard !allowed.isEmpty else { return }
         for url in allowed { _ = url.startAccessingSecurityScopedResource() }
         showSettings = false

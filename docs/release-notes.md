@@ -2,6 +2,8 @@
 
 Drag yourMark onto Applications (follow the arrow). This disk is signed and notarized by Apple. First launch installs Microsoft MarkItDown from PyPI.
 
+A Shortcut or Terminal can hand a file to yourMark: `yourmark://convert?file=/Users/you/Manual.pdf`
+
 ### Windows (early)
 
 No library, bookmarks, or Ask. Same Microsoft converter.

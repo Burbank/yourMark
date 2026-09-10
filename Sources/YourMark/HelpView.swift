@@ -53,6 +53,10 @@ struct HelpView: View {
             "yourMark does not edit files. MarkEdit is a free native Mac editor. Press Edit in the reader, or get it from Settings. Saves there show up here."
         ),
         (
+            "Shortcuts and scripts",
+            "A Shortcut or Terminal can hand a file to yourMark with a link: yourmark://convert?file=/Users/you/Manual.pdf — put your file’s full path after file=. Dropping a PDF on the window still works."
+        ),
+        (
             "Keep the original",
             "Converted Markdown is for search and study. Keep the original PDF or Word file."
         ),
