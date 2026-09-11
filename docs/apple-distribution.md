@@ -39,7 +39,8 @@ Apple forbids App Store apps from downloading and running new code. So this flav
 
 - Sets `YourMarkDistribution=mas` in Info.plist
 - Uses the App Sandbox (`Resources/YourMark.mas.entitlements`)
-- Converts with **Apple PDFKit + Live Text** (no PyPI, no Docling install)
+- Ships **Microsoft MarkItDown inside the app** (no PyPI after purchase)
+- Scans use **Apple Live Text** (this copy cannot install Docling)
 - Defaults Markdown to the yourMark library folder
 - Hides GitHub / PyPI update buttons (updates come from the App Store)
 
@@ -54,18 +55,20 @@ Then in App Store Connect:
 
 1. Create the Mac app `yourMark`, bundle ID `com.burbank.yourmark`.
 2. Privacy policy URL: https://burbank.github.io/yourMark/privacy.html
-3. App Privacy: we do not collect data. Ask keys stay on device; they are sent only to the provider the user picks.
-4. Export compliance: HTTPS only (exempt).
-5. Age rating: 4+ (no objectionable content).
-6. Screenshots from `docs/shots/` (Mac 1280×800 and 2560×1600).
-7. Review notes: conversion is on-device; Ask is optional and uses the user’s own key; no account.
-8. Upload the `.pkg` with Transporter. Needs **3rd Party Mac Developer Application** + **Installer** certificates (same developer account).
+3. Support URL (listing only — do not put this on the public site, README, or GitHub Help): https://burbank.github.io/yourMark/support.html
+   The page is `docs/support.html`. It is for the App Store copy. GitHub installs stay on Issues. After the listing is live, paste the `apps.apple.com` link into the reserved App Store slot on that page. The URL is live only after you push `docs/`.
+4. App Privacy: we do not collect data. Ask keys stay on device; they are sent only to the provider the user picks.
+5. Export compliance: HTTPS only (exempt).
+6. Age rating: 4+ (no objectionable content).
+7. Screenshots from `docs/shots/` (Mac 1280×800 and 2560×1600).
+8. Review notes: conversion is on-device; Ask is optional and uses the user’s own key; no account.
+9. Upload the `.pkg` with Transporter. Needs **3rd Party Mac Developer Application** + **Installer** certificates (same developer account).
 
 Category suggestion: **Productivity** or **Education**.
 
 ## What still needs a human
 
-- Import Developer ID into this keychain (only “Apple Development” is here today)
-- Add the GitHub secrets above
-- Create the App Store Connect listing
-- First notarized GitHub tag is `v0.3.47`
+- Create the App Store Connect listing (yourMark, `com.burbank.yourmark`)
+- Create **Apple Distribution** + **Mac Installer Distribution** on team R4SB7G9A32 (keep Developer ID)
+- Paste listing copy and 2560×1600 shots from `CURSOR_general_logs/yourMark/AppStore/`
+- Then run `./Scripts/package-mas.sh` and upload the `.pkg` with Transporter

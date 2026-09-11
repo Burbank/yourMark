@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>yourMark support</title>
+  <meta name="description" content="Support for the App Store copy of yourMark. GitHub installs should use GitHub Issues." />
+  <meta name="robots" content="noindex" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #000000;
+      --panel: rgba(26, 26, 26, 0.92);
+      --text: #e0e0e0;
+      --muted: #9a9a9a;
+      --line: #333333;
+      --klm: #00a1e4;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; background: var(--bg); }
+    body {
+      font-family: "Atkinson Hyperlegible", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      line-height: 1.6;
+      color: var(--text);
+      max-width: 52rem;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+    .head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1.5rem;
+      border-bottom: 2px solid var(--klm);
+      padding-bottom: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+    h1 {
+      color: var(--klm);
+      font-size: 2rem;
+      font-weight: 700;
+    }
+    .icon {
+      display: block;
+      height: 5.1rem;
+      width: auto;
+      border-radius: 14px;
+    }
+    .note {
+      margin-bottom: 1.5rem;
+    }
+    .note p { margin-bottom: 0.85rem; }
+    .muted { color: var(--muted); }
+    a { color: var(--klm); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    h2 {
+      color: var(--klm);
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 0.6rem;
+    }
+    .contact {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr);
+      gap: 0;
+      margin-top: 1.5rem;
+      padding: 1.4rem 1.5rem;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+    }
+    .contact-left {
+      padding-right: 1.75rem;
+      border-right: 1px solid var(--line);
+    }
+    .contact-right {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.85rem;
+      padding-left: 1.75rem;
+    }
+    .contact-right p { margin: 0; }
+    .link-label { display: block; color: var(--text); }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 0.7rem;
+      margin-top: 0.85rem;
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-size: 0.95rem;
+    }
+    input, textarea {
+      font: inherit;
+      color: var(--text);
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.45rem 0.6rem;
+    }
+    button {
+      align-self: flex-start;
+      font: inherit;
+      font-weight: 700;
+      color: var(--klm);
+      background: transparent;
+      border: 1px solid var(--klm);
+      border-radius: 8px;
+      padding: 0.4rem 0.9rem;
+      cursor: pointer;
+    }
+    button:hover { opacity: 0.85; }
+    .status { color: var(--text); margin: 0; }
+    .hp {
+      position: absolute;
+      left: -9999px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+    @media (max-width: 720px) {
+      body { padding: 1.25rem 0.9rem 3rem; }
+      h1 { font-size: 1.6rem; }
+      .icon { height: 3.9rem; }
+      .contact { grid-template-columns: 1fr; }
+      .contact-left {
+        border-right: none;
+        border-bottom: 1px solid var(--line);
+        padding: 0 0 1.15rem;
+        margin-bottom: 1.15rem;
+      }
+      .contact-right { padding-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header class="head">
+    <h1>yourMark support</h1>
+    <img class="icon" src="icon.png" width="128" height="128" alt="" />
+  </header>
+
+  <div class="note">
+    <p>This form is for the <strong>App Store</strong> copy of yourMark.</p>
+    <p class="muted">If you installed from GitHub, do not use this page. Open an <a href="https://github.com/Burbank/yourMark/issues">issue on GitHub</a> instead.</p>
+    <p>yourMark converts files on your Mac. We do not run an account, and we do not receive your PDFs.</p>
+    <p class="muted">Questions or a problem? Send a short note. Send opens your mail app with the message filled in.</p>
+  </div>
+
+  <div class="contact">
+    <div class="contact-left">
+      <h2>Contact Developer</h2>
+      <p>Name, email, and a short message.</p>
+      <form id="support-form" autocomplete="on">
+        <label class="hp" aria-hidden="true">
+          <span>Website</span>
+          <input type="text" name="website" tabindex="-1" autocomplete="off" />
+        </label>
+        <input class="hp" type="text" name="company" tabindex="-1" autocomplete="off" aria-hidden="true" />
+        <input type="hidden" name="gate" value="" />
+        <label>
+          <span>Name</span>
+          <input type="text" name="name" required maxlength="80" autocomplete="name" />
+        </label>
+        <label>
+          <span>Email</span>
+          <input type="email" name="email" required maxlength="120" autocomplete="email" />
+        </label>
+        <label>
+          <span>Message</span>
+          <textarea name="message" required maxlength="4000" rows="5"></textarea>
+        </label>
+        <button type="submit">Send</button>
+        <p id="support-status" class="status" hidden></p>
+      </form>
+    </div>
+    <div class="contact-right">
+      <p>
+        <span class="link-label">Mac site</span>
+        <a href="https://burbank.github.io/yourMark/">burbank.github.io/yourMark</a>
+      </p>
+      <p>
+        <span class="link-label">Privacy</span>
+        <a href="privacy.html">yourMark privacy</a>
+      </p>
+      <!--
+        After the Mac App Store listing is live, paste the apps.apple.com URL
+        on the link below and remove the hidden attribute from this paragraph.
+      -->
+      <p class="store-app" hidden>
+        <span class="link-label">App Store</span>
+        <a href="https://apps.apple.com/app/idREPLACE">yourMark on the Mac App Store</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const form = document.getElementById("support-form");
+      const status = document.getElementById("support-status");
+      if (!form || !status) return;
+      const opened = Date.now();
+      const gate = form.elements.namedItem("gate");
+      const mark = String(opened ^ 0x5a5a);
+      window.setTimeout(() => {
+        if (gate) gate.value = mark;
+      }, 2800);
+      const inbox = () =>
+        [62, 47, 52, 51, 59, 26, 46, 47, 46, 59, 55, 59, 51, 54, 116, 57, 53, 55]
+          .map((n) => String.fromCharCode(n ^ 0x5a))
+          .join("");
+      const scheme = () => ["mai", "lto:"].join("");
+      const coolKey = "ym-note";
+      const coolMs = 90 * 1000;
+      const say = (text) => {
+        status.hidden = false;
+        status.textContent = text;
+      };
+      const fakeOk = () => {
+        say("Sent. Thank you.");
+        form.reset();
+        if (gate) gate.value = "";
+      };
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const data = new FormData(form);
+        const bait =
+          String(data.get("website") || "").trim() ||
+          String(data.get("company") || "").trim();
+        if (bait) {
+          fakeOk();
+          return;
+        }
+        if (Date.now() - opened < 2800 || !gate || gate.value !== mark) {
+          say("Please wait a moment, then press Send again.");
+          return;
+        }
+        const last = Number(sessionStorage.getItem(coolKey) || 0);
+        if (last && Date.now() - last < coolMs) {
+          say("Please wait a minute before sending another note.");
+          return;
+        }
+        const name = String(data.get("name") || "").trim();
+        const email = String(data.get("email") || "").trim();
+        const message = String(data.get("message") || "").trim();
+        if (name.length < 1 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || message.length < 3) {
+          say("Name, email, and a short message are needed.");
+          return;
+        }
+        sessionStorage.setItem(coolKey, String(Date.now()));
+        const subject = encodeURIComponent("yourMark support — " + name);
+        const body = encodeURIComponent("From: " + name + "\nEmail: " + email + "\n\n" + message);
+        say("Your mail app should open with the message filled in.");
+        window.location.href = scheme() + inbox() + "?subject=" + subject + "&body=" + body;
+      });
+    })();
+  </script>
+</body>
+</html>
