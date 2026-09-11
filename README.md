@@ -70,7 +70,7 @@ Pictures are blue links, not the photo in the page. Hover over a link to see it.
 
 Pick **From** and **To** in the reader. **Below** keeps the original and puts the translation under each paragraph. **Replace** shows only the translation. Translate this chapter, or the entire file.
 
-Save a copy writes a second Markdown file next to the original (for example `Manual.es.md`). The original words are not overwritten. Convert still stays on this Mac. The chapter is sent to Google Translate or to your Ask key — pick which in Settings.
+Save a copy writes a second Markdown file next to the original (for example `Manual.es.md`). The original words are not overwritten. Convert still stays on this Mac. The chapter is sent to Google Translate or to your Ask key — pick which in Settings. Google Translate is incredibly fast.
 
 <br>
 
