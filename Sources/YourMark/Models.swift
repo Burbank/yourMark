@@ -15,7 +15,6 @@ struct ConvertJob: Identifiable, Hashable {
     var detail: String
     var startedAt: Date?
     var needsOCR: Bool = false
-    var looksGraphic: Bool = false
     var pictureCount: Int = 0
 
     enum Status: String {
@@ -80,7 +79,9 @@ enum YourMarkError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .engineNotFound:
-            return "Microsoft MarkItDown is not installed yet. yourMark installs it from PyPI on first launch — use Install converter if it did not finish."
+            return Distribution.isAppStore
+                ? "This App Store build converts with Apple PDFKit and Live Text."
+                : "Microsoft MarkItDown is not installed yet. yourMark installs it from PyPI on first launch — use Install converter if it did not finish."
         case .invalidInput(let message):
             return message
         case .processFailed(let message):
@@ -93,16 +94,15 @@ enum YourMarkError: Error, LocalizedError {
     }
 }
 
-struct PreviewSection: Identifiable, Sendable, Hashable {
-    var id: Int
-    var lines: [String]
+struct PreviewLine: Identifiable, Sendable, Hashable {
+    let id: Int
+    var text: String
 }
 
 struct PreviewPack: Sendable {
     var text: String
-    var lines: [String]
+    var lines: [PreviewLine]
     var headings: [ManualBookmark]
-    var sections: [PreviewSection]
     var base: URL
     var missing: Bool = false
 }

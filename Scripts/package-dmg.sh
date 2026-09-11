@@ -23,9 +23,11 @@ if [[ ! -x "$VENV/bin/dmgbuild" ]]; then
 fi
 
 # Drop leftover mounts so Finder does not reuse an old yourMark window.
+setopt NULL_GLOB
 for vol in /Volumes/yourMark /Volumes/yourMark\ * /Volumes/yourMark\ 1; do
   [[ -d "$vol" ]] && hdiutil detach "$vol" -force >/dev/null 2>&1 || true
 done
+unsetopt NULL_GLOB
 
 rm -f "$DMG"
 export YOURMARK_DMG_ROOT="$ROOT"

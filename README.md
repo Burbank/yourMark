@@ -6,7 +6,7 @@
 
 A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, and ask questions about. The file never leaves this computer. See [All versions](https://github.com/Burbank/yourMark/releases) for an early Windows version as well.
 
-**[Download yourMark-0.4.0.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.4.0.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
+**[Download yourMark-0.5.0.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.5.0.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
 
 [Test a simpler version in your browser](https://burbank.github.io/yourMark/) (preview only — no OCR)
 
@@ -14,7 +14,7 @@ A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Mark
 
 A PDF is a picture of a page. Markdown is the words, in order.
 
-That is why it works so well with AI. A model can read a chapter, quote it, and say when the file is silent — instead of guessing at a scan. Paste a heading into Grok or ChatGPT, keep notes, or search a whole course. Tables stay tables. Headings stay an outline.
+That is why it works so well with AI. A model can read a chapter and quote the words that are there. If that chapter does not have the answer, it can say so — instead of guessing at a scan. Paste a heading into Grok or ChatGPT, keep notes, or search a whole course. Tables stay tables. Headings stay an outline.
 
 Keep the original PDF. Markdown is the working copy.
 
@@ -22,9 +22,9 @@ Keep the original PDF. Markdown is the working copy.
 
 The window has three places:
 
-- **Convert** — drop a PDF, Word, slides, or Excel. The words are written on this Mac.
-- **Library** — file on the left, bookmarks in the middle, the text on the right. Ask a chapter at the bottom if you add a key.
-- **Settings** — Bright, Dim, or System colours in the header; an optional AI key; extra help for scanned pages.
+- **Convert** — drop a PDF, Word, slides, or Excel. The words are written on your Mac, not online.
+- **Library** — file on the left, bookmarks in the middle, the text on the right. Ask a chapter at the bottom if you add a key. Translate sits in the reader toolbar.
+- **Settings** — Bright, Dim, or System colours in the header; an optional AI key or Google Translate key; extra help for scanned pages.
 
 yourMark is the window. [Microsoft MarkItDown](https://github.com/microsoft/markitdown) does the converting, on this Mac. If Microsoft publishes an update, yourMark can install it for you.
 
@@ -57,6 +57,20 @@ Library at night — files, bookmarks, and the text. Ask a chapter underneath. B
 <br>
 
 Pictures are blue links, not the photo in the page. Hover over a link to see it. Use the slider to adjust the preview size.
+
+<br>
+
+## Translate
+
+<br>
+
+<img src="docs/shots/translate-toolbar.png" width="880" alt="Reader toolbar: English translate to Spanish, Below or Replace, and Translate for this chapter or the entire file">
+
+<br>
+
+Pick **From** and **To** in the reader. **Below** keeps the original and puts the translation under each paragraph. **Replace** shows only the translation. Translate this chapter, or the entire file.
+
+Save a copy writes a second Markdown file next to the original (for example `Manual.es.md`). The original words are not overwritten. Convert still stays on this Mac. The chapter is sent to Google Translate or to your Ask key — pick which in Settings.
 
 <br>
 

@@ -14,7 +14,7 @@ struct ContentView: View {
 
         VStack(spacing: 0) {
             TopBar()
-            if model.installingEngine || model.enginePath == nil {
+            if !Distribution.isAppStore, model.installingEngine || model.enginePath == nil {
                 EngineBanner()
             }
             if let tag = model.appUpdateTag {
@@ -32,7 +32,9 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            statusBar
+            if model.selectedTool == .convert, !model.showSettings, !model.showHelp {
+                StatusBar()
+            }
         }
         .background(deck.page)
         .foregroundStyle(deck.ink)
@@ -135,15 +137,15 @@ struct ContentView: View {
         return true
     }
 
-    private var statusBar: some View {
+}
+
+private struct StatusBar: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.deck) private var deck
+
+    var body: some View {
         HStack {
-            Text(model.statusText)
-                .foregroundStyle(deck.muted)
-                .lineLimit(1)
             Spacer()
-            if model.isBusy || model.installingEngine {
-                ProgressView().controlSize(.small).padding(.trailing, 8)
-            }
             if model.selectedTool == .convert, model.enginePath != nil, !model.showSettings, !model.showHelp {
                 Button("Convert") {
                     Task { await model.convertQueued() }
@@ -169,7 +171,7 @@ private struct DoclingPromptSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("This PDF has graphics")
                 .font(.title2.weight(.bold))
-            Text("Tables, photos, arrows, and diagrams need IBM Docling (layout OCR). Install it in this app, then conversion starts. Without it, Microsoft MarkItDown only keeps the words.")
+            Text("This PDF has tables or pictures. The layout scanner (IBM Docling) reads those better than Apple Live Text. Get it in this app, then conversion starts. Or convert with the words only.")
                 .foregroundStyle(deck.muted)
                 .fixedSize(horizontal: false, vertical: true)
             Text(model.pendingGraphics.map(\.lastPathComponent).joined(separator: ", "))
@@ -180,7 +182,7 @@ private struct DoclingPromptSheet: View {
                     model.skipDoclingInstall()
                 }
                 Spacer()
-                Button("Install Docling, then convert") {
+                Button("Get the layout scanner, then convert") {
                     Task { await model.acceptDoclingInstall() }
                 }
                 .buttonStyle(.borderedProminent)
@@ -419,7 +421,27 @@ private struct TopBar: View {
                     .font(.caption)
                     .foregroundStyle(deck.muted)
             }
-            Spacer()
+            Spacer(minLength: 8)
+            if !bannerText.isEmpty {
+                HStack(spacing: 8) {
+                    if bannerLive {
+                        ProgressView().controlSize(.small)
+                    }
+                    Text(bannerText)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(deck.cyan)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 8).fill(deck.field))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: deck.border))
+                .frame(minWidth: 0, maxWidth: 420, alignment: .trailing)
+                .layoutPriority(-1)
+                .help(bannerText)
+                .transition(.opacity)
+            }
             ForEach(AppTool.allCases) { tool in
                 Button(tool.rawValue) { model.selectTool(tool) }
                     .buttonStyle(.plain)
@@ -480,6 +502,21 @@ private struct TopBar: View {
         .padding(.vertical, 10)
         .background(deck.panel)
         .overlay(Rectangle().frame(height: deck.border).foregroundStyle(deck.line), alignment: .bottom)
+        .animation(.easeInOut(duration: 0.2), value: bannerText)
+    }
+
+    private var bannerLive: Bool {
+        let text = model.statusText
+        guard !text.isEmpty, text != "Ready" else { return false }
+        return model.isBusy || model.installingEngine
+            || text.hasSuffix("…")
+            || text.hasSuffix("...")
+    }
+
+    private var bannerText: String {
+        if bannerLive { return model.statusText }
+        if model.toastVisible { return model.toastText }
+        return ""
     }
 
     @ViewBuilder
@@ -608,17 +645,12 @@ struct LibraryPanel: View {
         model.library.first(where: { $0.id == model.selectedLibraryID })
     }
 
-    private var headingBookmarks: [ManualBookmark] {
-        model.previewHeadings
-    }
-
     private var outlineFromPdf: Bool {
         !(selected?.bookmarks ?? []).isEmpty
     }
 
     private var outline: [ManualBookmark] {
-        let fromPdf = selected?.bookmarks ?? []
-        return fromPdf.isEmpty ? headingBookmarks : fromPdf
+        model.documentOutline
     }
 
     @AppStorage("splitLibrary") private var libFrac = 0.20
@@ -631,17 +663,19 @@ struct LibraryPanel: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
+            let h = geo.size.height
             let libW = max(160, w * libFrac)
             let marksW = max(120, w * marksFrac)
+            let readW = max(240, w - libW - marksW - 2)
             HStack(spacing: 0) {
                 libraryColumn
-                    .frame(width: libW)
+                    .frame(width: libW, height: h, alignment: .top)
                 SplitDrag(fraction: $libFrac, min: 0.14, max: 0.36, total: w, color: deck.line)
                 bookmarksColumn
-                    .frame(width: marksW)
+                    .frame(width: marksW, height: h, alignment: .top)
                 SplitDrag(fraction: $marksFrac, min: 0.10, max: 0.32, total: w, color: deck.line)
-                markdownColumn
-                    .frame(maxWidth: .infinity)
+                markdownColumn(width: readW)
+                    .frame(width: readW, height: h, alignment: .top)
             }
         }
         .background(deck.page)
@@ -710,11 +744,19 @@ struct LibraryPanel: View {
 
     private var bookmarksColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
+            Text(selected?.title ?? "Markdown")
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(deck.ink)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
             Text(outlineFromPdf ? "Bookmarks · from the PDF" : "Bookmarks")
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
                 .foregroundStyle(deck.cyan)
                 .padding(.horizontal, 12)
-                .padding(.top, 10)
+                .padding(.top, 2)
             if outline.isEmpty {
                 Text("No outline. Scanned PDFs need OCR first, or the source had no bookmarks/headings.")
                     .font(.caption)
@@ -740,29 +782,23 @@ struct LibraryPanel: View {
         .background(deck.panel)
     }
 
-    private var markdownColumn: some View {
+    private func markdownColumn(width: CGFloat) -> some View {
         VStack(spacing: 0) {
-            markdownHeader
+            markdownHeader(narrow: width < 860)
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: previewRendered ? 6 : 2) {
-                        ForEach(markdownSections) { section in
-                            VStack(alignment: .leading, spacing: previewRendered ? 4 : 2) {
-                                ForEach(Array(section.lines.enumerated()), id: \.offset) { _, line in
-                                    markdownLine(line)
-                                }
-                            }
-                            .id(section.id)
-                        }
-                    }
-                    .padding(20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                List(model.previewLines) { row in
+                    markdownLine(row.text)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
+                        .listRowBackground(deck.field)
+                        .id(row.id)
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .background(deck.field)
                 .onChange(of: model.scrollToLine) { _, line in
                     guard let line else { return }
-                    let target = markdownSections.last(where: { $0.id <= line })?.id ?? line
-                    withAnimation { proxy.scrollTo(target, anchor: .top) }
+                    proxy.scrollTo(line, anchor: .top)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -779,89 +815,178 @@ struct LibraryPanel: View {
         }
     }
 
-    private var markdownHeader: some View {
-        HStack(spacing: 10) {
-            Text(selected?.title ?? "Markdown")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(deck.cyan)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Button {
-                previewPointSize = max(12, previewPointSize - 1)
-            } label: {
-                Text("A").font(.system(size: 10, weight: .bold))
-            }
-            .buttonStyle(.plain)
-            .help("Smaller text")
-            Slider(value: $previewPointSize, in: 12...26, step: 1)
-                .frame(width: 88)
-                .controlSize(.mini)
-                .help("Text size")
-            Button {
-                previewPointSize = min(26, previewPointSize + 1)
-            } label: {
-                Text("A").font(.system(size: 16, weight: .bold))
-            }
-            .buttonStyle(.plain)
-            .help("Larger text")
-            Image(systemName: "photo")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(deck.muted)
-                .help("Picture preview size")
-            Slider(value: $figurePreviewSize, in: 240...900, step: 20)
-                .frame(width: 88)
-                .controlSize(.mini)
-                .help("Picture preview size when you hover a figure link. Default is large.")
-            Button {
-                figurePreviewSize = min(900, figurePreviewSize + 40)
-            } label: {
-                Image(systemName: "plus.magnifyingglass")
-                    .font(.system(size: 11, weight: .semibold))
-            }
-            .buttonStyle(.plain)
-            .help("Larger picture preview")
-            Button(previewRendered ? "Rendered" : "Plain") {
-                previewRendered.toggle()
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(RoundedRectangle(cornerRadius: 6).fill(previewRendered ? deck.btn : deck.field))
-            .foregroundStyle(previewRendered ? deck.btnText : deck.ink)
-            .help("Rendered shows headings. Plain shows the raw Markdown.")
-            if let item = selected {
-                Button("Edit") {
-                    model.openInMarkEdit(item)
+    private func markdownHeader(narrow: Bool) -> some View {
+        Group {
+            if narrow {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        translateTools
+                        Spacer(minLength: 0)
+                    }
+                    HStack(spacing: 8) {
+                        readerTools
+                        Spacer(minLength: 0)
+                    }
                 }
-                .buttonStyle(.plain)
-                .font(.body.weight(.bold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 8).fill(deck.btn))
-                .foregroundStyle(deck.btnText)
-                .help("Open this file in MarkEdit, a free Markdown editor")
-                Button("Finder") {
-                    model.revealLibrary(item)
+            } else {
+                HStack(spacing: 8) {
+                    translateTools
+                    Spacer(minLength: 8)
+                    readerTools
                 }
-                .buttonStyle(.plain)
-                .font(.body.weight(.bold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: deck.border))
-                .help("Show this file in Finder")
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .frame(minHeight: 56)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(deck.panel)
         .overlay(Rectangle().frame(height: deck.border).foregroundStyle(deck.line), alignment: .bottom)
     }
 
     @ViewBuilder
+    private var translateTools: some View {
+        TranslateLangPicker(
+            title: TranslateLang.label(for: model.translateFrom),
+            includeAuto: true,
+            code: Binding(
+                get: { model.translateFrom },
+                set: {
+                    model.translateFrom = $0
+                    model.persistTranslateSettings()
+                }
+            )
+        )
+        Text("translate to")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(deck.muted)
+            .fixedSize()
+        TranslateLangPicker(
+            title: TranslateLang.label(for: model.translateTo),
+            includeAuto: false,
+            code: Binding(
+                get: { model.translateTo },
+                set: {
+                    model.translateTo = $0
+                    model.persistTranslateSettings()
+                }
+            )
+        )
+        Picker("", selection: Binding(
+            get: { model.translateLayout },
+            set: {
+                model.translateLayout = $0
+                model.persistTranslateSettings()
+            }
+        )) {
+            Text("Below").tag("below")
+            Text("Replace").tag("replace")
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 132)
+        .help("Below each paragraph keeps the original. Replace shows only the translation.")
+        Menu {
+            Button("This chapter") {
+                Task { await model.runTranslate(entireFile: false) }
+            }
+            Button("Entire file") {
+                Task { await model.runTranslate(entireFile: true) }
+            }
+        } label: {
+            Text(model.translateBusy ? "Translating…" : "Translate")
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .disabled(model.translateBusy || selected == nil)
+        .help(model.translateReadyHint)
+        if model.translateMarkdown != nil {
+            Button("Save a copy") { model.saveTranslationCopy() }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .semibold))
+                .help("Write a second file. The original Markdown stays as it is.")
+            Button("Clear") { model.clearTranslation() }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .semibold))
+        }
+    }
+
+    @ViewBuilder
+    private var readerTools: some View {
+        Button {
+            previewPointSize = max(12, previewPointSize - 1)
+        } label: {
+            Text("A").font(.system(size: 10, weight: .bold))
+        }
+        .buttonStyle(.plain)
+        .help("Smaller text")
+        Slider(value: $previewPointSize, in: 12...26, step: 1)
+            .frame(width: 88)
+            .controlSize(.mini)
+            .help("Text size")
+        Button {
+            previewPointSize = min(26, previewPointSize + 1)
+        } label: {
+            Text("A").font(.system(size: 16, weight: .bold))
+        }
+        .buttonStyle(.plain)
+        .help("Larger text")
+        Image(systemName: "photo")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(deck.muted)
+            .help("Picture preview size")
+        Slider(value: $figurePreviewSize, in: 240...900, step: 20)
+            .frame(width: 88)
+            .controlSize(.mini)
+            .help("Picture preview size when you hover a figure link. Default is large.")
+        Button {
+            figurePreviewSize = min(900, figurePreviewSize + 40)
+        } label: {
+            Image(systemName: "plus.magnifyingglass")
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .buttonStyle(.plain)
+        .help("Larger picture preview")
+        Button(previewRendered ? "Rendered" : "Plain") {
+            previewRendered.toggle()
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(RoundedRectangle(cornerRadius: 6).fill(previewRendered ? deck.btn : deck.field))
+        .foregroundStyle(previewRendered ? deck.btnText : deck.ink)
+        .help("Rendered shows headings. Plain shows the raw Markdown.")
+        if let item = selected {
+            Button("Edit") {
+                model.openInMarkEdit(item)
+            }
+            .buttonStyle(.plain)
+            .font(.body.weight(.bold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 8).fill(deck.btn))
+            .foregroundStyle(deck.btnText)
+            .help("Open this file in MarkEdit, a free Markdown editor")
+            Button("Finder") {
+                model.revealLibrary(item)
+            }
+            .buttonStyle(.plain)
+            .font(.body.weight(.bold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: deck.border))
+            .help("Show this file in Finder")
+        }
+    }
+
+    @ViewBuilder
     private func markdownLine(_ line: String) -> some View {
         let size = CGFloat(previewPointSize)
-        if let img = markdownImage(line, base: model.previewBaseURL) {
+        if line.hasPrefix(TranslateService.marker) {
+            let rest = String(line.dropFirst(TranslateService.marker.count))
+            translatedMarkdownLine(rest, size: size)
+        } else if let img = markdownImage(line, base: model.previewBaseURL) {
             FigureLink(url: img.url, alt: img.alt, hover: $figureHover)
         } else if !previewRendered {
             Text(line.isEmpty ? " " : line)
@@ -881,6 +1006,10 @@ struct LibraryPanel: View {
         } else if line.trimmingCharacters(in: .whitespaces).hasPrefix("<!--") {
             EmptyView()
         } else if let heading = atxHeading(line) {
+            if heading.level == 1,
+               heading.text.caseInsensitiveCompare(selected?.title ?? "") == .orderedSame {
+                EmptyView()
+            } else {
             Text(heading.text)
                 .font(model.readerFont(size: headingSize(heading.level, base: size), weight: heading.level <= 2 ? .bold : .semibold))
                 .foregroundStyle(deck.ink)
@@ -888,6 +1017,7 @@ struct LibraryPanel: View {
                 .padding(.top, heading.level <= 2 ? 14 : 8)
                 .padding(.bottom, 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
         } else if let callout = wholeLineBold(line) {
             Text(callout)
                 .font(model.readerFont(size: size, weight: .semibold))
@@ -898,6 +1028,27 @@ struct LibraryPanel: View {
         } else {
             inlineMarkdown(line, size: size)
                 .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func translatedMarkdownLine(_ line: String, size: CGFloat) -> some View {
+        if line.trimmingCharacters(in: .whitespaces).isEmpty {
+            Text(" ")
+                .font(model.readerFont(size: size))
+        } else if let heading = atxHeading(line) {
+            Text(heading.text)
+                .font(model.readerFont(size: headingSize(heading.level, base: size), weight: heading.level <= 2 ? .bold : .semibold))
+                .foregroundStyle(deck.muted)
+                .textSelection(.enabled)
+                .padding(.leading, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            inlineMarkdown(line, size: size)
+                .foregroundStyle(deck.muted)
+                .textSelection(.enabled)
+                .padding(.leading, 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -938,12 +1089,60 @@ struct LibraryPanel: View {
         }
         return text.foregroundStyle(deck.ink)
     }
+}
 
-    private var markdownSections: [PreviewSection] {
-        if model.previewSections.isEmpty {
-            return [PreviewSection(id: 0, lines: ["Select a converted file."])]
+private struct TranslateLangPicker: View {
+    @Environment(\.deck) private var deck
+    var title: String
+    var includeAuto: Bool
+    @Binding var code: String
+    @State private var open = false
+
+    var body: some View {
+        Button {
+            open.toggle()
+        } label: {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(RoundedRectangle(cornerRadius: 6).stroke(deck.line, lineWidth: deck.border))
         }
-        return model.previewSections
+        .buttonStyle(.plain)
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    if includeAuto {
+                        langRow(TranslateLang.auto)
+                    }
+                    ForEach(TranslateLang.spoken) { lang in
+                        langRow(lang)
+                    }
+                }
+                .padding(8)
+            }
+            .frame(width: 220, height: 280)
+        }
+    }
+
+    private func langRow(_ lang: TranslateLang) -> some View {
+        Button {
+            code = lang.id
+            open = false
+        } label: {
+            HStack {
+                Text(lang.label)
+                Spacer()
+                if code == lang.id {
+                    Image(systemName: "checkmark")
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -1211,13 +1410,25 @@ private struct AskStrip: View {
                     .foregroundStyle(deck.cyan)
                 Spacer()
                 Picker("Chapter", selection: Binding(
-                    get: { model.askChapter },
-                    set: { model.askChapter = $0 }
+                    get: {
+                        let titles = model.askChapterChoices.map(\.title)
+                        if model.askChapter != "Entire file",
+                           !titles.contains(where: { $0.caseInsensitiveCompare(model.askChapter) == .orderedSame }) {
+                            return "Entire file"
+                        }
+                        return model.askChapter
+                    },
+                    set: { model.setAskChapter($0) }
                 )) {
                     Text("Entire file").tag("Entire file")
+                    ForEach(model.askChapterChoices, id: \.title) { choice in
+                        Text(String(repeating: "  ", count: max(0, choice.level - 1)) + choice.title)
+                            .tag(choice.title)
+                    }
                 }
                 .labelsHidden()
-                .frame(maxWidth: 180)
+                .frame(maxWidth: 260)
+                .help("Ask one chapter, or the whole file")
             }
             HStack(spacing: 8) {
                 TextField("What does this chapter say about…", text: Binding(
@@ -1347,12 +1558,23 @@ struct EnginePanel: View {
                     Button("Copy last crash report") { model.sendLastCrash() }
                 }
             }
-            if model.settingsFocus == "ocr" {
+            if Distribution.isAppStore {
+                Section("Converter") {
+                    LabeledContent("Engine", value: Distribution.converterLabel)
+                    Text("Microsoft MarkItDown is included in this copy. Photographed pages use Apple Live Text. This App Store copy does not download extra software.")
+                        .foregroundStyle(.secondary)
+                    Button("Privacy") {
+                        NSWorkspace.shared.open(Distribution.privacyURL)
+                    }
+                }
+            }
+            if model.settingsFocus == "ocr", !Distribution.isAppStore {
                 Section {
                     Text("Install OCR here — Scanned PDFs, below. IBM Docling handles scans, tables, and figures.")
                         .foregroundStyle(.secondary)
                 }
             }
+            if !Distribution.isAppStore {
             Section("Microsoft MarkItDown") {
                 LabeledContent("Version", value: model.engineVersion)
                 LabeledContent("Path") {
@@ -1366,6 +1588,7 @@ struct EnginePanel: View {
                 Text("Installs Microsoft MarkItDown, the converter for ordinary PDFs and Office files.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
             }
             Section("Ask AI") {
                 Picker("Provider", selection: Binding(
@@ -1431,7 +1654,7 @@ struct EnginePanel: View {
                             .disabled(model.askCheckingKey)
                             .help("Lock this API key on this Mac")
                     }
-                    Text("Paste the key, then press Enter. yourMark sends one short test question so you know the key works before it is locked in.")
+                    Text("Paste the key, then press Enter. yourMark sends one short test question so you know the key works before it is locked in. The key stays on this Mac. It is sent only when you ask, to the provider you pick.")
                         .foregroundStyle(.secondary)
                     if !model.askKeyHint.isEmpty {
                         Text(model.askKeyHint)
@@ -1476,62 +1699,157 @@ struct EnginePanel: View {
                 ))
                 Text("Uses your Ask key after conversion. Inserts ## headings where chapters clearly start. Off unless you tick it. Needs a saved key.")
                     .foregroundStyle(.secondary)
-                Toggle("Read text inside pictures with your Ask key", isOn: Binding(
-                    get: { model.askReadPictures },
+                if !Distribution.isAppStore {
+                    Toggle("Read text inside pictures with your Ask key", isOn: Binding(
+                        get: { model.askReadPictures },
+                        set: {
+                            model.askReadPictures = $0
+                            UserDefaults.standard.set($0, forKey: "askReadPictures")
+                        }
+                    ))
+                    Text("Microsoft’s markitdown-ocr plugin sends pictures to your AI so it can read labels on diagrams. Off unless you tick it. A large PDF can mean many requests and a bill. Needs a saved key. Pictures themselves are always saved locally, with or without this.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Section("Translate") {
+                Picker("Engine", selection: Binding(
+                    get: { model.translateEngine },
                     set: {
-                        model.askReadPictures = $0
-                        UserDefaults.standard.set($0, forKey: "askReadPictures")
+                        model.translateEngine = $0
+                        model.persistTranslateSettings()
                     }
-                ))
-                Text("Microsoft’s markitdown-ocr plugin sends pictures to your AI so it can read labels on diagrams. Off unless you tick it. A large PDF can mean many requests and a bill. Needs a saved key. Pictures themselves are always saved locally, with or without this.")
+                )) {
+                    Text("Your Ask key").tag("ask")
+                    Text("Google Translate").tag("google")
+                }
+                Text(model.translateEngine == "google"
+                     ? "The open chapter is sent to Google when you press Translate. Convert still stays on this Mac."
+                     : "The open chapter is sent to your Ask model when you press Translate. Convert still stays on this Mac.")
+                    .foregroundStyle(.secondary)
+                if model.translateEngine == "google" {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Google Translate API key")
+                        Text("Turn on Cloud Translation API in your Google Cloud project, then create an API key.")
+                            .foregroundStyle(.secondary)
+                        if let help = URL(string: "https://cloud.google.com/docs/authentication/api-keys") {
+                            Button {
+                                NSWorkspace.shared.open(help)
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Text("How to get a Google Translate key")
+                                        .underline()
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.caption.weight(.semibold))
+                                }
+                                .foregroundStyle(deck.cyan)
+                            }
+                            .buttonStyle(.plain)
+                            .onHover { inside in
+                                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                            }
+                            .help("Opens Google’s help in your browser")
+                        }
+                        HStack {
+                            SecureField(
+                                model.googleHasKey ? "Key locked in — paste a new one to replace" : "Paste your Google API key here",
+                                text: Binding(
+                                    get: { model.googleKeyDraft },
+                                    set: { model.googleKeyDraft = $0 }
+                                )
+                            )
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { model.lockGoogleTranslateKey() }
+                            Button(model.googleCheckingKey ? "Testing…" : "Enter") {
+                                model.lockGoogleTranslateKey()
+                            }
+                            .disabled(model.googleCheckingKey)
+                        }
+                        if !model.googleKeyHint.isEmpty {
+                            Text(model.googleKeyHint)
+                                .foregroundStyle(.orange)
+                        }
+                        if model.googleHasKey {
+                            Label(
+                                model.googleKeyTestNote.isEmpty ? "Google Translate key is locked in." : model.googleKeyTestNote,
+                                systemImage: "lock.fill"
+                            )
+                            .foregroundStyle(.green)
+                            Button("Clear key", role: .destructive) { model.clearGoogleTranslateKey() }
+                        }
+                    }
+                }
+                Picker("In the reader", selection: Binding(
+                    get: { model.translateLayout },
+                    set: {
+                        model.translateLayout = $0
+                        model.persistTranslateSettings()
+                    }
+                )) {
+                    Text("Below each paragraph").tag("below")
+                    Text("Replace the original").tag("replace")
+                }
+                Picker("After Translate", selection: Binding(
+                    get: { model.translateSaveMode },
+                    set: {
+                        model.translateSaveMode = $0
+                        model.persistTranslateSettings()
+                    }
+                )) {
+                    Text("Keep in the reader until I save a copy").tag("keep")
+                    Text("Save a second file next to the original").tag("copy")
+                }
+                Text("The original Markdown is never overwritten. Save a copy writes Manual.es.md beside it and uses the same pictures folder.")
                     .foregroundStyle(.secondary)
             }
             Section("Scanned PDFs") {
-                Toggle("Layout OCR for scans", isOn: Binding(
+                Toggle("Read photographed pages", isOn: Binding(
                     get: { model.ocrEnabled },
                     set: {
                         model.ocrEnabled = $0
                         UserDefaults.standard.set($0, forKey: "ocrEnabled")
                     }
                 ))
-                Text("A scan is a picture of a page. OCRmyPDF and Apple Live Text only read words — they do not rebuild tables or columns. For scans, yourMark uses IBM Docling (layout, TableFormer, figures). That takes a little longer. Normal PDFs still go to Microsoft MarkItDown. If Docling is missing, we fall back to OCRmyPDF / Live Text and keep page pictures.")
-                    .foregroundStyle(.secondary)
-                LabeledContent("Docling") {
-                    Text(model.doclingPath == nil ? "Not installed yet" : "Installed and ready")
+                Picker("Scanner", selection: Binding(
+                    get: { model.ocrScanner },
+                    set: { model.setOcrScanner($0) }
+                )) {
+                    Text("Apple Live Text — words on this Mac").tag("livetext")
+                    Text("IBM Docling — tables and layout").tag("docling")
                 }
-                if let path = model.doclingPath {
-                    Text(path)
+                Text("Live Text is already on this Mac and reads the words. Docling is better at tables, columns, and pictures. It is a large extra (about 2 GB).")
+                    .foregroundStyle(.secondary)
+                if !model.ocrScannerHint.isEmpty {
+                    Text(model.ocrScannerHint)
+                        .foregroundStyle(.orange)
+                }
+                if Distribution.isAppStore {
+                    Text("This App Store copy cannot download Docling. Apple does not allow the app to install new software after you buy it. It stays on Live Text.")
                         .font(.caption)
-                        .textSelection(.enabled)
+                        .foregroundStyle(.secondary)
+                } else {
+                    LabeledContent("Layout scanner") {
+                        Text(model.doclingPath == nil ? "Not on this Mac yet" : "Ready")
+                    }
+                    Button(model.doclingPath == nil ? "Get the layout scanner" : "Reinstall the layout scanner") {
+                        model.setOcrScanner("docling")
+                        Task { await model.installDocling() }
+                    }
+                    .disabled(model.installingEngine)
+                    Text(model.doclingPath == nil
+                         ? "One download, from this window. Then photographed pages use tables and columns. Needs the internet."
+                         : "Ready on this Mac. Press Reinstall only if scans start failing.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button(model.ocrmypdfPath == nil ? "Optional backup scanner" : "Reinstall backup scanner") {
+                        Task { await model.installOcrmypdf() }
+                    }
+                    .disabled(model.installingEngine)
+                    Text(model.ocrmypdfPath == nil
+                         ? "Only if you want a second fallback. Live Text already works without this."
+                         : "Backup is ready if the layout scanner cannot run.")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Button(model.doclingPath == nil ? "Install Docling (layout models)" : "Reinstall Docling") {
-                    Task { await model.installDocling() }
-                }
-                .disabled(model.installingEngine)
-                Text(model.doclingPath == nil
-                     ? "Needed for scans and PDFs with tables or pictures. Install from this app, not Terminal."
-                     : "Docling is installed on this Mac and ready. Scanned PDFs will use it. Press Reinstall only if conversion of scans starts failing.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                LabeledContent("OCRmyPDF fallback") {
-                    Text(model.ocrmypdfPath == nil ? "Not installed — Apple Live Text" : "Installed and ready")
-                }
-                if let path = model.ocrmypdfPath {
-                    Text(path)
-                        .font(.caption)
-                        .textSelection(.enabled)
-                        .foregroundStyle(.secondary)
-                }
-                Button(model.ocrmypdfPath == nil ? "Install OCRmyPDF via Homebrew" : "Reinstall OCRmyPDF") {
-                    Task { await model.installOcrmypdf() }
-                }
-                .disabled(model.installingEngine)
-                Text(model.ocrmypdfPath == nil
-                     ? "Optional backup. Without it, this Mac can still read scans with Apple Live Text."
-                     : "OCRmyPDF is installed on this Mac as a backup if Docling cannot run. Press Reinstall only if something stops working.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             Section("Converted files") {
                 Picker("Save Markdown", selection: Binding(
@@ -1546,7 +1864,9 @@ struct EnginePanel: View {
                     Text("yourMark library folder").tag("library")
                     Text("Choose a folder…").tag("custom")
                 }
-                Text("Each convert makes a little folder (the Markdown plus a figures folder inside) so Finder stays tidy.")
+                Text(Distribution.isAppStore
+                     ? "The App Store build defaults to the yourMark library folder. Writing next to a PDF needs a folder you choose, because the sandbox cannot always write beside a dropped file."
+                     : "Each convert makes a little folder (the Markdown plus a figures folder inside) so Finder stays tidy.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if model.filePlace == "custom", !model.customFolderPath.isEmpty {
@@ -1556,7 +1876,20 @@ struct EnginePanel: View {
                     Button("Change folder") { model.pickOutputFolder() }
                 }
             }
-            Section("Actions") {
+            if Distribution.isAppStore {
+                Section("Actions") {
+                    Button("App Store updates") {
+                        if let url = URL(string: "macappstore://showUpdatesPage") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    Text("This copy updates from the App Store, not from a disk image.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if !Distribution.isAppStore {
+            Section("GitHub updates") {
                 VStack(alignment: .leading, spacing: 4) {
                     Button("Check for update of the main app") {
                         Task { await model.checkUpdates(force: true) }
@@ -1570,7 +1903,7 @@ struct EnginePanel: View {
                         Task { await model.upgradeEngine() }
                     }
                     .disabled(model.isBusy)
-                    Text("Pulls the latest Microsoft MarkItDown from PyPI. Does not change the yourMark app itself.")
+                    Text("Pulls the latest Microsoft MarkItDown. Does not change the yourMark app itself.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1580,6 +1913,7 @@ struct EnginePanel: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            }
             }
             if !model.lastUpgradeLog.isEmpty {
                 Section("Last upgrade") {

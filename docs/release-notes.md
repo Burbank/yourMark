@@ -2,11 +2,13 @@
 
 Drag yourMark onto Applications (follow the arrow). This disk is signed and notarized by Apple. First launch installs Microsoft MarkItDown from PyPI.
 
+**Translate** sits in the reader toolbar: pick From and To, then This chapter or Entire file. Below keeps the original; Replace shows only the translation. Save a copy writes a second file. The original Markdown is not overwritten. Convert still stays on this Mac.
+
 A Shortcut or Terminal can hand a file to yourMark: `yourmark://convert?file=/Users/you/Manual.pdf`
 
 ### Windows (early)
 
-No library, bookmarks, or Ask. Same Microsoft converter.
+No library, bookmarks, Ask, or Translate. Same Microsoft converter.
 
 1. Download **yourMark.exe**.
 2. Double-click it. You do not need Python.

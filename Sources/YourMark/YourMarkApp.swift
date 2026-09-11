@@ -10,7 +10,7 @@ struct YourMarkApp: App {
         Window("yourMark", id: "main") {
             ContentView()
                 .environment(model)
-                .frame(minWidth: 960, minHeight: 620)
+                .frame(minWidth: 780, minHeight: 620)
                 .onAppear { appDelegate.attach(model) }
                 .onOpenURL { url in model.openIncoming([url]) }
         }
@@ -24,15 +24,17 @@ struct YourMarkApp: App {
             CommandMenu("Settings") {
                 Button("Settings") { model.toggleSettings() }
                     .keyboardShortcut(",", modifiers: .command)
-                Button("Check for update of the processing engine") {
-                    appDelegate.upgradeEngine()
-                }
-                Button("Install converter") {
-                    appDelegate.installEngine()
-                }
-                Divider()
-                Button("Check for update of the main app") {
-                    appDelegate.checkUpdates()
+                if !Distribution.isAppStore {
+                    Button("Check for update of the processing engine") {
+                        appDelegate.upgradeEngine()
+                    }
+                    Button("Install converter") {
+                        appDelegate.installEngine()
+                    }
+                    Divider()
+                    Button("Check for update of the main app") {
+                        appDelegate.checkUpdates()
+                    }
                 }
             }
             CommandGroup(replacing: .help) {

@@ -7,6 +7,7 @@ enum MoveToApplications {
     /// Returns true if this process is exiting so a copy in Applications can take over.
     @MainActor
     static func relocateIfNeeded(opening files: [URL]) -> Bool {
+        guard Distribution.allowsSelfMove else { return false }
         let source = Bundle.main.bundleURL.standardizedFileURL
         guard source.pathExtension == "app" else { return false }
         if source.path.contains("/.build/") { return false }

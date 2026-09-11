@@ -11,11 +11,21 @@ final class FileWatcher: @unchecked Sendable {
     var onChange: ((String) -> Void)?
 
     func replace(paths: [String]) {
+        update(paths: paths)
+    }
+
+    /// Add or drop watches without tearing down ones that are already correct.
+    func update(paths: [String]) {
+        let wanted = Set(paths)
         lock.lock()
-        sources.values.forEach { $0.cancel() }
-        sources.removeAll()
+        let have = Set(sources.keys)
+        let gone = have.subtracting(wanted)
+        for path in gone {
+            sources[path]?.cancel()
+            sources[path] = nil
+        }
         lock.unlock()
-        for path in Set(paths) {
+        for path in wanted.subtracting(have) {
             addWatch(path)
         }
     }

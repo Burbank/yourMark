@@ -222,16 +222,22 @@ struct AskService {
         [question, title, chapter, note].filter { !$0.isEmpty }.joined(separator: " — ")
     }
 
-    static func excerpt(markdown: String, heading: String, max: Int = 12000) -> String {
+    static func excerpt(markdown: String, heading: String, startLine: Int? = nil, max: Int = 12000) -> String {
         if heading.isEmpty || heading == "Entire file" {
             return String(markdown.prefix(max))
         }
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        let needle = heading.lowercased()
-        guard let start = lines.firstIndex(where: {
-            $0.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).lowercased().contains(needle)
-        }) else {
-            return String(markdown.prefix(max))
+        let start: Int
+        if let idx = startLine, lines.indices.contains(idx) {
+            start = idx
+        } else {
+            let needle = heading.lowercased()
+            guard let found = lines.firstIndex(where: {
+                $0.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).lowercased().contains(needle)
+            }) else {
+                return String(markdown.prefix(max))
+            }
+            start = found
         }
         let startLevel = lines[start].prefix(while: { $0 == "#" }).count
         var collected: [String] = []

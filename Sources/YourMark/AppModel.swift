@@ -13,7 +13,12 @@ final class AppModel {
     var isBusy = false
     var installingEngine = false
     var installLog = ""
-    var statusText = "Ready"
+    var statusText = "Ready" {
+        didSet { considerToast(statusText) }
+    }
+    var toastText = ""
+    var toastVisible = false
+    private var toastGen = 0
     var appearance: String = UserDefaults.standard.string(forKey: "appearance") ?? "system"
     var errorMessage: String?
     var showHelp = false
@@ -22,9 +27,8 @@ final class AppModel {
     var library: [LibraryItem] = []
     var selectedLibraryID: UUID?
     var previewMarkdown: String = ""
-    var previewLines: [String] = []
+    var previewLines: [PreviewLine] = []
     var previewHeadings: [ManualBookmark] = []
-    var previewSections: [PreviewSection] = []
     var previewBaseURL: URL?
     var lastUpgradeLog: String = ""
     var scrollToLine: Int?
@@ -41,6 +45,29 @@ final class AppModel {
     var askKeyTestNote = ""
     var askQuestion = ""
     var askChapter = "Entire file"
+
+    /// Same tree as the Bookmarks column: PDF outline when present, else Markdown headings.
+    var documentOutline: [ManualBookmark] {
+        if let item = library.first(where: { $0.id == selectedLibraryID }), !item.bookmarks.isEmpty {
+            return item.bookmarks
+        }
+        return previewHeadings
+    }
+
+    var askChapterChoices: [(title: String, level: Int)] {
+        var seen = Set<String>()
+        var out: [(String, Int)] = []
+        for mark in documentOutline {
+            let title = mark.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { continue }
+            let key = title.lowercased()
+            if key == "outline" || key == "entire file" { continue }
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            out.append((title, max(1, min(mark.level, 3))))
+        }
+        return out
+    }
     var askAnswer = ""
     var askOpenAnswer = ""
     var askBusy = false
@@ -48,11 +75,13 @@ final class AppModel {
     var askWebFallback = UserDefaults.standard.bool(forKey: "askWebFallback")
     var filePlace: String = UserDefaults.standard.string(forKey: "filePlace") ?? "beside"
     var customFolderPath: String = UserDefaults.standard.string(forKey: "customFolder") ?? ""
-    var fileNotice: String = ""
     var appUpdateTag: String?
     var appUpdateURL: URL?
     var draggingFiles = false
     var ocrEnabled = UserDefaults.standard.object(forKey: "ocrEnabled") as? Bool ?? true
+    var ocrScanner: String = UserDefaults.standard.string(forKey: "ocrScanner")
+        ?? (Distribution.isAppStore ? "livetext" : "docling")
+    var ocrScannerHint = ""
     var showInstallSheet = false
     var showOCRSheet = false
     var showMarkEditSheet = false
@@ -66,6 +95,20 @@ final class AppModel {
     var askReadPictures = UserDefaults.standard.object(forKey: "askReadPictures") as? Bool ?? false
     var stripChrome = UserDefaults.standard.object(forKey: "stripChrome") as? Bool ?? true
     var previewFontName = UserDefaults.standard.string(forKey: "previewFontName") ?? "rounded"
+    var translateFrom = UserDefaults.standard.string(forKey: "translateFrom") ?? "auto"
+    var translateTo = UserDefaults.standard.string(forKey: "translateTo") ?? TranslateLang.deviceTo
+    var translateEngine = UserDefaults.standard.string(forKey: "translateEngine") ?? "ask"
+    var translateLayout = UserDefaults.standard.string(forKey: "translateLayout") ?? "below"
+    var translateSaveMode = UserDefaults.standard.string(forKey: "translateSaveMode") ?? "keep"
+    var translateMarkdown: String?
+    var translateBusy = false
+    var translateError = ""
+    var googleKeyDraft = ""
+    var googleHasKey = false
+    var googleKeyHint = ""
+    var googleCheckingKey = false
+    var googleKeyTestPassed = false
+    var googleKeyTestNote = ""
     var doclingPath: String? = OcrService.doclingPath()
     var ocrmypdfPath: String? = OcrService.ocrmypdfPath()
     private var convertWanted = false
@@ -80,6 +123,8 @@ final class AppModel {
     private let watcher = FileWatcher()
     private var watchDebounce: Task<Void, Never>?
     private var watchedPaths: Set<String> = []
+    private var lastStatusAt = Date.distantPast
+    private var previewBackup: (lines: [PreviewLine], headings: [ManualBookmark])?
 
     init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -100,9 +145,26 @@ final class AppModel {
         askKeyTail = UserDefaults.standard.string(forKey: "askKeyTail") ?? ""
         askKeyTestPassed = askHasKey && UserDefaults.standard.bool(forKey: "askKeyTestPassed")
         askKeyTestNote = askHasKey ? (UserDefaults.standard.string(forKey: "askKeyTestNote") ?? "") : ""
+        googleHasKey = UserDefaults.standard.bool(forKey: "googleHasKey")
+            || !TranslateSecrets.load().isEmpty
+        googleKeyTestPassed = googleHasKey && UserDefaults.standard.bool(forKey: "googleKeyTestPassed")
+        googleKeyTestNote = googleHasKey ? (UserDefaults.standard.string(forKey: "googleKeyTestNote") ?? "") : ""
+        if UserDefaults.standard.string(forKey: "translateEngine") == nil {
+            translateEngine = askHasKey ? "ask" : "google"
+        }
         watcher.onChange = { path in
             DispatchQueue.main.async { [weak self] in
                 self?.fileDidChange(path)
+            }
+        }
+        if Distribution.isAppStore {
+            if UserDefaults.standard.object(forKey: "masFilePlaceSet") == nil {
+                filePlace = "library"
+                UserDefaults.standard.set("library", forKey: "filePlace")
+                UserDefaults.standard.set(true, forKey: "masFilePlaceSet")
+            }
+            if let restored = FolderAccess.restoreCustomFolder() {
+                customFolderPath = restored.path
             }
         }
     }
@@ -121,6 +183,19 @@ final class AppModel {
     }
 
     func bootstrap() async {
+        if Distribution.isAppStore {
+            UserDefaults.standard.set(true, forKey: "sawInstallSheet")
+            UserDefaults.standard.set(true, forKey: "sawOCRSheet")
+            let status = await service.refreshStatus()
+            enginePath = status.path
+            engineVersion = status.path == nil ? "missing from this copy" : status.version
+            statusText = status.path == nil ? "Converter missing from this copy" : "Ready"
+            maybeOfferMarkEdit()
+            Task { await fillMissingBookmarks() }
+            maybeOfferCrashReport()
+            startWatching()
+            return
+        }
         let status = await service.refreshStatus()
         enginePath = status.path
         engineVersion = status.version
@@ -304,11 +379,16 @@ final class AppModel {
         }
     }
 
-    static var installedFontFamilies: [String] {
-        NSFontManager.shared.availableFontFamilies.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }
+    private static let cachedFontFamilies: [String] = NSFontManager.shared.availableFontFamilies
+        .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+
+    static var installedFontFamilies: [String] { cachedFontFamilies }
 
     func installEngine() async {
+        guard Distribution.allowsEngineInstall else {
+            statusText = "This App Store build uses \(Distribution.converterLabel)"
+            return
+        }
         installingEngine = true
         installLog = "Getting Microsoft MarkItDown…"
         statusText = "Installing converter…"
@@ -333,6 +413,26 @@ final class AppModel {
     func refreshOCRTools() {
         doclingPath = OcrService.doclingPath()
         ocrmypdfPath = OcrService.ocrmypdfPath()
+    }
+
+    /// GitHub disk may download Docling. App Store copy may not run downloaded code.
+    var prefersDocling: Bool {
+        ocrEnabled && ocrScanner == "docling" && Distribution.allowsEngineInstall
+    }
+
+    func setOcrScanner(_ value: String) {
+        if value == "docling", Distribution.isAppStore {
+            ocrScanner = "livetext"
+            ocrScannerHint = "This App Store copy cannot download the layout scanner (a large extra). It stays on Apple Live Text. The disk from GitHub can install the better scanner."
+            UserDefaults.standard.set("livetext", forKey: "ocrScanner")
+            return
+        }
+        ocrScanner = value
+        ocrScannerHint = ""
+        UserDefaults.standard.set(value, forKey: "ocrScanner")
+        if value == "docling", doclingPath == nil, Distribution.allowsEngineInstall {
+            statusText = "Get the layout scanner below — then scans use tables and columns"
+        }
     }
 
     func clearError() { errorMessage = nil }
@@ -375,8 +475,9 @@ final class AppModel {
                 previewMarkdown = ""
                 previewLines = []
                 previewHeadings = []
-                previewSections = []
                 previewBaseURL = nil
+                previewBackup = nil
+                askChapter = "Entire file"
             }
         }
         saveLibrary()
@@ -422,7 +523,7 @@ final class AppModel {
 
     A PDF is a picture of a page. Markdown is the words, in order, as plain text you can search and edit.
 
-    That is why it works so well with AI. A model can read a chapter, quote it, and tell you when the file is silent — instead of guessing at columns or a scan. You can paste one heading into Grok or ChatGPT, keep notes in Obsidian, or search a whole course. Tables stay tables. Headings stay an outline.
+    That is why it works so well with AI. A model can read a chapter and quote the words that are there. If that chapter does not have the answer, it can say so — instead of guessing at a scan. You can paste one heading into Grok or ChatGPT, keep notes in Obsidian, or search a whole course. Tables stay tables. Headings stay an outline.
 
     Keep the original PDF. Markdown is the working copy.
 
@@ -468,7 +569,7 @@ final class AppModel {
     - **yourMark library folder**
     - **Choose a folder** — opens Finder
 
-    The key stays on this Mac, in the Keychain.
+    The key stays on this Mac. It is sent only when you ask a question, to the provider you pick.
 
     Optionally (off by default): if the chapter does not provide an answer, also show a **model summary** below, labelled as not from the file.
 
@@ -600,6 +701,7 @@ final class AppModel {
         UserDefaults.standard.set(filePlace, forKey: "filePlace")
         UserDefaults.standard.set(customFolderPath, forKey: "customFolder")
         UserDefaults.standard.set(ocrEnabled, forKey: "ocrEnabled")
+        UserDefaults.standard.set(ocrScanner, forKey: "ocrScanner")
         UserDefaults.standard.set(aiChaptersEnabled, forKey: "aiChaptersEnabled")
         UserDefaults.standard.set(askReadPictures, forKey: "askReadPictures")
         UserDefaults.standard.set(stripChrome, forKey: "stripChrome")
@@ -639,9 +741,13 @@ final class AppModel {
             } else {
                 markdown = previewMarkdown
             }
+            let mark = documentOutline.first {
+                $0.title.caseInsensitiveCompare(askChapter) == .orderedSame
+            }
             let excerpt = AskService.excerpt(
                 markdown: markdown,
-                heading: askChapter
+                heading: askChapter,
+                startLine: mark?.lineIndex
             )
             let title = library.first(where: { $0.id == selectedLibraryID })?.title ?? "Document"
             let settings = AskService.Settings(
@@ -691,6 +797,225 @@ final class AppModel {
         }
     }
 
+    func persistTranslateSettings() {
+        UserDefaults.standard.set(translateFrom, forKey: "translateFrom")
+        UserDefaults.standard.set(translateTo, forKey: "translateTo")
+        UserDefaults.standard.set(translateEngine, forKey: "translateEngine")
+        UserDefaults.standard.set(translateLayout, forKey: "translateLayout")
+        UserDefaults.standard.set(translateSaveMode, forKey: "translateSaveMode")
+    }
+
+    @discardableResult
+    private func setStatus(_ text: String, important: Bool = false) -> Bool {
+        guard text != statusText else { return false }
+        if !important, Date().timeIntervalSince(lastStatusAt) < 0.4 { return false }
+        lastStatusAt = Date()
+        statusText = text
+        return true
+    }
+
+    private func considerToast(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != "Ready" else { return }
+        if trimmed.hasSuffix("…") || trimmed.hasSuffix("...") { return }
+        showToast(trimmed)
+    }
+
+    private func showToast(_ text: String) {
+        toastText = text
+        toastVisible = true
+        toastGen += 1
+        let gen = toastGen
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_500_000_000)
+            guard gen == toastGen else { return }
+            toastVisible = false
+        }
+    }
+
+    var translateReadyHint: String {
+        if translateEngine == "google" {
+            return googleHasKey
+                ? "This chapter will be sent to Google Translate"
+                : "Add a Google Translate key in Settings, or switch Translate to your Ask key"
+        }
+        return askHasKey
+            ? "This chapter will be sent to your Ask model"
+            : "Add an Ask key in Settings, or switch Translate to Google"
+    }
+
+    func lockGoogleTranslateKey() {
+        let draft = AskService.normalizeKey(googleKeyDraft)
+        guard !draft.isEmpty else {
+            googleKeyHint = "Paste a Google Translate API key first."
+            return
+        }
+        googleCheckingKey = true
+        googleKeyHint = ""
+        Task {
+            let result = await TranslateService.testGoogleKey(draft)
+            googleCheckingKey = false
+            if result.passed {
+                TranslateSecrets.save(draft)
+                googleHasKey = true
+                googleKeyDraft = ""
+                googleKeyTestPassed = true
+                googleKeyTestNote = result.message
+                UserDefaults.standard.set(true, forKey: "googleHasKey")
+                UserDefaults.standard.set(true, forKey: "googleKeyTestPassed")
+                UserDefaults.standard.set(result.message, forKey: "googleKeyTestNote")
+                statusText = "Google Translate key locked in"
+            } else {
+                googleKeyHint = result.message
+            }
+        }
+    }
+
+    func clearGoogleTranslateKey() {
+        TranslateSecrets.delete()
+        googleHasKey = false
+        googleKeyDraft = ""
+        googleKeyHint = ""
+        googleKeyTestPassed = false
+        googleKeyTestNote = ""
+        UserDefaults.standard.set(false, forKey: "googleHasKey")
+        UserDefaults.standard.set(false, forKey: "googleKeyTestPassed")
+        UserDefaults.standard.set("", forKey: "googleKeyTestNote")
+        statusText = "Google Translate key cleared"
+    }
+
+    func runTranslate(entireFile: Bool) async {
+        guard let item = library.first(where: { $0.id == selectedLibraryID }) else {
+            translateError = "Open a file in Library first."
+            return
+        }
+        if translateEngine == "google", !googleHasKey {
+            translateError = "Add a Google Translate key in Settings, or switch Translate to your Ask key."
+            statusText = translateError
+            return
+        }
+        if translateEngine != "google", !askHasKey {
+            translateError = "Add an Ask key in Settings, or switch Translate to Google."
+            statusText = translateError
+            return
+        }
+        if translateTo == "auto" || translateTo.isEmpty {
+            translateError = "Pick a language to translate to."
+            return
+        }
+        translateBusy = true
+        translateError = ""
+        statusText = entireFile
+            ? "Translating the file…"
+            : "Translating this chapter…"
+        defer { translateBusy = false }
+        let disk = (try? String(contentsOf: URL(fileURLWithPath: item.markdownPath), encoding: .utf8))
+            ?? previewMarkdown
+        let heading = entireFile ? "Entire file" : askChapter
+        let mark = entireFile ? nil : documentOutline.first {
+            $0.title.caseInsensitiveCompare(heading) == .orderedSame
+        }
+        let excerpt = AskService.excerpt(
+            markdown: disk,
+            heading: heading,
+            startLine: mark?.lineIndex,
+            max: 40_000
+        )
+        let askSettings = AskService.Settings(
+            provider: askProvider,
+            model: askModel,
+            baseURL: askBaseURL,
+            apiKey: AskSecrets.load()
+        )
+        do {
+            let result = try await TranslateService.translate(
+                markdown: excerpt,
+                from: translateFrom,
+                to: translateTo,
+                mode: translateLayout,
+                engine: translateEngine,
+                ask: askSettings,
+                googleKey: TranslateSecrets.load()
+            )
+            translateMarkdown = result
+            applyDisplayLines(result)
+            if translateSaveMode == "copy" {
+                saveTranslationCopy()
+            } else {
+                statusText = "Translation is in the reader — Save a copy when you want it on disk"
+            }
+        } catch {
+            translateError = error.localizedDescription
+            statusText = translateError
+        }
+    }
+
+    func clearTranslation() {
+        translateMarkdown = nil
+        translateError = ""
+        if let backup = previewBackup {
+            previewLines = backup.lines
+            previewHeadings = backup.headings
+            setStatus(translateReadyHint, important: true)
+            return
+        }
+        guard let item = library.first(where: { $0.id == selectedLibraryID }) else {
+            setStatus(translateReadyHint, important: true)
+            return
+        }
+        let path = item.markdownPath
+        let scanHeadings = item.bookmarks.isEmpty
+        Task.detached {
+            let pack = AppModel.buildPreview(path: path, scanHeadings: scanHeadings)
+            await MainActor.run {
+                self.previewMarkdown = pack.text
+                self.previewLines = pack.lines
+                self.previewHeadings = pack.headings
+                self.previewBaseURL = pack.base
+                self.previewBackup = (pack.lines, pack.headings)
+                self.setStatus(self.translateReadyHint, important: true)
+            }
+        }
+    }
+
+    func saveTranslationCopy() {
+        guard let text = translateMarkdown,
+              let item = library.first(where: { $0.id == selectedLibraryID })
+        else { return }
+        let original = URL(fileURLWithPath: item.markdownPath)
+        let folder = original.deletingLastPathComponent()
+        let stem = original.deletingPathExtension().lastPathComponent
+        let lang = translateTo
+        var dest = folder.appendingPathComponent("\(stem).\(lang).md")
+        var n = 2
+        while FileManager.default.fileExists(atPath: dest.path) {
+            dest = folder.appendingPathComponent("\(stem).\(lang)-\(n).md")
+            n += 1
+        }
+        quietWatch(8)
+        do {
+            try text.write(to: dest, atomically: true, encoding: .utf8)
+        } catch {
+            translateError = error.localizedDescription
+            statusText = "Could not save the translation copy"
+            return
+        }
+        let source = item.sourcePath.isEmpty
+            ? original
+            : URL(fileURLWithPath: item.sourcePath)
+        _ = insertLibraryItem(
+            source: source,
+            markdown: dest,
+            bookmarks: item.bookmarks,
+            title: "\(item.title) · \(TranslateLang.label(for: lang))"
+        )
+        statusText = "Saved a copy — the original Markdown is unchanged"
+    }
+
+    private func applyDisplayLines(_ text: String) {
+        previewLines = Self.readerLines(from: text)
+    }
+
     func openIncoming(_ urls: [URL]) {
         let allowed = urls.flatMap(IncomingURLs.files(from:)).filter { ConvertibleKind.allows($0) }
         guard !allowed.isEmpty else { return }
@@ -715,17 +1040,19 @@ final class AppModel {
         let scanSet = Set(scans)
         let scanURLs = allowed.filter { scanSet.contains($0.path) }
         let rest = allowed.filter { !scanSet.contains($0.path) }
-        if !rest.isEmpty { enqueue(rest) }
+        if !rest.isEmpty { enqueue(rest, scans: []) }
 
-        let doclingReady = OcrService.doclingPath() != nil
+        let doclingReady = prefersDocling && (
+            OcrService.doclingPath() != nil
             || UserDefaults.standard.bool(forKey: "doclingReady")
-        if !scanURLs.isEmpty, !doclingReady {
+        )
+        if !scanURLs.isEmpty, prefersDocling, !doclingReady {
             pendingGraphics.append(contentsOf: scanURLs.filter { g in
                 !pendingGraphics.contains(where: { $0.path == g.path })
             })
             showDoclingPrompt = true
         } else if !scanURLs.isEmpty {
-            enqueue(scanURLs)
+            enqueue(scanURLs, scans: scanSet)
         }
         await convertQueued()
     }
@@ -774,16 +1101,17 @@ final class AppModel {
         openIncoming(panel.urls)
     }
 
-    func enqueue(_ urls: [URL]) {
+    func enqueue(_ urls: [URL], scans: Set<String>? = nil) {
         var scanCount = 0
         for url in urls where ConvertibleKind.allows(url) {
             if jobs.contains(where: { $0.sourceURL == url }) { continue }
             var scan = false
-            var graphic = false
             if ocrEnabled && url.pathExtension.lowercased() == "pdf" {
-                let p = OcrService.profile(url)
-                scan = p.needsOCR
-                graphic = p.looksGraphic
+                if let scans {
+                    scan = scans.contains(url.path)
+                } else {
+                    scan = OcrService.profile(url).needsOCR
+                }
                 if scan { scanCount += 1 }
             }
             jobs.append(ConvertJob(
@@ -795,8 +1123,7 @@ final class AppModel {
                     ? "Scan — layout OCR first, so this takes a little longer"
                     : url.path,
                 startedAt: nil,
-                needsOCR: scan,
-                looksGraphic: graphic
+                needsOCR: scan
             ))
         }
         if scanCount > 0 {
@@ -820,9 +1147,11 @@ final class AppModel {
         do {
             _ = try await service.resolveEngine()
         } catch {
-            errorMessage = error.localizedDescription
-            statusText = "Engine missing"
-            return
+            if Distribution.isAppStore {
+                statusText = "Converter missing from this copy"
+            } else {
+                statusText = "Using Apple Live Text until MarkItDown is installed"
+            }
         }
 
         while convertWanted {
@@ -850,16 +1179,69 @@ final class AppModel {
                 var input = original
                 var usedOCR = false
                 let isPDF = original.pathExtension.lowercased() == "pdf"
-                let layoutFirst = ocrEnabled && isPDF && scan
+                let pythonReady: Bool
+                if enginePath != nil {
+                    pythonReady = true
+                } else {
+                    pythonReady = (try? await service.resolveEngine()) != nil
+                }
+                if !pythonReady {
+                    let onNative: @Sendable (String) -> Void = { msg in
+                        Task { @MainActor in
+                            if self.setStatus(msg), let i = self.jobs.firstIndex(where: { $0.id == jobID }) {
+                                self.jobs[i].detail = msg
+                            }
+                        }
+                    }
+                    let url = try await NativeConvert.convert(
+                        input: original,
+                        output: output,
+                        ocr: ocrEnabled && scan,
+                        onStatus: onNative
+                    )
+                    var pictures = 0
+                    if isPDF {
+                        await tidyPDFMarkdown(url, pdf: original)
+                        let bookmarks = await loadBookmarks(original)
+                        let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
+                        pictures = await PdfFigures.embed(
+                            markdownURL: final,
+                            sourcePDF: original,
+                            stripChrome: stripChrome,
+                            onStatus: onNative
+                        )
+                        await finishJob(
+                            jobID: jobID,
+                            markdown: final,
+                            original: original,
+                            usedOCR: scan,
+                            pictures: pictures,
+                            bookmarks: located
+                        )
+                    } else {
+                        let bookmarks = await loadBookmarks(original)
+                        let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
+                        await finishJob(
+                            jobID: jobID,
+                            markdown: final,
+                            original: original,
+                            usedOCR: false,
+                            pictures: 0,
+                            bookmarks: located
+                        )
+                    }
+                    continue
+                }
+                let layoutFirst = prefersDocling && isPDF && scan
                 if layoutFirst {
                     jobs[index].needsOCR = true
                     jobs[index].detail = "Layout OCR first — this takes a little longer"
                     statusText = "Layout OCR first — this takes a little longer · \(original.lastPathComponent)"
                     let onOCR: @Sendable (String) -> Void = { msg in
                         Task { @MainActor in
-                            self.statusText = "Layout OCR first — this takes a little longer. \(msg)"
-                            if let i = self.jobs.firstIndex(where: { $0.id == jobID }) {
-                                self.jobs[i].detail = "Layout OCR first — this takes a little longer. \(msg)"
+                            let line = "Layout OCR first — this takes a little longer. \(msg)"
+                            if self.setStatus(line), let i = self.jobs.firstIndex(where: { $0.id == jobID }) {
+                                self.jobs[i].detail = line
                             }
                         }
                     }
@@ -870,7 +1252,8 @@ final class AppModel {
                         onStatus: onOCR
                     ) {
                         UserDefaults.standard.set(true, forKey: "doclingReady")
-                        if let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py") {
+                        if let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py"),
+                           await markdownNeedsEnrich(output) {
                             await service.enrichPDF(markdown: output, pdf: original, script: script)
                         }
                         let bookmarks = await loadBookmarks(original)
@@ -899,8 +1282,7 @@ final class AppModel {
                 if isPDF {
                     let onFig: @Sendable (String) -> Void = { msg in
                         Task { @MainActor in
-                            self.statusText = msg
-                            if let i = self.jobs.firstIndex(where: { $0.id == jobID }) {
+                            if self.setStatus(msg), let i = self.jobs.firstIndex(where: { $0.id == jobID }) {
                                 self.jobs[i].detail = msg
                             }
                         }
@@ -914,8 +1296,7 @@ final class AppModel {
                         statusText = "This PDF is a scan (picture of the page). Running OCR…"
                         let onOCR: @Sendable (String) -> Void = { msg in
                             Task { @MainActor in
-                                self.statusText = msg
-                                if let i = self.jobs.firstIndex(where: { $0.id == jobID }) {
+                                if self.setStatus(msg), let i = self.jobs.firstIndex(where: { $0.id == jobID }) {
                                     self.jobs[i].detail = msg
                                 }
                             }
@@ -950,9 +1331,11 @@ final class AppModel {
                     }
                     statusText = "Cleaning headers and headings…"
                     await tidyPDFMarkdown(url, pdf: original)
-                    let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py")
-                    statusText = "Restoring the PDF outline and tables…"
-                    await service.enrichPDF(markdown: url, pdf: original, script: script)
+                    if await markdownNeedsEnrich(url) {
+                        let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py")
+                        statusText = "Restoring the PDF outline and tables…"
+                        await service.enrichPDF(markdown: url, pdf: original, script: script)
+                    }
                     let bookmarks = await loadBookmarks(original)
                     let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
                     _ = await PdfFigures.materializeEmbedded(markdownURL: final)
@@ -1016,11 +1399,21 @@ final class AppModel {
 
     private func tidyPDFMarkdown(_ url: URL, pdf: URL) async {
         let strip = stripChrome
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        let text = await Task.detached { try? String(contentsOf: url, encoding: .utf8) }.value
+        guard let text else { return }
         let cleaned = await PdfCleanup.tidyAsync(markdown: text, pdf: pdf, stripChrome: strip)
         if cleaned != text {
-            try? cleaned.write(to: url, atomically: true, encoding: .utf8)
+            await Task.detached { try? cleaned.write(to: url, atomically: true, encoding: .utf8) }.value
         }
+    }
+
+    private func markdownNeedsEnrich(_ url: URL) async -> Bool {
+        await Task.detached {
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { return true }
+            let hasPages = text.contains("<!-- page 2 -->")
+            let tables = text.components(separatedBy: "\n| ").count
+            return !(hasPages && tables >= 6)
+        }.value
     }
 
     private func finishJob(
@@ -1076,6 +1469,7 @@ final class AppModel {
     }
 
     func upgradeEngine() async {
+        guard Distribution.allowsEngineInstall else { return }
         isBusy = true
         statusText = "Upgrading MarkItDown from PyPI…"
         defer { isBusy = false }
@@ -1090,6 +1484,7 @@ final class AppModel {
     }
 
     func installOcrmypdf() async {
+        guard Distribution.allowsEngineInstall else { return }
         installingEngine = true
         statusText = "Installing OCRmyPDF (Tesseract)…"
         defer {
@@ -1109,6 +1504,7 @@ final class AppModel {
     }
 
     func installDocling() async {
+        guard Distribution.allowsEngineInstall else { return }
         installingEngine = true
         statusText = "Installing Docling (layout models)… first run downloads extra files"
         defer {
@@ -1118,7 +1514,10 @@ final class AppModel {
         do {
             lastUpgradeLog = try await OcrService.installDocling()
             refreshOCRTools()
-            statusText = doclingPath == nil ? "Docling install finished" : "Docling ready"
+            ocrScanner = "docling"
+            UserDefaults.standard.set("docling", forKey: "ocrScanner")
+            ocrScannerHint = ""
+            statusText = doclingPath == nil ? "Layout scanner finished" : "Layout scanner ready"
         } catch {
             errorMessage = error.localizedDescription
             statusText = "Docling install failed"
@@ -1128,6 +1527,9 @@ final class AppModel {
     func selectLibrary(_ item: LibraryItem, show: Bool = true) {
         selectedLibraryID = item.id
         previewNeedsLoad = false
+        translateMarkdown = nil
+        translateError = ""
+        askChapter = "Entire file"
         if show {
             selectedTool = .library
             showSettings = false
@@ -1137,13 +1539,14 @@ final class AppModel {
         previewGen += 1
         let gen = previewGen
         previewMarkdown = "Loading…"
-        previewLines = ["Loading…"]
+        previewLines = [PreviewLine(id: 0, text: "Loading…")]
         previewHeadings = []
-        previewSections = [PreviewSection(id: 0, lines: ["Loading…"])]
+        previewBackup = nil
         previewBaseURL = URL(fileURLWithPath: item.markdownPath).deletingLastPathComponent()
         let path = item.markdownPath
+        let scanHeadings = item.bookmarks.isEmpty
         Task.detached {
-            let pack = AppModel.buildPreview(path: path)
+            let pack = AppModel.buildPreview(path: path, scanHeadings: scanHeadings)
             await MainActor.run {
                 guard gen == self.previewGen else { return }
                 if pack.missing, !self.previewMarkdown.isEmpty, self.previewMarkdown != "Loading…" {
@@ -1152,27 +1555,34 @@ final class AppModel {
                 self.previewMarkdown = pack.text
                 self.previewLines = pack.lines
                 self.previewHeadings = pack.headings
-                self.previewSections = pack.sections
                 self.previewBaseURL = pack.base
+                self.previewBackup = (pack.lines, pack.headings)
             }
         }
     }
 
-    nonisolated static func buildPreview(path: String) -> PreviewPack {
-        let url = URL(fileURLWithPath: path)
-        let base = url.deletingLastPathComponent()
-        guard let data = try? Data(contentsOf: url), data.count > 8,
-              var text = String(data: data, encoding: .utf8) else {
-            let missing = "_File missing on disk._"
-            return PreviewPack(
-                text: missing,
-                lines: [missing],
-                headings: [],
-                sections: [PreviewSection(id: 0, lines: [missing])],
-                base: base,
-                missing: true
-            )
+    nonisolated static func readerLines(from text: String) -> [PreviewLine] {
+        let raw = text.split(separator: "\n", omittingEmptySubsequences: false)
+        var out: [PreviewLine] = []
+        out.reserveCapacity(min(raw.count, 4_500))
+        for (i, line) in raw.enumerated() {
+            if i >= 4_500 { break }
+            if line.contains("data:image") {
+                out.append(PreviewLine(id: i, text: "_A picture is stored as a file in the figures folder (Finder)._"))
+            } else {
+                out.append(PreviewLine(id: i, text: String(line)))
+            }
         }
+        return out
+    }
+
+    nonisolated static func packFromText(
+        _ text: String,
+        base: URL,
+        missing: Bool = false,
+        scanHeadings: Bool = true
+    ) -> PreviewPack {
+        var text = text
         let cap = 120_000
         if text.count > cap {
             let idx = text.index(text.startIndex, offsetBy: cap)
@@ -1180,47 +1590,58 @@ final class AppModel {
             if let nl = cut.lastIndex(of: "\n") { cut = String(cut[..<nl]) }
             text = cut + "\n\n_Preview shows the start of this large file. Open it in Finder for the rest._\n"
         }
-        let rawLines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var lines: [String] = []
-        lines.reserveCapacity(min(rawLines.count, 8_000))
-        for line in rawLines {
-            if line.contains("data:image") {
-                lines.append("_A picture is stored as a file in the figures folder (Finder)._")
-                continue
-            }
-            lines.append(line)
-            if lines.count >= 4_500 { break }
-        }
+        let lines = readerLines(from: text)
         var headings: [ManualBookmark] = []
-        var used = Set<String>()
-        for (i, line) in lines.enumerated() {
-            guard let title = PdfSidecar.headingText(line) else { continue }
-            guard title.caseInsensitiveCompare("Outline") != .orderedSame else { continue }
-            var key = title.lowercased()
-            if used.contains(key) { key += "-\(headings.count)" }
-            used.insert(key)
-            let n = line.prefix(while: { $0 == "#" }).count
-            headings.append(ManualBookmark(title: title, level: max(1, min(Int(n), 3)), pageIndex: nil, lineIndex: i))
+        if scanHeadings {
+            var used = Set<String>()
+            for (i, row) in lines.enumerated() {
+                let probe = row.text.hasPrefix(TranslateService.marker)
+                    ? String(row.text.dropFirst(TranslateService.marker.count))
+                    : row.text
+                guard let title = PdfSidecar.headingText(probe) else { continue }
+                guard title.caseInsensitiveCompare("Outline") != .orderedSame else { continue }
+                var key = title.lowercased()
+                if used.contains(key) { key += "-\(headings.count)" }
+                used.insert(key)
+                let n = probe.prefix(while: { $0 == "#" }).count
+                headings.append(ManualBookmark(title: title, level: max(1, min(Int(n), 3)), pageIndex: nil, lineIndex: i))
+            }
         }
-        let chunk = 28
-        var sections: [PreviewSection] = []
-        var i = 0
-        while i < lines.count {
-            let end = min(i + chunk, lines.count)
-            sections.append(PreviewSection(id: i, lines: Array(lines[i..<end])))
-            i = end
+        return PreviewPack(text: text, lines: lines, headings: headings, base: base, missing: missing)
+    }
+
+    nonisolated static func buildPreview(path: String, scanHeadings: Bool = true) -> PreviewPack {
+        let url = URL(fileURLWithPath: path)
+        let base = url.deletingLastPathComponent()
+        guard let data = try? Data(contentsOf: url), data.count > 8,
+              let text = String(data: data, encoding: .utf8) else {
+            let missing = "_File missing on disk._"
+            return PreviewPack(
+                text: missing,
+                lines: [PreviewLine(id: 0, text: missing)],
+                headings: [],
+                base: base,
+                missing: true
+            )
         }
-        if sections.isEmpty {
-            sections = [PreviewSection(id: 0, lines: ["Select a converted file."])]
+        return packFromText(text, base: base, scanHeadings: scanHeadings)
+    }
+
+    func setAskChapter(_ title: String) {
+        askChapter = title
+        guard title != "Entire file" else { return }
+        if let mark = documentOutline.first(where: {
+            $0.title.caseInsensitiveCompare(title) == .orderedSame
+        }) {
+            jumpToBookmark(mark)
         }
-        return PreviewPack(text: text, lines: lines, headings: headings, sections: sections, base: base)
     }
 
     func jumpToBookmark(_ bookmark: ManualBookmark) {
         askChapter = bookmark.title
         let lines = previewLines.isEmpty
             ? previewMarkdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-            : previewLines
+            : previewLines.map(\.text)
         let pdf = selectedLibraryID.flatMap { id in
             library.first(where: { $0.id == id }).flatMap { item -> URL? in
                 item.sourcePath.isEmpty ? nil : URL(fileURLWithPath: item.sourcePath)
@@ -1297,6 +1718,8 @@ final class AppModel {
         panel.prompt = "Choose"
         panel.message = "Converted Markdown will be saved here."
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        _ = FolderAccess.access(url)
+        FolderAccess.saveCustomFolder(url)
         customFolderPath = url.path
         filePlace = "custom"
         persistAskSettings()
@@ -1311,7 +1734,8 @@ final class AppModel {
             parent = convertedDir
         case "custom":
             if !customFolderPath.isEmpty {
-                parent = URL(fileURLWithPath: customFolderPath)
+                parent = FolderAccess.accessPath(customFolderPath)
+                    ?? URL(fileURLWithPath: customFolderPath)
             } else {
                 parent = input.deletingLastPathComponent()
             }
@@ -1319,8 +1743,18 @@ final class AppModel {
             parent = input.deletingLastPathComponent()
         }
         let folder = parent.appendingPathComponent(stem, isDirectory: true)
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        return folder.appendingPathComponent(stem + ".md")
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            return folder.appendingPathComponent(stem + ".md")
+        } catch {
+            if Distribution.isAppStore, filePlace != "library" {
+                let fallback = convertedDir.appendingPathComponent(stem, isDirectory: true)
+                try? FileManager.default.createDirectory(at: fallback, withIntermediateDirectories: true)
+                statusText = "Saved in the yourMark library folder (App Store cannot write next to that file)"
+                return fallback.appendingPathComponent(stem + ".md")
+            }
+            return folder.appendingPathComponent(stem + ".md")
+        }
     }
 
     private func startWatching() {
@@ -1336,7 +1770,7 @@ final class AppModel {
         let unique = Set(paths.filter { !$0.isEmpty })
         guard unique != watchedPaths else { return }
         watchedPaths = unique
-        watcher.replace(paths: Array(unique))
+        watcher.update(paths: Array(unique))
     }
 
     private func quietWatch(_ seconds: TimeInterval = 4) {
@@ -1352,25 +1786,30 @@ final class AppModel {
             guard !Task.isCancelled else { return }
             if self.isBusy || Date() < self.ignoreWatchUntil { return }
             if self.library.contains(where: { $0.sourcePath == path }) {
-                self.fileNotice = "Original file changed on disk"
+                self.setStatus("Original file changed on disk", important: true)
                 return
             }
             guard let item = self.library.first(where: { $0.id == self.selectedLibraryID }) else { return }
             let md = item.markdownPath
             guard path == md else { return }
             guard FileManager.default.isReadableFile(atPath: md) else { return }
-            self.fileNotice = "Updated from disk"
+            self.setStatus("Updated from disk", important: true)
             self.selectLibrary(item, show: false)
             self.startWatching()
         }
     }
 
-    private func addToLibrary(source: URL, markdown: URL, bookmarks: [ManualBookmark]) {
+    private func insertLibraryItem(
+        source: URL,
+        markdown: URL,
+        bookmarks: [ManualBookmark],
+        title: String? = nil
+    ) -> LibraryItem {
         quietWatch(12)
         let values = try? markdown.resourceValues(forKeys: [.fileSizeKey])
         let item = LibraryItem(
             id: UUID(),
-            title: markdown.deletingPathExtension().lastPathComponent,
+            title: title ?? markdown.deletingPathExtension().lastPathComponent,
             sourceName: source.lastPathComponent,
             markdownPath: markdown.path,
             addedAt: Date(),
@@ -1382,6 +1821,11 @@ final class AppModel {
         library.insert(item, at: 0)
         saveLibrary()
         startWatching()
+        return item
+    }
+
+    private func addToLibrary(source: URL, markdown: URL, bookmarks: [ManualBookmark]) {
+        let item = insertLibraryItem(source: source, markdown: markdown, bookmarks: bookmarks)
         selectedLibraryID = item.id
         // Do not parse a huge Markdown on the main thread the instant convert
         // finishes — that freeze looked like the app dying after "Done".
@@ -1399,22 +1843,19 @@ final class AppModel {
     }
 
     private func fillMissingBookmarks() async {
-        let jobs: [(Int, String, String)] = library.enumerated().compactMap { idx, item in
-            item.bookmarks.isEmpty ? (idx, item.markdownPath, item.sourcePath) : nil
+        let jobs: [(Int, String)] = library.enumerated().compactMap { idx, item in
+            item.bookmarks.isEmpty ? (idx, item.markdownPath) : nil
         }
         guard !jobs.isEmpty else { return }
         let found = await PdfWork.runAsync { () -> [Int: [ManualBookmark]] in
             var map: [Int: [ManualBookmark]] = [:]
-            for (idx, md, src) in jobs {
+            for (idx, md) in jobs {
                 let side = PdfSidecar.readSidecar(nextTo: URL(fileURLWithPath: md))
                 if !side.isEmpty {
                     map[idx] = side
                     continue
                 }
-                if !src.isEmpty, FileManager.default.fileExists(atPath: src) {
-                    let marks = PdfSidecar.bookmarks(from: URL(fileURLWithPath: src))
-                    if !marks.isEmpty { map[idx] = marks }
-                }
+                // Sidecar only at launch — opening every PDF here freezes startup.
             }
             return map
         }
@@ -1431,6 +1872,10 @@ final class AppModel {
     }
 
     func checkUpdates(force: Bool) async {
+        guard Distribution.allowsGitHubUpdates else {
+            if force { statusText = "Updates come from the App Store" }
+            return
+        }
         let now = Date().timeIntervalSince1970
         let lastEngine = UserDefaults.standard.double(forKey: "lastEngineCheck")
         let lastApp = UserDefaults.standard.double(forKey: "lastAppCheck")

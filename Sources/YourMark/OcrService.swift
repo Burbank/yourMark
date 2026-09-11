@@ -41,8 +41,6 @@ enum OcrService {
 
     static func needsOCR(_ url: URL) -> Bool { profile(url).needsOCR }
 
-    static func looksGraphic(_ url: URL) -> Bool { profile(url).looksGraphic }
-
     private static func profileUncached(_ url: URL) -> PdfProfile {
         guard let doc = PDFDocument(url: url), doc.pageCount > 0 else {
             return PdfProfile(needsOCR: false, looksGraphic: false)
@@ -317,6 +315,50 @@ except Exception:
         }
 
         try? parts.joined(separator: "\n").write(to: markdownURL, atomically: true, encoding: .utf8)
+    }
+
+    /// Full convert with PDFKit text, or Live Text on scans. No Python.
+    static func writeAppleMarkdown(
+        from url: URL,
+        to dest: URL,
+        ocr: Bool,
+        onStatus: @escaping @Sendable (String) -> Void
+    ) async throws {
+        guard let doc = PDFDocument(url: url), doc.pageCount > 0 else {
+            throw YourMarkError.invalidInput("That PDF could not be opened.")
+        }
+        try FileManager.default.createDirectory(
+            at: dest.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let title = url.deletingPathExtension().lastPathComponent
+        var parts: [String] = [
+            "---",
+            "title: \(title)",
+            "---",
+            "",
+        ]
+        let count = doc.pageCount
+        let useOCR = ocr || needsOCR(url)
+        for i in 0..<count {
+            onStatus(useOCR ? "Live Text page \(i + 1) of \(count)…" : "Reading page \(i + 1) of \(count)…")
+            guard let page = doc.page(at: i) else { continue }
+            let heading = pageHeading(page, index: i)
+            let kit = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let text: String
+            if useOCR && (kit.count < 48 || textOperatorCount(page) < 2) {
+                text = await liveText(page)
+            } else {
+                text = kit
+            }
+            parts.append("## \(heading)")
+            parts.append("")
+            if !text.isEmpty {
+                parts.append(text)
+                parts.append("")
+            }
+        }
+        try parts.joined(separator: "\n").write(to: dest, atomically: true, encoding: .utf8)
     }
 
     static func markdownLooksEmpty(_ url: URL) -> Bool {

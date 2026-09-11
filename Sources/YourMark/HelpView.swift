@@ -3,23 +3,33 @@ import SwiftUI
 struct HelpView: View {
     @Environment(\.deck) private var deck
 
-    private let cards: [(title: String, body: String)] = [
+    private var cards: [(title: String, body: String)] {
+        var list: [(title: String, body: String)] = [
         (
             "Why Markdown",
-            "A PDF is a picture of a page. Markdown is the words, in order. AI can quote a chapter and stay quiet when the file is silent. Keep the original PDF."
+            "A PDF is a picture of a page. Markdown is the words, in order. A model can read a chapter and quote the words that are there. If that chapter does not have the answer, it can say so — instead of guessing at a scan. Keep the original PDF."
         ),
-        (
-            "Engine",
-            "First launch installs Microsoft MarkItDown from PyPI. Convert stays on this Mac. About once a day we check for their updates. Settings → Install or reinstall does that now."
-        ),
-        (
-            "If Apple blocks the app",
-            "This build is not notarized yet. If macOS says it could not verify: click Done, not Move to Bin. Then right-click yourMark → Open, or Privacy & Security → Open Anyway."
-        ),
-        (
-            "Scanned PDFs",
-            "A scan has no text layer. yourMark uses IBM Docling for layout, tables, and figures. That takes longer the first time. Ordinary digital PDFs still go to MarkItDown."
-        ),
+        ]
+        if Distribution.isAppStore {
+            list.append((
+                "Engine",
+                "Microsoft MarkItDown is included. Photographed pages use Apple Live Text. The GitHub disk can still add IBM Docling for tables."
+            ))
+        } else {
+            list.append((
+                "Engine",
+                "First launch installs Microsoft MarkItDown from PyPI. Convert stays on this Mac. About once a day we check for their updates. Settings → Install or reinstall does that now."
+            ))
+            list.append((
+                "First open",
+                "This disk is signed and notarized by Apple. The first open may ask if you want to open it — click Open."
+            ))
+            list.append((
+                "Scanned PDFs",
+                "A scan has no text layer. Settings lets you pick Apple Live Text (already on this Mac) or IBM Docling (better tables — a large download). Ordinary digital PDFs still go to MarkItDown."
+            ))
+        }
+        list += [
         (
             "Tables",
             "Real tables become Markdown tables. Colours and merged cells flatten. Drawn “tables” that are only lines often become plain rows. Scans keep a picture plus OCR text."
@@ -42,7 +52,7 @@ struct HelpView: View {
         ),
         (
             "Ask chapter",
-            "Paste a Grok or OpenAI key in Settings, then press Enter. We test it once and lock it on this Mac. Ask uses only the current chapter. If it is silent, Search the web is there."
+            "Paste a Grok or OpenAI key in Settings, then press Enter. We test it once and lock it on this Mac. Ask uses only the current chapter. If the chapter does not have the answer, Search the web is there."
         ),
         (
             "Reading",
@@ -57,6 +67,10 @@ struct HelpView: View {
             "A Shortcut or Terminal can hand a file to yourMark with a link: yourmark://convert?file=/Users/you/Manual.pdf — put your file’s full path after file=. Dropping a PDF on the window still works."
         ),
         (
+            "Translate",
+            "Translate sends the open chapter to Google Translate or to your Ask model — whichever you pick in Settings. Convert still stays on this Mac. Pick From and To in the reader, then press Translate. Below each paragraph keeps the original; Replace shows only the translation. Save a copy writes a second file. The original Markdown is not overwritten."
+        ),
+        (
             "Keep the original",
             "Converted Markdown is for search and study. Keep the original PDF or Word file."
         ),
@@ -64,14 +78,18 @@ struct HelpView: View {
             "Crash reports",
             "If yourMark closes unexpectedly, we can copy the macOS report. Paste it in a message — no GitHub account needed. Settings can turn the offer off. Nothing is sent in the background."
         ),
-    ]
+        ]
+        return list
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("yourMark")
                     .font(.system(.largeTitle, design: .rounded).bold())
-                Text("PDFs → Markdown, using Microsoft MarkItDown on this Mac.")
+                Text(Distribution.isAppStore
+                     ? "PDFs → Markdown, using Apple PDFKit and Live Text on this Mac."
+                     : "PDFs → Markdown, using Microsoft MarkItDown on this Mac.")
                     .foregroundStyle(deck.muted)
                     .frame(maxWidth: 420, alignment: .leading)
 

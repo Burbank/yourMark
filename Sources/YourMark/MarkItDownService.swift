@@ -1,7 +1,7 @@
 import Foundation
 
-/// Thin local wrapper around Microsoft MarkItDown on PyPI.
-/// Never vendors the converter — discovers `markitdown` / `uv` on this Mac.
+/// Microsoft MarkItDown. App Store builds use the copy inside the .app.
+/// GitHub builds still find a user install, or install from PyPI.
 actor MarkItDownService {
     private(set) var enginePath: String?
     private(set) var versionString: String = "unknown"
@@ -21,6 +21,16 @@ actor MarkItDownService {
     func resolveEngine() async throws -> String {
         if let enginePath, FileManager.default.isExecutableFile(atPath: enginePath) {
             return enginePath
+        }
+
+        if let bundled = Distribution.bundledPythonPath {
+            enginePath = bundled
+            versionString = await readVersion(executable: bundled, module: true)
+            return bundled
+        }
+
+        if Distribution.isAppStore {
+            throw YourMarkError.engineNotFound
         }
 
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -63,8 +73,14 @@ actor MarkItDownService {
         let keepUris = ["docx", "pptx", "xlsx", "ppt", "xls", "html", "htm",
                         "jpg", "jpeg", "png", "gif", "webp", "tif", "tiff"].contains(ext)
 
+        let py: String?
+        if let bundled = Distribution.bundledPythonPath {
+            py = bundled
+        } else {
+            py = await pythonForEngine()
+        }
         if let script, FileManager.default.isReadableFile(atPath: script.path),
-           let py = await pythonForEngine() {
+           let py {
             var extra: [String: String] = [:]
             if !llmKey.isEmpty {
                 extra["YOURMARK_LLM_KEY"] = llmKey
@@ -86,16 +102,20 @@ actor MarkItDownService {
             }
         }
 
+        let asModule = (py != nil) || exe.hasSuffix("/python3") || exe.hasSuffix("/python3.12") || exe.hasSuffix("/python")
+        func args(_ extra: [String]) -> [String] {
+            asModule ? (["-m", "markitdown"] + extra) : extra
+        }
         var attempts: [[String]] = [
-            [input.path, "-o", output.path, "--use-plugins"],
+            args([input.path, "-o", output.path, "--use-plugins"]),
         ]
         if keepUris {
-            attempts.insert([input.path, "-o", output.path, "--keep-data-uris", "--use-plugins"], at: 0)
+            attempts.insert(args([input.path, "-o", output.path, "--keep-data-uris", "--use-plugins"]), at: 0)
         }
         var lastError: Error = YourMarkError.outputMissing(output.path)
-        for args in attempts {
+        for argv in attempts {
             do {
-                _ = try await run(executable: exe, arguments: args, captureStdout: false)
+                _ = try await run(executable: exe, arguments: argv, captureStdout: false)
                 if FileManager.default.fileExists(atPath: output.path) {
                     return output
                 }
@@ -120,6 +140,7 @@ actor MarkItDownService {
     }
 
     private func pythonForEngine() async -> String? {
+        if let bundled = Distribution.bundledPythonPath { return bundled }
         let exe = (try? await resolveEngine()) ?? enginePath
         guard let exe else { return nil }
         if let data = FileManager.default.contents(atPath: exe),
@@ -155,8 +176,11 @@ actor MarkItDownService {
         return guessed.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    /// Install Microsoft’s official MarkItDown from PyPI (uv). Not vendored.
+    /// GitHub disk only. App Store copy already contains the converter.
     func installEngine() async throws -> String {
+        if Distribution.isAppStore {
+            throw YourMarkError.engineNotFound
+        }
         enginePath = nil
         var log: [String] = []
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -265,9 +289,10 @@ actor MarkItDownService {
         return parent.appendingPathComponent("\(stem).md")
     }
 
-    private func readVersion(executable: String) async -> String {
+    private func readVersion(executable: String, module: Bool = false) async -> String {
         guard !executable.isEmpty else { return "unknown" }
-        let out = (try? await run(executable: executable, arguments: ["--version"], captureStdout: true).stdout)
+        let argv = module ? ["-m", "markitdown", "--version"] : ["--version"]
+        let out = (try? await run(executable: executable, arguments: argv, captureStdout: true).stdout)
             ?? ""
         let trimmed = out.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "unknown" : trimmed
