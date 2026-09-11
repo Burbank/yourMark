@@ -38,7 +38,7 @@ This Mac disk is signed and notarized by Apple. Open yourMark from Applications.
 
 <br>
 
-<img src="docs/shots/library-dim.jpg" width="880" alt="yourMark library at night: files on the left, bookmarks in the middle, Markdown on the right">
+<img src="docs/shots/library-dim-now.jpg" width="880" alt="yourMark library at night: files on the left, bookmarks in the middle, Markdown on the right, Translate in the toolbar">
 
 <br>
 
@@ -46,7 +46,7 @@ Library at night — files, bookmarks, and the text. Ask a chapter underneath. B
 
 <br>
 
-| <img src="docs/shots/library-bright.jpg" width="280" alt="Library in Bright"> | <img src="docs/shots/convert-bright.jpg" width="280" alt="Convert — drop a PDF"> | <img src="docs/shots/settings-dim.jpg" width="280" alt="Settings"> |
+| <img src="docs/shots/library-bright-now.jpg" width="280" alt="Library in Bright"> | <img src="docs/shots/convert-bright.jpg" width="280" alt="Convert — drop a PDF"> | <img src="docs/shots/settings-dim.jpg" width="280" alt="Settings"> |
 | --- | --- | --- |
 | Library · Bright — the same three columns on paper. | Convert — drop a PDF. Nothing is uploaded. | Settings — headers, font, MarkEdit, and your key. |
 
