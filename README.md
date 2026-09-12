@@ -12,6 +12,8 @@ A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Mark
 
 The GitHub disk is named **yourMark**. The Mac App Store listing is **yourMark AI** (the short name was taken). Same app, two channels.
 
+The window is **US English**, **Spanish**, or **Dutch**. Lock an Ask AI key in Settings if you want more interface languages.
+
 ## Why Markdown?
 
 A PDF is a picture of a page. Markdown is the words, in order.
@@ -26,7 +28,7 @@ Keep the original PDF. Markdown is the working copy.
 - **Library** — file on the left, bookmarks in the middle, the text on the right. Search in files stays on this Mac. Ask a chapter at the bottom if you add a key.
 - **Translate** — From and To in the reader. A Google Translate key or an Ask AI key is enough; you do not need both. Below keeps the original; Replace shows only the translation. **SIDE BY SIDE** opens both languages and they can scroll together.
 - **Hunter-Gatherer / FORAGE** — select text, press Enter, keep clips on a dated note beside the reader.
-- **Settings** — choose the folder once (iCloud if you want). New Markdown in that folder appears in the library. Bright, Dim, or System in the header; your keys; extra help for scanned pages.
+- **Settings** — choose the folder once (iCloud if you want). New Markdown in that folder appears in the library. Interface language is US English, Spanish, or Dutch — an Ask AI key can add more. Bright, Dim, or System in the header; your keys; extra help for scanned pages.
 
 yourMark is the window. [Microsoft MarkItDown](https://github.com/microsoft/markitdown) does the converting, on this Mac. If Microsoft publishes an update, yourMark can install it for you.
 
@@ -74,13 +76,15 @@ Lock a **Google Translate** key or an **Ask AI** key in Settings — either one 
 
 **SIDE BY SIDE** opens the pair. **SyncScroll** keeps the headings together. Save a copy writes a second file (for example `Manual.es.md`). The original Markdown is not overwritten. Convert still stays on this Mac. Google Translate is incredibly fast.
 
+**Hunter-Gatherer** is for clipping as you read. Select text and press Enter: each piece keeps its chapter and page and lands on a dated **FORAGE** note beside the reader. Press **FORAGE** to keep that note open while you change files. After Ask, **Add displayed Search Result to Forage** keeps the line you found — and your question — on today’s note.
+
 <br>
 
 ## Ask
 
 <br>
 
-<img src="docs/shots/ask-history.jpg" width="880" alt="Ask pane: a question, recent Asks, and an answer from this file">
+<img src="docs/shots/ask-and-forage.jpg" width="880" alt="Ask and FORAGE: a question in the file, gathered clips, and Add to Forage">
 
 <br>
 
