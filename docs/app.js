@@ -17,9 +17,11 @@
   const DEMO_ID = "demo";
   const DEMO = `# Landing gear
 
+This is a generic training note. It names no operator and no manufacturer.
+
 The landing gear supports the aeroplane on the ground and absorbs the shock of landing.
 
-[Figure, page 1](shots/intro-figure.jpg)
+[Figure, page 1](shots/sample-landing-gear.jpg)
 
 Flaps increase lift at low speed when landing. Slats do the same at the leading edge.
 
