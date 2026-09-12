@@ -4,8 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>yourMark — browser preview (no OCR)</title>
-  <meta name="description" content="Browser preview of yourMark. No OCR. The Mac app is better for PDFs with graphics — scans, tables, and figures stay intact there." />
+  <meta name="description" content="Browser preview of yourMark. Drop a PDF with selectable text, ask a chapter, clip to FORAGE, and try Translate. No OCR here — the Mac app keeps scans, tables, and figures intact." />
+  <meta name="theme-color" content="#1e4a73" />
+  <meta property="og:title" content="yourMark — Markdown from a PDF" />
+  <meta property="og:description" content="A Mac app that turns PDFs into Markdown. This tab is a simpler preview — no OCR." />
+  <meta property="og:image" content="https://burbank.github.io/yourMark/shots/intro-library-dim.jpg" />
+  <meta property="og:url" content="https://burbank.github.io/yourMark/" />
+  <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="apple-touch-icon" href="icon-256.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet" />
@@ -22,15 +29,17 @@
         </div>
       </div>
       <nav class="tabs">
-        <button data-tab="library" class="on">Library</button>
-        <button data-tab="convert">Convert</button>
+        <button data-tab="library" class="on" data-i18n="tabLibrary">Library</button>
+        <button data-tab="convert" data-i18n="tabConvert">Convert</button>
       </nav>
       <div class="seg" id="theme-seg" title="Colours">
         <button data-theme="system">SYSTEM</button>
         <button data-theme="bright">BRIGHT</button>
         <button data-theme="dim">DIM</button>
       </div>
-      <button data-tab="settings" class="ghost" id="btn-settings">Settings</button>
+      <button type="button" class="ghost" id="btn-hunter" title="Select text, press Enter">Hunter</button>
+      <button type="button" class="ghost" id="btn-forage" title="Open today’s FORAGE note">FORAGE</button>
+      <button data-tab="settings" class="ghost" id="btn-settings" data-i18n="tabSettings">Settings</button>
       <button class="ghost round" id="btn-help" title="Help">i</button>
     </header>
 
@@ -43,41 +52,111 @@
       <a href="privacy.html">Privacy</a>.
     </p>
 
+    <section id="hero" class="hero">
+      <button type="button" class="hero-close" id="hero-close" title="Hide this">×</button>
+      <div class="hero-copy">
+        <p class="kicker">MAC APP · BROWSER PREVIEW</p>
+        <h1>PDFs become Markdown you can search, ask, and clip.</h1>
+        <p>Conversion stays on this computer. This tab is a simpler preview — no OCR. The Mac app is the one for scans, tables, Translate keys, and Finder.</p>
+        <p class="hero-actions">
+          <a class="primary" href="https://github.com/Burbank/yourMark">Mac app on GitHub</a>
+          <button type="button" class="ghost" id="btn-try">Use this tab</button>
+          <a class="ghost" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe">Windows (early)</a>
+        </p>
+      </div>
+      <div class="hero-shots">
+        <figure>
+          <img src="shots/intro-library-dim.jpg" alt="Library at night: files, bookmarks, and a figure preview" width="880" height="550" />
+          <figcaption>Library · Dim</figcaption>
+        </figure>
+        <figure>
+          <img src="shots/intro-translate.jpg" alt="English and Chinese side by side" width="880" height="550" />
+          <figcaption>Translate</figcaption>
+        </figure>
+        <figure>
+          <img src="shots/intro-ask.jpg" alt="Ask a chapter and clip to FORAGE" width="880" height="550" />
+          <figcaption>Ask · FORAGE</figcaption>
+        </figure>
+      </div>
+    </section>
+
     <main id="view-library" class="stage">
-      <aside class="cards" id="cards"></aside>
+      <aside class="cards-col" id="cards-col">
+        <input id="lib-search" type="search" placeholder="Search in files…" autocomplete="off" />
+        <div class="cards" id="cards"></div>
+      </aside>
       <aside class="toc" id="toc"></aside>
       <section class="reader">
         <div class="reader-top">
+          <button type="button" class="ghost tight" id="btn-hide-lib" title="Hide library">‹‹</button>
           <span id="reader-title">Getting started with yourMark</span>
           <div class="reader-tools">
+            <input id="find-q" type="search" placeholder="Find in chapter" autocomplete="off" />
             <span class="a-sm">A</span>
             <input type="range" id="font-size" min="14" max="28" value="18" />
             <span class="a-lg">A</span>
+            <input type="range" id="fig-size" min="180" max="560" value="320" title="Picture preview size" />
             <button id="btn-rendered" class="on">Rendered</button>
             <button id="btn-source">Source</button>
+            <button id="btn-copy" title="Copy Markdown">Copy</button>
             <button id="btn-download">Download</button>
           </div>
         </div>
+        <div class="tr-bar" id="tr-bar">
+          <span class="kicker">TRANSLATE</span>
+          <label>From
+            <select id="tr-from"></select>
+          </label>
+          <label>To
+            <select id="tr-to"></select>
+          </label>
+          <button type="button" id="btn-tr" class="ghost tight">Translate</button>
+          <button type="button" data-tr-mode="below" class="ghost tight on">Below</button>
+          <button type="button" data-tr-mode="replace" class="ghost tight">Replace</button>
+          <button type="button" data-tr-mode="side" class="ghost tight">SIDE BY SIDE</button>
+          <label class="chk"><input type="checkbox" id="tr-sync" checked /> SyncScroll</label>
+          <button type="button" class="ghost tight" id="btn-tr-save">Save a copy</button>
+          <span class="muted" id="tr-status">This chapter leaves this tab when you press Translate.</span>
+        </div>
+        <aside id="ask-ans" class="ask-ans" hidden>
+          <header>
+            <strong>Ask</strong>
+            <span id="ask-ans-q"></span>
+            <button type="button" class="ghost tight" id="ask-ans-close">×</button>
+          </header>
+          <div id="ask-ans-body"></div>
+        </aside>
         <article id="md-view" class="md"></article>
+        <div id="md-pair" class="md-pair" hidden>
+          <article id="md-left" class="md"></article>
+          <article id="md-right" class="md"></article>
+        </div>
         <pre id="md-src" class="src" hidden></pre>
       </section>
     </main>
 
     <footer class="ask" id="ask-bar">
       <span class="ask-model" id="ask-model">Ask this chapter · stays in this tab</span>
+      <button type="button" class="ghost tight" id="btn-ask-hist" title="Recent Asks">↻</button>
       <input id="ask-q" type="text" placeholder="What does this chapter say about…" />
       <button id="btn-ask">Ask</button>
+      <button type="button" class="ghost" id="btn-add-forage" title="Add the answer to today’s FORAGE note">Add to Forage</button>
     </footer>
+    <div id="ask-hist" class="ask-hist" hidden></div>
+    <div id="fig-pop" class="fig-pop" hidden></div>
 
     <section id="view-convert" class="pane" hidden>
       <div class="kicker">CONVERT</div>
       <h2>Drop a PDF</h2>
       <p class="lede">This site is a browser preview. Drop a PDF with selectable text and it stays in this tab — nothing is uploaded. The Mac app is better for PDFs with graphics: OCR and layout. Scans, tables, and figures stay intact there. The browser version does not include OCR.</p>
       <div class="drop" id="drop">
-        <p><strong>Drop PDFs or Word here</strong></p>
-        <p class="muted">Or choose files. Markdown is saved in this browser.</p>
-        <button id="btn-choose" class="primary">Choose files</button>
-        <input id="file-input" type="file" accept=".pdf,.docx,.md,.txt" multiple hidden />
+        <p><strong>Drop PDFs, Word, or Markdown here</strong></p>
+        <p class="muted">Or choose files. Converted text stays in this browser. Pictures in a PDF become blue Figure links.</p>
+        <p class="hero-actions">
+          <button id="btn-choose" class="primary">Choose files</button>
+          <button type="button" class="ghost" id="btn-open-demo">Open the sample chapter</button>
+        </p>
+        <input id="file-input" type="file" accept=".pdf,.docx,.md,.markdown,.txt" multiple hidden />
       </div>
       <div id="jobs"></div>
     </section>
@@ -90,6 +169,19 @@
           <em>Drops repeating page titles, page numbers, and header logos. Chapter headings stay. On by default.</em>
         </span>
         <input type="checkbox" id="opt-chrome" checked />
+      </label>
+
+      <h2>Interface</h2>
+      <label class="row-set">
+        <span>
+          <strong>Language</strong>
+          <em>US English, Spanish, or Dutch for this preview’s buttons. The Mac app can add more if you lock an Ask key.</em>
+        </span>
+        <select id="opt-lang">
+          <option value="en">US English</option>
+          <option value="es">Spanish</option>
+          <option value="nl">Dutch</option>
+        </select>
       </label>
 
       <h2>Reader</h2>
@@ -114,6 +206,29 @@
         <button id="btn-get-editor" class="primary">Get the editor</button>
       </div>
 
+      <h2>Translate</h2>
+      <div class="box">
+        <label class="row-set">
+          <span>
+            <strong>Engine</strong>
+            <em>Preview uses a public service. Google or Ask needs a key. Convert still stays in this tab.</em>
+          </span>
+          <select id="opt-tr-engine">
+            <option value="preview">Preview service</option>
+            <option value="google">Google Translate</option>
+            <option value="ask">Ask AI</option>
+          </select>
+        </label>
+        <label class="row-set">
+          <span>Google Translate key</span>
+          <span class="key-row">
+            <input type="password" id="opt-gkey" placeholder="AIza…" autocomplete="off" />
+            <button type="button" id="btn-lock-gkey">Enter</button>
+          </span>
+        </label>
+        <p class="muted" id="gkey-status">A Google key or an Ask key is enough on the Mac. Here, either one is tried first; otherwise the preview service is used.</p>
+      </div>
+
       <h2>Ask AI</h2>
       <div class="box">
         <label class="row-set">
@@ -134,11 +249,17 @@
         <button id="btn-test-key">Test key</button>
       </div>
 
+      <h2>This library</h2>
+      <div class="box">
+        <p>Files stay in this browser. Removing a card does not touch anything on disk.</p>
+        <button type="button" id="btn-clear-lib" class="ghost">Clear converted files</button>
+      </div>
+
       <h2>Get the full app</h2>
       <div class="box">
         <p>Library, bookmarks, pictures, OCR, Ask, Translate, and FORAGE work best on the Mac. A Google Translate key or an Ask key is enough for Translate.</p>
         <p>
-          <a class="btn-link" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.5.1.dmg">Download Mac disk</a>
+          <a class="btn-link" href="https://github.com/Burbank/yourMark">Mac app on GitHub</a>
           ·
           <a class="btn-link" href="https://github.com/Burbank/yourMark/releases/latest/download/yourMark.exe">Windows exe</a>
           ·
@@ -158,13 +279,16 @@
         <button id="help-close">Close</button>
       </header>
       <div class="help-grid">
-        <article><h3>This tab</h3><p>A browser preview. Drop a PDF with selectable text. Nothing is uploaded. The browser version does not include OCR.</p></article>
-        <article><h3>Mac app</h3><p>Better for PDFs with graphics. OCR and layout. Scans, tables, and figures stay intact there.</p></article>
-        <article><h3>Convert</h3><p>Drop a PDF or Word file. Repeating headers can be dropped in Settings. Numbered titles become headings.</p></article>
-        <article><h3>Library</h3><p>Cards on the left. Bookmarks in the middle — the PDF outline when it has one. Click to jump.</p></article>
-        <article><h3>Ask</h3><p>Answers come from the open chapter, in this tab. A real model needs the Mac app; browsers often block the key.</p></article>
+        <article><h3>This tab</h3><p>A browser preview. Drop a PDF with selectable text, Word, or ready Markdown. Nothing is uploaded. No OCR here.</p></article>
+        <article><h3>Mac app</h3><p>Better for PDFs with graphics. OCR, layout, Translate, and Finder. Opens the GitHub intro — it does not start a download.</p></article>
+        <article><h3>Convert</h3><p>Drop a PDF or Word file. Repeating headers can be dropped in Settings. Numbered titles become headings. Pictures in the PDF become blue links.</p></article>
+        <article><h3>Library</h3><p>Cards on the left. Search in files filters them. Bookmarks in the middle. The double chevron hides the library.</p></article>
+        <article><h3>Hunter / FORAGE</h3><p>Turn Hunter on, select a passage, press Enter. Clips land on today’s FORAGE note beside the library.</p></article>
+        <article><h3>Ask</h3><p>Answers come from the open chapter. AND, OR, and NOT must be capitals, in the same sentence. Recent Asks stay in this tab.</p></article>
         <article><h3>Edit</h3><p>Download the Markdown. Mac: MarkEdit. Windows: MarkText. Both are free and open source.</p></article>
-        <article><h3>Picture links</h3><p>On the Mac app, pictures are blue links. Hover for a small preview. Click to show that file in Finder. The browser preview does not include OCR or those links.</p></article>
+        <article><h3>Picture links</h3><p>Hover a blue Figure link to see the picture. The slider next to A…A sets preview size. Click to open it. Scans still need the Mac app.</p></article>
+        <article><h3>Translate</h3><p>From and To on the reader. Below keeps the original. Replace shows only the translation. SIDE BY SIDE opens both. Save a copy writes a second card. The original stays.</p></article>
+        <article><h3>Share</h3><p>Copy puts the Markdown on the clipboard for Grok or ChatGPT. Download writes a .md. Nothing is uploaded unless you press Ask or Translate.</p></article>
       </div>
     </div>
   </div>

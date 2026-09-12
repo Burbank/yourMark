@@ -2,22 +2,107 @@
 (() => {
   const GUIDE_ID = "guide";
   const GUIDE_CARDS = [
-    ["Browser preview", "This site is a preview. Files stay in this tab. Nothing is uploaded. The browser version does not include OCR."],
-    ["Mac app", "Better for PDFs with graphics — OCR and layout. Scans, tables, and figures stay intact there."],
-    ["Convert", "Drop a PDF that already has selectable text. A scan (a photograph of the page) gets a short note. Use the Mac app for that."],
-    ["Library", "Cards on the left. Click to open. The × removes a file from this browser only."],
-    ["Bookmarks", "The middle pane is the PDF outline when the file has one, otherwise headings. Click to jump."],
-    ["Ask", "The answer is taken from the open chapter, in this tab. A real model needs the Mac app."],
+    ["Browser preview", "Files stay in this tab. Nothing is uploaded. No OCR here — scans need the Mac app."],
+    ["Mac app", "OCR, layout, Translate, and Finder. The Mac app link opens the GitHub intro."],
+    ["Convert", "Drop a PDF with selectable text, Word, or ready Markdown. Pictures in the PDF become blue Figure links."],
+    ["Library", "Cards on the left. Search in files filters them. × removes a file from this browser only."],
+    ["Hunter / FORAGE", "Turn Hunter on, select a passage, press Enter. Clips go on today’s FORAGE note."],
+    ["Ask", "Answers come from the open chapter. AND, OR, and NOT must be capitals, in the same sentence."],
     ["Edit", "Download, then open in MarkEdit (Mac) or MarkText (Windows). Both are free."],
-    ["Themes", "Bright, Dim, or System in the header. Font and size are in Settings."],
+    ["Languages", "US English, Spanish, or Dutch for this preview. The Mac app can add more with an Ask key."],
+    ["Translate", "From and To on the reader. Below, Replace, or SIDE BY SIDE. Save a copy writes a second card."],
+    ["Share", "Copy puts Markdown on the clipboard. Nothing is uploaded unless you press Ask or Translate."],
+  ];
+
+  const DEMO_ID = "demo";
+  const DEMO = `# Landing gear
+
+The landing gear supports the aeroplane on the ground and absorbs the shock of landing.
+
+[Figure, page 1](shots/intro-figure.jpg)
+
+Flaps increase lift at low speed when landing. Slats do the same at the leading edge.
+
+Ice on the gear is a separate problem from flap position.
+
+## Extension
+
+The gear extends before landing. The doors open, the legs lock down, and the lights confirm.
+
+## Retraction
+
+After takeoff the gear retracts. Doors close. A horn sounds if the gear is up while the aeroplane is configured to land.
+
+## Ask this chapter
+
+Try: \`flaps AND landing NOT ice\`. AND, OR, and NOT must be capitals, in the same sentence.
+`;
+
+  const TR_LANGS = [
+    ["auto", "Detect"],
+    ["en", "English"],
+    ["es", "Spanish"],
+    ["nl", "Dutch"],
+    ["zh-CN", "Chinese"],
+    ["fr", "French"],
+    ["de", "German"],
+    ["ja", "Japanese"],
+    ["it", "Italian"],
+    ["pt", "Portuguese"],
   ];
 
   const GUIDE = `# Getting started with yourMark
 
 This site is a **browser preview**. The browser version does **not** include OCR.
 
-The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for PDFs with graphics — OCR and layout. Scans, tables, and figures stay intact there.
+The [Mac app](https://github.com/Burbank/yourMark) is better for PDFs with graphics — OCR and layout. Scans, tables, and figures stay intact there.
+
+**Hunter-Gatherer:** select text and press Enter. Each clip keeps its heading and lands on a dated **FORAGE** note.
+
+**Ask:** AND, OR, and NOT must be capitals, and the words must sit in the same sentence.
 `;
+
+  const I18N = {
+    en: {
+      tabLibrary: "Library",
+      tabConvert: "Convert",
+      tabSettings: "Settings",
+      libSearch: "Search in files…",
+      find: "Find in chapter",
+      hunter: "Hunter",
+      forage: "FORAGE",
+      askPh: "What does this chapter say about…",
+      addForage: "Add to Forage",
+      copy: "Copy",
+      translate: "Translate",
+    },
+    es: {
+      tabLibrary: "Biblioteca",
+      tabConvert: "Convertir",
+      tabSettings: "Ajustes",
+      libSearch: "Buscar en archivos…",
+      find: "Buscar en el capítulo",
+      hunter: "Hunter",
+      forage: "FORAGE",
+      askPh: "Qué dice este capítulo sobre…",
+      addForage: "Añadir a Forage",
+      copy: "Copiar",
+      translate: "Traducir",
+    },
+    nl: {
+      tabLibrary: "Bibliotheek",
+      tabConvert: "Converteren",
+      tabSettings: "Instellingen",
+      libSearch: "Zoeken in bestanden…",
+      find: "Zoeken in hoofdstuk",
+      hunter: "Hunter",
+      forage: "FORAGE",
+      askPh: "Wat zegt dit hoofdstuk over…",
+      addForage: "Toevoegen aan Forage",
+      copy: "Kopiëren",
+      translate: "Vertalen",
+    },
+  };
 
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -28,6 +113,12 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
     files: [],
     current: GUIDE_ID,
     rendered: true,
+    hunterOn: false,
+    hideLib: false,
+    lastAsk: "",
+    lastAnswer: "",
+    askHistory: JSON.parse(sessionStorage.getItem("yourmark-asks") || "[]"),
+    tr: { from: "en", to: "zh-CN", mode: "below", text: "", busy: false },
     settings: loadSettings(),
   };
 
@@ -41,22 +132,36 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
           stripChrome: true,
           provider: "openai",
           key: "",
+          googleKey: "",
+          trEngine: "preview",
+          figSize: 320,
+          lang: "en",
+          hideHero: false,
         },
         JSON.parse(localStorage.getItem("yourmark-settings") || "{}")
       );
     } catch {
-      return { theme: "bright", font: "Atkinson Hyperlegible", fontSize: 18, stripChrome: true, provider: "openai", key: "" };
+      return { theme: "bright", font: "Atkinson Hyperlegible", fontSize: 18, stripChrome: true, provider: "openai", key: "", googleKey: "", trEngine: "preview", figSize: 320, lang: "en", hideHero: false };
     }
   }
   function saveSettings() {
-    const { key, ...rest } = state.settings;
-    localStorage.setItem("yourmark-settings", JSON.stringify({ ...rest, key: key ? "set" : "" }));
+    const { key, googleKey, ...rest } = state.settings;
+    localStorage.setItem(
+      "yourmark-settings",
+      JSON.stringify({ ...rest, key: key ? "set" : "", googleKey: googleKey ? "set" : "" })
+    );
     sessionStorage.setItem("yourmark-key", state.settings.key || "");
+    sessionStorage.setItem("yourmark-gkey", state.settings.googleKey || "");
   }
   if (sessionStorage.getItem("yourmark-key")) {
     state.settings.key = sessionStorage.getItem("yourmark-key");
   } else if (state.settings.key === "set") {
     state.settings.key = "";
+  }
+  if (sessionStorage.getItem("yourmark-gkey")) {
+    state.settings.googleKey = sessionStorage.getItem("yourmark-gkey");
+  } else if (state.settings.googleKey === "set") {
+    state.settings.googleKey = "";
   }
 
   function dbp() {
@@ -297,7 +402,7 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
       "",
       "The **Mac app** is better for PDFs with graphics — OCR and layout. Scans, tables, and figures stay intact there.",
       "",
-      "[Download the Mac app](https://github.com/Burbank/yourMark/releases/latest)",
+      "[Mac app on GitHub](https://github.com/Burbank/yourMark)",
       "",
     ].join("\n");
   }
@@ -367,21 +472,29 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
       const md = scanNotice(name, n);
       return { markdown: md, bookmarks: bookmarksFrom(md, []), name, scan: true };
     }
-    const pictures = [];
-    for (let i = 1; i <= n; i++) {
-      pictures.push([]);
-    }
     const chrome = state.settings.stripChrome ? chromeSet(pages) : new Set();
     const parts = [];
-    pages.forEach((lines, i) => {
-      const body = (lines || [])
+    const imgPages = Math.min(n, 80);
+    for (let i = 0; i < n; i++) {
+      const body = (pages[i] || [])
         .filter((l) => !chrome.has(norm(l)))
         .filter((l) => !/^\s*\d+\s*$/.test(l))
         .map(headingize);
-      if (!body.length) return;
+      const figs = [];
+      if (i < imgPages) {
+        try {
+          const page = await pdf.getPage(i + 1);
+          const urls = await imagesOnPage(page);
+          urls.forEach((url, fi) => {
+            figs.push("[Figure, page " + (i + 1) + (urls.length > 1 ? "." + (fi + 1) : "") + "](" + url + ")");
+          });
+        } catch (_) {}
+      }
+      if (!body.length && !figs.length) continue;
       parts.push("<!-- page " + (i + 1) + " -->", "");
-      parts.push.apply(parts, body.concat([""]));
-    });
+      if (figs.length) parts.push.apply(parts, figs.concat([""]));
+      if (body.length) parts.push.apply(parts, body.concat([""]));
+    }
     let md = parts.join("\n").trim();
     if (!md) md = "_No selectable text in this PDF. Scans need OCR — try again, or the Mac app._";
     const outline = await outlineOf(pdf);
@@ -400,10 +513,11 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
       .replace(/<p[^>]*>/gi, "\n\n")
       .replace(/<br\s*\/?>/gi, "\n")
       .replace(/<[^>]+>/g, "")
-      .replace(/&/g, "&")
-      .replace(/</g, "<")
-      .replace(/>/g, ">")
-      .replace(/&nbsp;/g, " ");
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"');
     const md = html.replace(/\n{3,}/g, "\n\n").trim() || "_Empty Word file._";
     return { markdown: md, bookmarks: bookmarksFrom(md, []), name };
   }
@@ -412,26 +526,65 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
     return "f" + Math.random().toString(36).slice(2, 10);
   }
 
+  function demoFile() {
+    return { id: DEMO_ID, title: "Landing gear (sample)", kind: "DEMO", markdown: DEMO, bookmarks: bookmarksFrom(DEMO, []) };
+  }
+
   function currentFile() {
     if (state.current === GUIDE_ID) {
       return { id: GUIDE_ID, title: "Getting started with yourMark", kind: "GUIDE", markdown: GUIDE, bookmarks: bookmarksFrom(GUIDE, []) };
     }
+    if (state.current === DEMO_ID) return demoFile();
     return state.files.find((f) => f.id === state.current) || null;
+  }
+
+  function booleanHit(hay, query) {
+    const q = String(query || "").trim();
+    if (!q) return true;
+    const parts = q.split(/\s+/);
+    const sents = String(hay).split(/(?<=[.?!])\s+|\n+/);
+    const testSent = (sent) => {
+      const low = sent.toLowerCase();
+      let ok = null;
+      let mode = "AND";
+      let pendingNot = false;
+      for (const raw of parts) {
+        if (raw === "AND" || raw === "OR") {
+          mode = raw;
+          continue;
+        }
+        if (raw === "NOT") {
+          pendingNot = true;
+          continue;
+        }
+        const word = raw.replace(/^["']|["']$/g, "").toLowerCase();
+        if (!word) continue;
+        const has = low.includes(word);
+        const bit = pendingNot ? !has : has;
+        pendingNot = false;
+        ok = ok == null ? bit : mode === "OR" ? ok || bit : ok && bit;
+      }
+      return !!ok;
+    };
+    if (/\b(AND|OR|NOT)\b/.test(q)) return sents.some(testSent);
+    return hay.toLowerCase().includes(q.toLowerCase());
   }
 
   function renderCards() {
     const box = $("cards");
+    const q = ($("lib-search") && $("lib-search").value) || "";
     const items = [
-      { id: GUIDE_ID, title: "Getting started with yourMark", kind: "GUIDE" },
-      ...state.files.map((f) => ({ id: f.id, title: f.title, kind: "MARKDOWN" })),
-    ];
+      { id: GUIDE_ID, title: "Getting started with yourMark", kind: "GUIDE", markdown: GUIDE },
+      demoFile(),
+      ...state.files.map((f) => ({ id: f.id, title: f.title, kind: f.kind || "MARKDOWN", markdown: f.markdown })),
+    ].filter((it) => !q || booleanHit(it.title + "\n" + (it.markdown || ""), q));
     box.innerHTML = items
       .map(
         (it) => `<div class="card ${it.id === state.current ? "on" : ""}" data-id="${it.id}">
-        ${it.id === GUIDE_ID ? "" : `<button class="del" data-del="${it.id}" title="Remove">×</button>`}
-        <small>${it.kind}</small>${escapeHtml(it.title)}</div>`
+        ${it.id === GUIDE_ID || it.id === DEMO_ID ? "" : `<button class="del" data-del="${it.id}" title="Remove">×</button>`}
+        <small>${it.kind}${q ? " · match" : ""}</small>${escapeHtml(it.title)}</div>`
       )
-      .join("");
+      .join("") || `<p class="muted">No cards match.</p>`;
   }
 
   function renderToc() {
@@ -460,32 +613,336 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
     return String(md).replace(/</g, '&' + 'lt;');
   }
 
+  function paintMarkdown(el, md) {
+    el.style.fontFamily = state.settings.font;
+    el.style.fontSize = state.settings.fontSize + "px";
+    const html = mdToHtml(md);
+    el.innerHTML = DOMPurify.sanitize(html, { ADD_TAGS: ["img"], ADD_ATTR: ["src", "alt", "href"] });
+    decorateFigures(el);
+  }
+
+  function belowMarkdown(orig, trans) {
+    const a = orig.split(/\n{2,}/);
+    const b = trans.split(/\n{2,}/);
+    const n = Math.max(a.length, b.length);
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      if (a[i]) out.push(a[i]);
+      if (b[i] && b[i] !== a[i]) out.push("> " + b[i].replace(/\n/g, "\n> "));
+    }
+    return out.join("\n\n");
+  }
+
   function renderReader() {
     const f = currentFile();
     $("reader-title").textContent = f ? f.title : "";
     $("md-view").style.fontFamily = state.settings.font;
     $("md-view").style.fontSize = state.settings.fontSize + "px";
     $("md-src").style.fontSize = Math.max(13, state.settings.fontSize - 2) + "px";
+    const pair = $("md-pair");
     if (!f) {
       $("md-view").innerHTML = "";
       $("md-src").textContent = "";
+      if (pair) pair.hidden = true;
       return;
     }
     $("md-src").textContent = f.markdown;
-    if (f.id === GUIDE_ID && state.rendered) {
+    const side = state.rendered && state.tr.mode === "side" && state.tr.text;
+    if (pair) pair.hidden = !side;
+    if (f.id === GUIDE_ID && state.rendered && !side) {
       $("md-view").innerHTML = GUIDE_CARDS.map(
         ([h, p]) => `<article><h3>${h}</h3><p>${p}</p></article>`
       ).join("");
       $("md-view").classList.add("help-grid");
     } else {
       $("md-view").classList.remove("help-grid");
-      const html = mdToHtml(f.markdown);
-      $("md-view").innerHTML = DOMPurify.sanitize(html, { ADD_TAGS: ["img"], ADD_ATTR: ["src", "alt"] });
+      let md = f.markdown;
+      if (state.tr.text && state.tr.mode === "replace") md = state.tr.text;
+      else if (state.tr.text && state.tr.mode === "below") md = belowMarkdown(f.markdown, state.tr.text);
+      paintMarkdown($("md-view"), md);
+      highlightFind();
     }
-    $("md-view").hidden = !state.rendered;
+    if (side) {
+      paintMarkdown($("md-left"), f.markdown);
+      paintMarkdown($("md-right"), state.tr.text);
+      const left = $("md-left");
+      const right = $("md-right");
+      const on = $("tr-sync") && $("tr-sync").checked;
+      left.onscroll = on ? () => { right.scrollTop = left.scrollTop; } : null;
+      right.onscroll = on ? () => { left.scrollTop = right.scrollTop; } : null;
+    }
+    $("md-view").hidden = !state.rendered || !!side;
     $("md-src").hidden = state.rendered;
     $("btn-rendered").classList.toggle("on", state.rendered);
     $("btn-source").classList.toggle("on", !state.rendered);
+    document.querySelectorAll("[data-tr-mode]").forEach((b) => b.classList.toggle("on", b.dataset.trMode === state.tr.mode));
+  }
+
+  function isFigHref(href) {
+    if (!href) return false;
+    return /^(data:image|shots\/|\.\/shots\/)/.test(href) || /\.(jpe?g|png|gif|webp)(\?|#|$)/i.test(href);
+  }
+
+  function decorateFigures(root) {
+    (root || $("md-view")).querySelectorAll("a[href]").forEach((a) => {
+      const href = a.getAttribute("href");
+      if (!isFigHref(href)) return;
+      a.classList.add("fig-link");
+      a.addEventListener("mouseenter", (e) => showFig(e, href));
+      a.addEventListener("mouseleave", hideFig);
+    });
+  }
+
+  function showFig(e, href) {
+    const pop = $("fig-pop");
+    if (!pop) return;
+    pop.hidden = false;
+    pop.innerHTML = '<img alt="" src="' + href + '">';
+    const x = Math.min(e.clientX + 16, window.innerWidth - 320);
+    const y = Math.min(e.clientY + 16, window.innerHeight - 240);
+    pop.style.left = x + "px";
+    pop.style.top = y + "px";
+  }
+  function hideFig() {
+    const pop = $("fig-pop");
+    if (pop) pop.hidden = true;
+  }
+
+  function highlightFind() {
+    const q = (($("find-q") && $("find-q").value) || "").trim();
+    if (!q || !state.rendered) return;
+    const view = $("md-view");
+    const walk = document.createTreeWalker(view, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    while (walk.nextNode()) {
+      const node = walk.currentNode;
+      if (!node.nodeValue || !node.nodeValue.toLowerCase().includes(q.toLowerCase())) continue;
+      hits.push(node);
+    }
+    hits.forEach((node) => {
+      const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig");
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      const text = node.nodeValue;
+      text.replace(re, (m, i) => {
+        frag.appendChild(document.createTextNode(text.slice(last, i)));
+        const mark = document.createElement("mark");
+        mark.textContent = m;
+        frag.appendChild(mark);
+        last = i + m.length;
+        return m;
+      });
+      frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    });
+  }
+
+  function todayForageTitle() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day + " FORAGE";
+  }
+
+  async function forageFile() {
+    const title = todayForageTitle();
+    let item = state.files.find((f) => f.title === title && f.kind === "FORAGE");
+    if (!item) {
+      item = {
+        id: uid(),
+        title,
+        kind: "FORAGE",
+        markdown: "# " + title + "\n\nClips stay in this browser.\n",
+        bookmarks: [],
+        at: Date.now(),
+      };
+      state.files.unshift(item);
+      await dbPut(item);
+    }
+    return item;
+  }
+
+  async function addToForage(passage, src) {
+    const text = String(passage || "").trim();
+    if (!text) return;
+    const item = await forageFile();
+    const f = currentFile();
+    const head = (src || (f && f.title) || "clip").replace(/\n/g, " ");
+    item.markdown += "\n## " + head + "\n\n" + text + "\n";
+    item.bookmarks = bookmarksFrom(item.markdown, []);
+    item.at = Date.now();
+    await dbPut(item);
+    renderCards();
+  }
+
+  function applyLang() {
+    const pack = I18N[state.settings.lang] || I18N.en;
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      const k = el.getAttribute("data-i18n");
+      if (pack[k]) el.textContent = pack[k];
+    });
+    if ($("lib-search")) $("lib-search").placeholder = pack.libSearch;
+    if ($("find-q")) $("find-q").placeholder = pack.find;
+    if ($("btn-hunter")) $("btn-hunter").textContent = pack.hunter;
+    if ($("btn-forage")) $("btn-forage").textContent = pack.forage;
+    if ($("ask-q")) $("ask-q").placeholder = pack.askPh;
+    if ($("btn-add-forage")) $("btn-add-forage").textContent = pack.addForage;
+    if ($("btn-copy")) $("btn-copy").textContent = pack.copy;
+    if ($("btn-tr")) $("btn-tr").textContent = pack.translate;
+    document.documentElement.lang = state.settings.lang || "en";
+  }
+
+  function fillTrLangs() {
+    const from = $("tr-from");
+    const to = $("tr-to");
+    if (!from || !to) return;
+    from.innerHTML = TR_LANGS.map(([id, lab]) => `<option value="${id}">${lab}</option>`).join("");
+    to.innerHTML = TR_LANGS.filter(([id]) => id !== "auto")
+      .map(([id, lab]) => `<option value="${id}">${lab}</option>`)
+      .join("");
+    from.value = state.tr.from;
+    to.value = state.tr.to;
+  }
+
+  function chunkText(text, max) {
+    const parts = [];
+    let buf = "";
+    String(text || "")
+      .split(/\n{2,}/)
+      .forEach((p) => {
+        if ((buf + "\n\n" + p).length > max && buf) {
+          parts.push(buf);
+          buf = p;
+        } else buf = buf ? buf + "\n\n" + p : p;
+      });
+    if (buf) parts.push(buf);
+    return parts;
+  }
+
+  async function translateViaMemory(text, from, to) {
+    const src = from === "auto" ? "en" : from;
+    const chunks = chunkText(text, 420);
+    const out = [];
+    for (const chunk of chunks) {
+      const url =
+        "https://api.mymemory.translated.net/get?q=" +
+        encodeURIComponent(chunk) +
+        "&langpair=" +
+        encodeURIComponent(src + "|" + to);
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      const t = j && j.responseData && j.responseData.translatedText;
+      if (!t) throw new Error("empty");
+      out.push(t);
+    }
+    return out.join("\n\n");
+  }
+
+  async function translateViaGoogle(text, from, to) {
+    const r = await fetch("https://translation.googleapis.com/language/translate/v2?key=" + encodeURIComponent(state.settings.googleKey), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        q: chunkText(text, 4000),
+        source: from === "auto" ? undefined : from,
+        target: to,
+        format: "text",
+      }),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    const bits = (((j.data || {}).translations) || []).map((x) => x.translatedText);
+    if (!bits.length) throw new Error("empty");
+    return bits.join("\n\n");
+  }
+
+  async function translateViaAsk(text, to) {
+    const url =
+      state.settings.provider === "xai"
+        ? "https://api.x.ai/v1/chat/completions"
+        : "https://api.openai.com/v1/chat/completions";
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + state.settings.key },
+      body: JSON.stringify({
+        model: state.settings.provider === "xai" ? "grok-3" : "gpt-4o-mini",
+        max_tokens: 2000,
+        messages: [
+          { role: "system", content: "Translate the Markdown to " + to + ". Keep headings and links. Do not add commentary." },
+          { role: "user", content: text.slice(0, 8000) },
+        ],
+      }),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
+  }
+
+  async function runTranslate() {
+    const f = currentFile();
+    if (!f || state.tr.busy) return;
+    state.tr.from = $("tr-from").value;
+    state.tr.to = $("tr-to").value;
+    state.tr.busy = true;
+    $("tr-status").textContent = "Translating this chapter…";
+    const raw = chapterText().slice(0, 6000) || f.markdown.slice(0, 6000);
+    const holes = [];
+    const src = String(raw).replace(/\[[^\]]+\]\([^)]+\)/g, (m) => {
+      holes.push(m);
+      return "[[" + (holes.length - 1) + "]]";
+    });
+    try {
+      let text = "";
+      const engine = state.settings.trEngine;
+      if (engine === "google" && state.settings.googleKey) text = await translateViaGoogle(src, state.tr.from, state.tr.to);
+      else if (engine === "ask" && state.settings.key) text = await translateViaAsk(src, state.tr.to);
+      else text = await translateViaMemory(src, state.tr.from, state.tr.to);
+      if (!text.trim()) throw new Error("empty");
+      text = text.replace(/\[\[\s*(\d+)\s*\]\]/g, (_, i) => holes[+i] || "");
+      state.tr.text = text.trim();
+      $("tr-status").textContent = "Done. Original is unchanged. Save a copy writes a second card.";
+      renderReader();
+    } catch (err) {
+      $("tr-status").textContent =
+        "Could not translate here (" + (err && err.message ? err.message : "blocked") + "). Try another engine, or the Mac app.";
+    } finally {
+      state.tr.busy = false;
+    }
+  }
+
+  async function saveTranslation() {
+    if (!state.tr.text) {
+      $("tr-status").textContent = "Translate first, then save a copy.";
+      return;
+    }
+    const f = currentFile();
+    const item = {
+      id: uid(),
+      title: (f && f.title ? f.title : "file") + "." + state.tr.to,
+      kind: "MARKDOWN",
+      markdown: state.tr.text,
+      bookmarks: bookmarksFrom(state.tr.text, []),
+      at: Date.now(),
+    };
+    await dbPut(item);
+    state.files.unshift(item);
+    state.current = item.id;
+    state.tr.text = "";
+    showTab("library");
+  }
+
+  function applyHero() {
+    document.getElementById("app").classList.toggle("hero-off", !!state.settings.hideHero);
+  }
+
+  function showAskAnswer(q, body) {
+    state.lastAsk = q;
+    state.lastAnswer = body;
+    $("ask-ans").hidden = false;
+    $("ask-ans-q").textContent = q;
+    $("ask-ans-body").textContent = body;
   }
 
   function escapeHtml(s) {
@@ -507,6 +964,8 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
     $("ask-bar").hidden = tab !== "library";
     document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
     $("btn-settings").classList.toggle("on", tab === "settings");
+    $("view-library").classList.toggle("hide-lib", !!state.hideLib);
+    $("btn-hunter").classList.toggle("on", !!state.hunterOn);
     if (tab === "library") {
       renderCards();
       renderToc();
@@ -538,7 +997,7 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
       let rec;
       if (ext === "pdf") rec = await convertPdf(buf, file.name, (msg) => { row.textContent = msg; });
       else if (ext === "docx") rec = await convertDocx(buf, file.name);
-      else if (ext === "md" || ext === "txt") {
+      else if (ext === "md" || ext === "markdown" || ext === "txt") {
         const text = new TextDecoder().decode(buf);
         rec = { markdown: text, bookmarks: bookmarksFrom(text, []), name: file.name };
       } else throw new Error("Use a PDF, Word, or Markdown file. The Mac app reads more types.");
@@ -558,7 +1017,7 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
         row.className = "job notice";
         row.innerHTML =
           "<span>This PDF is a scan — a photograph of the page. This browser preview does not include OCR. Use the Mac app for scans, tables, and figures.</span>" +
-          '<a href="https://github.com/Burbank/yourMark/releases/latest" target="_blank" rel="noopener">Get the Mac app</a>';
+          '<a href="https://github.com/Burbank/yourMark" target="_blank" rel="noopener">Mac app on GitHub</a>';
         showTab("library");
         return;
       }
@@ -568,7 +1027,7 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
       row.className = "job notice";
       row.innerHTML =
         "<span>Could not read this file here. This site is a browser preview and does not include OCR. The Mac app is better for scans, tables, and figures.</span>" +
-        '<a href="https://github.com/Burbank/yourMark/releases/latest" target="_blank" rel="noopener">Get the Mac app</a>';
+        '<a href="https://github.com/Burbank/yourMark" target="_blank" rel="noopener">Mac app on GitHub</a>';
     }
   }
 
@@ -593,6 +1052,9 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
       .sort((a, b) => b.n - a.n)
       .slice(0, 3)
       .map((x) => x.s.trim());
+    if (/\b(AND|OR|NOT)\b/.test(question) && !booleanHit(chapter, question)) {
+      return "That chapter does not say. AND, OR, and NOT must be capitals, in the same sentence.";
+    }
     if (!scored.length) return "That chapter does not say. Try another heading, or the Mac app with your own key.";
     return scored.join(" ");
   }
@@ -600,18 +1062,13 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
   async function ask() {
     const q = $("ask-q").value.trim();
     if (!q) return;
+    state.lastAsk = q;
+    state.askHistory = [{ q, at: Date.now() }, ...state.askHistory.filter((h) => h.q !== q)].slice(0, 20);
+    sessionStorage.setItem("yourmark-asks", JSON.stringify(state.askHistory));
     const chapter = chapterText();
     const local = extractive(chapter, q);
-    const box = $("md-view");
-    const note = document.createElement("aside");
-    note.style.border = "1px solid var(--line)";
-    note.style.background = "var(--field)";
-    note.style.padding = ".7rem .9rem";
-    note.style.borderRadius = "8px";
-    note.style.margin = "0 0 1rem";
     if (state.settings.key) {
-      note.textContent = "Trying your key…";
-      box.prepend(note);
+      showAskAnswer(q, "Trying your key…");
       try {
         const url =
           state.settings.provider === "xai"
@@ -631,23 +1088,27 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
         });
         if (!r.ok) throw new Error("HTTP " + r.status);
         const j = await r.json();
-        note.textContent = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || local;
+        showAskAnswer(q, (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || local);
         return;
       } catch {
-        note.textContent = local + " (This browser could not call the model. The Mac app can.)";
+        showAskAnswer(q, local + " (This browser could not call the model. The Mac app can.)");
         return;
       }
     }
-    note.textContent = local;
-    box.prepend(note);
+    showAskAnswer(q, local);
   }
 
   function fillSettings() {
     $("opt-chrome").checked = !!state.settings.stripChrome;
+    if ($("opt-lang")) $("opt-lang").value = state.settings.lang || "en";
     $("opt-font").value = state.settings.font;
     $("opt-provider").value = state.settings.provider;
     $("opt-key").value = state.settings.key ? "••••••••" : "";
+    if ($("opt-gkey")) $("opt-gkey").value = state.settings.googleKey ? "••••••••" : "";
+    if ($("opt-tr-engine")) $("opt-tr-engine").value = state.settings.trEngine || "preview";
     $("font-size").value = state.settings.fontSize;
+    if ($("fig-size")) $("fig-size").value = state.settings.figSize || 320;
+    document.documentElement.style.setProperty("--fig-max", (state.settings.figSize || 320) + "px");
     $("ask-model").textContent = state.settings.key ? "Your key · this tab" : "Ask this chapter · stays in this tab";
   }
 
@@ -686,6 +1147,7 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
     const id = e.target.closest("[data-id]") && e.target.closest("[data-id]").dataset.id;
     if (!id) return;
     state.current = id;
+    state.tr.text = "";
     showTab("library");
   });
   $("toc").addEventListener("click", (e) => {
@@ -704,6 +1166,19 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
     saveSettings();
     renderReader();
   };
+  if ($("btn-copy")) {
+    $("btn-copy").onclick = async () => {
+      const f = currentFile();
+      if (!f) return;
+      try {
+        await navigator.clipboard.writeText(f.markdown);
+        $("btn-copy").textContent = "Copied";
+        setTimeout(() => applyLang(), 1200);
+      } catch {
+        $("btn-copy").textContent = "Copy failed";
+      }
+    };
+  }
   $("btn-download").onclick = () => {
     const f = currentFile();
     if (!f) return;
@@ -795,8 +1270,144 @@ The [Mac app](https://github.com/Burbank/yourMark/releases/latest) is better for
   };
   $("btn-get-editor").onclick = () => window.open(editorUrl(), "_blank");
 
+  $("btn-hunter").onclick = () => {
+    state.hunterOn = !state.hunterOn;
+    $("btn-hunter").classList.toggle("on", state.hunterOn);
+  };
+  $("btn-forage").onclick = async () => {
+    const item = await forageFile();
+    state.current = item.id;
+    showTab("library");
+  };
+  $("btn-hide-lib").onclick = () => {
+    state.hideLib = !state.hideLib;
+    $("view-library").classList.toggle("hide-lib", state.hideLib);
+    $("btn-hide-lib").textContent = state.hideLib ? "››" : "‹‹";
+  };
+  $("lib-search").addEventListener("input", () => renderCards());
+  $("find-q").addEventListener("input", () => renderReader());
+  $("btn-add-forage").onclick = () => {
+    const body = ($("ask-ans-body") && $("ask-ans-body").textContent) || state.lastAnswer;
+    addToForage((body || state.lastAsk) + (state.lastAsk ? "\n\n_Question: " + state.lastAsk + "_" : ""), "Ask");
+  };
+  $("btn-ask-hist").onclick = () => {
+    const box = $("ask-hist");
+    box.hidden = !box.hidden;
+    box.innerHTML = state.askHistory.length
+      ? state.askHistory.map((h) => `<button type="button" data-replay="${escapeHtml(h.q)}">${escapeHtml(h.q)}</button>`).join("")
+      : "<p class='muted'>No recent Asks in this tab.</p>";
+  };
+  $("ask-hist").addEventListener("click", (e) => {
+    const q = e.target.dataset.replay;
+    if (!q) return;
+    $("ask-q").value = q;
+    $("ask-hist").hidden = true;
+    ask();
+  });
+  $("opt-lang").onchange = (e) => {
+    state.settings.lang = e.target.value;
+    saveSettings();
+    applyLang();
+  };
+  $("btn-clear-lib").onclick = async () => {
+    if (!state.files.length) return;
+    if (!confirm("Remove converted files from this browser?")) return;
+    for (const f of [...state.files]) await dbDel(f.id);
+    state.files = [];
+    state.current = GUIDE_ID;
+    showTab("library");
+  };
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      $("help").hidden = true;
+      if ($("ask-hist")) $("ask-hist").hidden = true;
+      hideFig();
+      return;
+    }
+    if ((e.key === "/" || (e.key === "f" && (e.metaKey || e.ctrlKey))) && e.target && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA") {
+      e.preventDefault();
+      $("find-q").focus();
+      return;
+    }
+    if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      $("ask-q").focus();
+      return;
+    }
+    if (e.key !== "Enter" || !state.hunterOn) return;
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return;
+    const sel = String(window.getSelection() || "").trim();
+    if (!sel) return;
+    e.preventDefault();
+    addToForage(sel);
+  });
+
+  if ($("btn-tr")) $("btn-tr").onclick = runTranslate;
+  if ($("btn-tr-save")) $("btn-tr-save").onclick = saveTranslation;
+  document.querySelectorAll("[data-tr-mode]").forEach((b) => {
+    b.onclick = () => {
+      state.tr.mode = b.dataset.trMode;
+      renderReader();
+    };
+  });
+  if ($("tr-from")) $("tr-from").onchange = (e) => { state.tr.from = e.target.value; };
+  if ($("tr-to")) $("tr-to").onchange = (e) => { state.tr.to = e.target.value; };
+  if ($("tr-sync")) {
+    $("tr-sync").onchange = (e) => {
+      const left = $("md-left");
+      const right = $("md-right");
+      if (!left || !right) return;
+      const sync = (a, b) => {
+        b.scrollTop = a.scrollTop;
+      };
+      left.onscroll = e.target.checked ? () => sync(left, right) : null;
+      right.onscroll = e.target.checked ? () => sync(right, left) : null;
+    };
+  }
+  if ($("fig-size")) {
+    $("fig-size").oninput = (e) => {
+      state.settings.figSize = +e.target.value;
+      document.documentElement.style.setProperty("--fig-max", state.settings.figSize + "px");
+      saveSettings();
+    };
+  }
+  if ($("opt-tr-engine")) {
+    $("opt-tr-engine").onchange = (e) => {
+      state.settings.trEngine = e.target.value;
+      saveSettings();
+    };
+  }
+  if ($("btn-lock-gkey")) {
+    $("btn-lock-gkey").onclick = () => {
+      const v = $("opt-gkey").value.trim();
+      if (v && v !== "••••••••") state.settings.googleKey = v;
+      saveSettings();
+      fillSettings();
+      $("gkey-status").textContent = state.settings.googleKey
+        ? "Google key saved in this tab. Set Engine to Google Translate."
+        : "No Google key stored.";
+    };
+  }
+  if ($("ask-ans-close")) $("ask-ans-close").onclick = () => { $("ask-ans").hidden = true; };
+  function hideHero() {
+    state.settings.hideHero = true;
+    saveSettings();
+    applyHero();
+  }
+  if ($("hero-close")) $("hero-close").onclick = hideHero;
+  if ($("btn-try")) $("btn-try").onclick = hideHero;
+  if ($("btn-open-demo")) {
+    $("btn-open-demo").onclick = () => {
+      state.current = DEMO_ID;
+      showTab("library");
+    };
+  }
+
   applyTheme();
   fillSettings();
+  fillTrLangs();
+  applyLang();
+  applyHero();
   dbAll()
     .then((rows) => {
       state.files = (rows || []).sort((a, b) => (b.at || 0) - (a.at || 0));
