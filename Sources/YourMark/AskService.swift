@@ -42,15 +42,6 @@ struct AskService {
         return String(s.suffix(4))
     }
 
-    static func kindLabel(_ kind: KeyKind) -> String {
-        switch kind {
-        case .xai: return "xAI (Grok)"
-        case .openai: return "OpenAI"
-        case .other: return "custom"
-        case .empty: return ""
-        }
-    }
-
     func ask(question: String, title: String, excerpt: String, settings: Settings, openKnowledge: Bool = false) async throws -> String {
         let key = Self.normalizeKey(settings.apiKey)
         if key.isEmpty {
@@ -77,7 +68,7 @@ struct AskService {
                     "role": "system",
                     "content": openKnowledge
                         ? "The student's file did not contain this. Give a short study summary from general knowledge. Do not pretend it came from their notes. Flag uncertainty. Two to four short paragraphs."
-                        : "You are a careful study assistant. Answer only from the provided excerpt. Quote short phrases when they help. If the excerpt is silent, say so clearly. Do not invent facts, citations, or numbers. Use short paragraphs.",
+                        : "You are a careful study assistant. Answer only from the provided excerpt. When a fact is from the excerpt, include one short verbatim phrase in straight double quotes. If the excerpt is silent, say so clearly. Do not invent facts, citations, or numbers. Use short paragraphs.",
                 ],
                 [
                     "role": "user",
@@ -102,6 +93,233 @@ struct AskService {
         let message = choices?.first?["message"] as? [String: Any]
         let text = message?["content"] as? String ?? ""
         return text
+    }
+
+    /// Interface catalogs only — not the chapter-study prompt (that one often says “silent”).
+    func translateInterface(
+        keys: [String],
+        languageLabel: String,
+        languageCode: String,
+        settings: Settings,
+        onBatch: (@Sendable (Int, Int) -> Void)? = nil
+    ) async throws -> [String: String] {
+        let key = Self.normalizeKey(settings.apiKey)
+        guard !key.isEmpty else {
+            throw YourMarkError.processFailed("Lock an Ask AI key to add more interface languages.")
+        }
+        let batches = Self.interfaceBatches(keys)
+        guard !batches.isEmpty else { return [:] }
+        var merged: [String: String] = [:]
+        for (i, batch) in batches.enumerated() {
+            onBatch?(i + 1, batches.count)
+            var piece = try await translateInterfaceBatch(
+                batch,
+                languageLabel: languageLabel,
+                languageCode: languageCode,
+                settings: settings
+            )
+            if piece.isEmpty {
+                piece = try await translateInterfaceBatch(
+                    batch,
+                    languageLabel: languageLabel,
+                    languageCode: languageCode,
+                    settings: settings
+                )
+            }
+            for (english, hit) in piece {
+                merged[english] = hit
+            }
+        }
+        return merged
+    }
+
+    private func translateInterfaceBatch(
+        _ keys: [String],
+        languageLabel: String,
+        languageCode: String,
+        settings: Settings
+    ) async throws -> [String: String] {
+        let key = Self.normalizeKey(settings.apiKey)
+        let base = settings.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(base)/chat/completions") else {
+            throw YourMarkError.invalidInput("Ask base URL is not valid.")
+        }
+        let payload = try JSONSerialization.data(withJSONObject: keys)
+        guard let list = String(data: payload, encoding: .utf8) else {
+            throw YourMarkError.processFailed("Could not prepare the interface lines.")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 120
+        let body: [String: Any] = [
+            "model": settings.model,
+            "max_tokens": 4000,
+            "temperature": 0.2,
+            "messages": [
+                [
+                    "role": "system",
+                    "content": "You translate yourMark interface phrases. Reply with one JSON object only. Copy each English key exactly. Values are the \(languageLabel) translations. Keep product names (yourMark, Markdown, MarkEdit, SIDE BY SIDE). Language names stay in English. No markdown fences.",
+                ],
+                [
+                    "role": "user",
+                    "content": "Translate each string in this JSON array into \(languageLabel) (\(languageCode)).\n\n\(list)",
+                ],
+            ],
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if let auth = Self.friendlyAuthError(code: code, body: data, key: key, provider: settings.provider) {
+            throw YourMarkError.processFailed(auth)
+        }
+        guard (200...299).contains(code) else {
+            throw YourMarkError.processFailed(Self.friendlyHTTPError(code: code, body: data, model: settings.model, provider: settings.provider))
+        }
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let choices = json?["choices"] as? [[String: Any]]
+        let message = choices?.first?["message"] as? [String: Any]
+        let text = message?["content"] as? String ?? ""
+        return Self.parseInterfaceTable(text, keys: keys)
+    }
+
+    static func interfaceBatches(_ keys: [String], budget: Int = 2800) -> [[String]] {
+        var out: [[String]] = []
+        var cur: [String] = []
+        var size = 0
+        for key in keys {
+            let extra = key.count + 8
+            if !cur.isEmpty, size + extra > budget {
+                out.append(cur)
+                cur = []
+                size = 0
+            }
+            cur.append(key)
+            size += extra
+        }
+        if !cur.isEmpty { out.append(cur) }
+        return out
+    }
+
+    static func parseInterfaceTable(_ raw: String, keys: [String]) -> [String: String] {
+        var trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("```") {
+            if let nl = trimmed.firstIndex(of: "\n") {
+                trimmed = String(trimmed[trimmed.index(after: nl)...])
+            }
+            if let fence = trimmed.range(of: "```", options: .backwards) {
+                trimmed = String(trimmed[..<fence.lowerBound])
+            }
+            trimmed = trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard let start = trimmed.firstIndex(of: "{"),
+              let end = trimmed.lastIndex(of: "}"),
+              start < end
+        else { return [:] }
+        var blob = String(trimmed[start...end])
+        var obj = (try? JSONSerialization.jsonObject(with: Data(blob.utf8))) as? [String: Any]
+        if obj == nil {
+            blob = Self.repairInterfaceJSON(blob)
+            obj = (try? JSONSerialization.jsonObject(with: Data(blob.utf8))) as? [String: Any]
+        }
+        guard let obj else { return [:] }
+        let wanted = Set(keys)
+        var out: [String: String] = [:]
+        for (key, rawVal) in obj {
+            guard wanted.contains(key) else { continue }
+            let value: String
+            if let s = rawVal as? String {
+                value = s
+            } else {
+                value = String(describing: rawVal)
+            }
+            let hit = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !hit.isEmpty { out[key] = hit }
+        }
+        return out
+    }
+
+    private static func repairInterfaceJSON(_ raw: String) -> String {
+        var s = raw
+        if let last = s.last, last != "}" {
+            if let cut = s.lastIndex(of: "\"") {
+                s = String(s[...cut])
+            }
+            s += "}"
+        }
+        return s
+    }
+
+    /// Title matching only — not the chapter-study prompt (that one often says “silent”).
+    func matchLibraryTitles(query: String, titles: [String], settings: Settings) async throws -> [String] {
+        let key = Self.normalizeKey(settings.apiKey)
+        guard !key.isEmpty else { return [] }
+        let base = settings.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(base)/chat/completions") else { return [] }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 40
+        let list = titles.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+        let body: [String: Any] = [
+            "model": settings.model,
+            "max_tokens": 400,
+            "temperature": 0,
+            "messages": [
+                [
+                    "role": "system",
+                    "content": "You match a search phrase to library titles. Reply with a JSON array of exact titles from the list. Match meaning, not only spelling. If none match, []. No other text.",
+                ],
+                [
+                    "role": "user",
+                    "content": "Search: \(query)\n\nTitles:\n\(list)",
+                ],
+            ],
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(code) else { return [] }
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let choices = json?["choices"] as? [[String: Any]]
+        let message = choices?.first?["message"] as? [String: Any]
+        let text = message?["content"] as? String ?? ""
+        return Self.parseTitleMatches(text, known: titles)
+    }
+
+    static func parseTitleMatches(_ raw: String, known: [String]) -> [String] {
+        var names: [String] = []
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let start = trimmed.firstIndex(of: "["), let end = trimmed.lastIndex(of: "]"), start < end,
+           let data = String(trimmed[start...end]).data(using: .utf8) {
+            if let arr = try? JSONSerialization.jsonObject(with: data) as? [String] {
+                names = arr
+            } else if let objs = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                names = objs.compactMap { $0["title"] as? String ?? $0["name"] as? String }
+            }
+        }
+        var hits: [String] = []
+        for name in names {
+            let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.isEmpty { continue }
+            if let match = known.first(where: {
+                $0.caseInsensitiveCompare(t) == .orderedSame
+                    || $0.localizedCaseInsensitiveContains(t)
+                    || t.localizedCaseInsensitiveContains($0)
+            }) {
+                if !hits.contains(match) { hits.append(match) }
+            }
+        }
+        if hits.isEmpty {
+            for title in known where title.count >= 4 && trimmed.localizedCaseInsensitiveContains(title) {
+                hits.append(title)
+            }
+        }
+        return hits
     }
 
     struct KeyTest {

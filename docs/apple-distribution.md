@@ -70,5 +70,6 @@ Category suggestion: **Productivity** or **Education**.
 
 - Create the App Store Connect listing (yourMark, `com.burbank.yourmark`)
 - Create **Apple Distribution** + **Mac Installer Distribution** on team R4SB7G9A32 (keep Developer ID)
-- Paste listing copy and 2560×1600 shots from `CURSOR_general_logs/yourMark/AppStore/`
-- Then run `./Scripts/package-mas.sh` and upload the `.pkg` with Transporter
+- Register App Group `group.com.burbank.yourmark` on that App ID (Share → convert)
+- Paste listing copy from `CURSOR_general_logs/yourMark/AppStore/LISTING.md` and 1280×800 shots from `docs/shots/app-store/`
+- Confirm https://burbank.github.io/yourMark/support.html is live, then run `./Scripts/package-mas.sh` and upload the `.pkg` with Transporter

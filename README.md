@@ -6,7 +6,7 @@
 
 A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, and ask questions about. The file never leaves this computer. See [All versions](https://github.com/Burbank/yourMark/releases) for an early Windows version as well.
 
-**[Download yourMark-0.5.0.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.5.0.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
+**[Download yourMark-0.5.1.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.5.1.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
 
 [Test a simpler version in your browser](https://burbank.github.io/yourMark/) (preview only — no OCR)
 
@@ -22,9 +22,9 @@ Keep the original PDF. Markdown is the working copy.
 
 The window has three places:
 
-- **Convert** — drop a PDF, Word, slides, or Excel. The words are written on your Mac, not online.
-- **Library** — file on the left, bookmarks in the middle, the text on the right. Ask a chapter at the bottom if you add a key. Translate sits in the reader toolbar.
-- **Settings** — Bright, Dim, or System colours in the header; an optional AI key or Google Translate key; extra help for scanned pages.
+- **Convert** — drop a PDF, Word, slides, or Excel. The words are written on your Mac, not online. A `.md` you already have skips the converter: File → Open, drop it, or put it in the folder you chose.
+- **Library** — file on the left, bookmarks in the middle, the text on the right. Ask a chapter at the bottom if you add a key. Translate sits in the reader toolbar. Show in Finder highlights the little folder (Markdown plus pictures) so you can compress that for AI.
+- **Settings** — choose the folder once (iCloud if you want). New Markdown in that folder appears in the library. Bright, Dim, or System colours in the header; an optional AI key or Google Translate key; extra help for scanned pages.
 
 yourMark is the window. [Microsoft MarkItDown](https://github.com/microsoft/markitdown) does the converting, on this Mac. If Microsoft publishes an update, yourMark can install it for you.
 
@@ -64,7 +64,7 @@ Pictures are blue links, not the photo in the page. Hover over a link to see it.
 
 <br>
 
-<img src="docs/shots/translate-toolbar.png" width="880" alt="Reader toolbar: English translate to Spanish, Below or Replace, and Translate for this chapter or the entire file">
+<img src="docs/shots/translate-toolbar.jpg" width="880" alt="Reader toolbar: English translate to Chinese, Below or Replace, and Translate for this chapter or the entire file">
 
 <br>
 

@@ -161,10 +161,13 @@ enum OcrService {
         do {
             _ = try await run(
                 pythonCmd.exe,
-                pythonCmd.args + [script.path, pdf.path, markdown.path, ocr ? "ocr" : "text"]
+                pythonCmd.args + [script.path, pdf.path, markdown.path, ocr ? "ocr" : "text"],
+                cancellable: true
             )
             return FileManager.default.fileExists(atPath: markdown.path)
                 && !markdownLooksEmpty(markdown)
+        } catch is ProcessRun.ConvertCancel {
+            return false
         } catch {
             onStatus("Docling failed — falling back. \(error.localizedDescription)")
             return false
@@ -270,10 +273,12 @@ except Exception:
                 out.path,
             ]
             do {
-                _ = try await run(exe, args)
+                _ = try await run(exe, args, cancellable: true)
                 if FileManager.default.fileExists(atPath: out.path) {
                     return (out, true)
                 }
+            } catch is ProcessRun.ConvertCancel {
+                throw ProcessRun.ConvertCancel.stopped
             } catch {
                 onStatus("OCRmyPDF failed — using Apple Live Text…")
             }
@@ -291,8 +296,10 @@ except Exception:
         sourcePDF: URL,
         onStatus: @escaping @Sendable (String) -> Void
     ) async {
-        guard markdownLooksEmpty(markdownURL) else { return }
-        guard let doc = PDFDocument(url: sourcePDF), doc.pageCount > 0 else { return }
+        let empty = await PdfWork.runAsync { markdownLooksEmpty(markdownURL) }
+        guard empty else { return }
+        let count = await PdfWork.runAsync { PDFDocument(url: sourcePDF)?.pageCount ?? 0 }
+        guard count > 0 else { return }
         onStatus("Reading the words on each page with Live Text…")
 
         var parts: [String] = [
@@ -300,13 +307,13 @@ except Exception:
             "",
         ]
 
-        let count = doc.pageCount
         for i in 0..<count {
+            if ProcessRun.convertWasCancelled { return }
             onStatus("OCR page \(i + 1) of \(count)…")
-            guard let page = doc.page(at: i) else { continue }
-            let heading = pageHeading(page, index: i)
-            let text = await liveText(page)
-            parts.append("## \(heading)")
+            let snap = await PdfWork.runAsync { pageSnapshot(sourcePDF, index: i, wantImage: true) }
+            guard let snap else { continue }
+            let text = await recognizeText(snap.image, fallback: snap.kit)
+            parts.append("## \(snap.heading)")
             parts.append("")
             if !text.isEmpty {
                 parts.append(text)
@@ -314,7 +321,10 @@ except Exception:
             }
         }
 
-        try? parts.joined(separator: "\n").write(to: markdownURL, atomically: true, encoding: .utf8)
+        let body = parts.joined(separator: "\n")
+        await PdfWork.runAsync {
+            try? body.write(to: markdownURL, atomically: true, encoding: .utf8)
+        }
     }
 
     /// Full convert with PDFKit text, or Live Text on scans. No Python.
@@ -324,7 +334,11 @@ except Exception:
         ocr: Bool,
         onStatus: @escaping @Sendable (String) -> Void
     ) async throws {
-        guard let doc = PDFDocument(url: url), doc.pageCount > 0 else {
+        let opened = await PdfWork.runAsync { () -> (count: Int, useOCR: Bool)? in
+            guard let doc = PDFDocument(url: url), doc.pageCount > 0 else { return nil }
+            return (doc.pageCount, ocr || needsOCR(url))
+        }
+        guard let opened else {
             throw YourMarkError.invalidInput("That PDF could not be opened.")
         }
         try FileManager.default.createDirectory(
@@ -338,20 +352,22 @@ except Exception:
             "---",
             "",
         ]
-        let count = doc.pageCount
-        let useOCR = ocr || needsOCR(url)
+        let count = opened.count
+        let useOCR = opened.useOCR
         for i in 0..<count {
+            if ProcessRun.convertWasCancelled { throw ProcessRun.ConvertCancel.stopped }
             onStatus(useOCR ? "Live Text page \(i + 1) of \(count)…" : "Reading page \(i + 1) of \(count)…")
-            guard let page = doc.page(at: i) else { continue }
-            let heading = pageHeading(page, index: i)
-            let kit = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let text: String
-            if useOCR && (kit.count < 48 || textOperatorCount(page) < 2) {
-                text = await liveText(page)
-            } else {
-                text = kit
+            let snap = await PdfWork.runAsync {
+                pageSnapshot(url, index: i, wantImage: useOCR)
             }
-            parts.append("## \(heading)")
+            guard let snap else { continue }
+            let text: String
+            if useOCR && (snap.kit.count < 48 || snap.operators < 2) {
+                text = await recognizeText(snap.image, fallback: snap.kit)
+            } else {
+                text = snap.kit
+            }
+            parts.append("## \(snap.heading)")
             parts.append("")
             if !text.isEmpty {
                 parts.append(text)
@@ -392,18 +408,36 @@ except Exception:
         return name
     }
 
-    private static func liveText(_ page: PDFPage) async -> String {
-        let img = page.thumbnail(of: CGSize(width: 2000, height: 2000), for: .mediaBox)
-        guard let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    private struct PageSnap: @unchecked Sendable {
+        var heading: String
+        var kit: String
+        var operators: Int
+        var image: CGImage?
+    }
+
+    /// PDFKit only. Call from `PdfWork`.
+    private static func pageSnapshot(_ url: URL, index: Int, wantImage: Bool) -> PageSnap? {
+        guard let doc = PDFDocument(url: url), let page = doc.page(at: index) else { return nil }
+        let heading = pageHeading(page, index: index)
+        let kit = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let operators = textOperatorCount(page)
+        var image: CGImage?
+        if wantImage {
+            let img = page.thumbnail(of: CGSize(width: 2000, height: 2000), for: .mediaBox)
+            image = img.cgImage(forProposedRect: nil, context: nil, hints: nil)
         }
+        return PageSnap(heading: heading, kit: kit, operators: operators, image: image)
+    }
+
+    private static func recognizeText(_ image: CGImage?, fallback: String) async -> String {
+        guard let image else { return fallback }
         return await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
                 let request = VNRecognizeTextRequest()
                 request.recognitionLevel = .accurate
                 request.usesLanguageCorrection = true
                 request.recognitionLanguages = ["en-US"]
-                let handler = VNImageRequestHandler(cgImage: cg, options: [:])
+                let handler = VNImageRequestHandler(cgImage: image, options: [:])
                 let text: String
                 do {
                     try handler.perform([request])
@@ -411,9 +445,9 @@ except Exception:
                         .compactMap { $0.topCandidates(1).first?.string }
                         .joined(separator: "\n")
                 } catch {
-                    text = page.string ?? ""
+                    text = fallback
                 }
-                cont.resume(returning: text)
+                cont.resume(returning: text.trimmingCharacters(in: .whitespacesAndNewlines))
             }
         }
     }
@@ -432,14 +466,15 @@ except Exception:
     }
 
     @discardableResult
-    private static func run(_ exe: String, _ args: [String]) async throws -> String {
+    private static func run(_ exe: String, _ args: [String], cancellable: Bool = false) async throws -> String {
         try await withCheckedThrowingContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     let result = try ProcessRun.run(
                         executable: exe,
                         arguments: args,
-                        captureStdout: true
+                        captureStdout: true,
+                        cancellable: cancellable
                     )
                     let msg = result.stderr.isEmpty ? result.stdout : result.stderr
                     if result.status == 0 {

@@ -6,36 +6,141 @@ struct TranslateLang: Identifiable, Hashable {
 
     static let auto = TranslateLang(id: "auto", label: "Auto-detect")
 
+    /// Google Cloud Translation codes (v2), English labels, A–Z.
     static let spoken: [TranslateLang] = [
-        TranslateLang(id: "en", label: "English"),
-        TranslateLang(id: "nl", label: "Dutch"),
-        TranslateLang(id: "de", label: "German"),
-        TranslateLang(id: "fr", label: "French"),
-        TranslateLang(id: "es", label: "Spanish"),
-        TranslateLang(id: "pt", label: "Portuguese"),
-        TranslateLang(id: "it", label: "Italian"),
-        TranslateLang(id: "pl", label: "Polish"),
-        TranslateLang(id: "sv", label: "Swedish"),
-        TranslateLang(id: "no", label: "Norwegian"),
-        TranslateLang(id: "da", label: "Danish"),
-        TranslateLang(id: "fi", label: "Finnish"),
-        TranslateLang(id: "el", label: "Greek"),
-        TranslateLang(id: "tr", label: "Turkish"),
+        TranslateLang(id: "af", label: "Afrikaans"),
+        TranslateLang(id: "sq", label: "Albanian"),
+        TranslateLang(id: "am", label: "Amharic"),
         TranslateLang(id: "ar", label: "Arabic"),
-        TranslateLang(id: "he", label: "Hebrew"),
-        TranslateLang(id: "hi", label: "Hindi"),
+        TranslateLang(id: "hy", label: "Armenian"),
+        TranslateLang(id: "as", label: "Assamese"),
+        TranslateLang(id: "ay", label: "Aymara"),
+        TranslateLang(id: "az", label: "Azerbaijani"),
+        TranslateLang(id: "bm", label: "Bambara"),
+        TranslateLang(id: "eu", label: "Basque"),
+        TranslateLang(id: "be", label: "Belarusian"),
+        TranslateLang(id: "bn", label: "Bengali"),
+        TranslateLang(id: "bho", label: "Bhojpuri"),
+        TranslateLang(id: "bs", label: "Bosnian"),
+        TranslateLang(id: "bg", label: "Bulgarian"),
+        TranslateLang(id: "ca", label: "Catalan"),
+        TranslateLang(id: "ceb", label: "Cebuano"),
+        TranslateLang(id: "ny", label: "Chichewa"),
         TranslateLang(id: "zh-CN", label: "Chinese (Simplified)"),
         TranslateLang(id: "zh-TW", label: "Chinese (Traditional)"),
-        TranslateLang(id: "ja", label: "Japanese"),
-        TranslateLang(id: "ko", label: "Korean"),
-        TranslateLang(id: "vi", label: "Vietnamese"),
-        TranslateLang(id: "th", label: "Thai"),
-        TranslateLang(id: "id", label: "Indonesian"),
-        TranslateLang(id: "ro", label: "Romanian"),
+        TranslateLang(id: "co", label: "Corsican"),
+        TranslateLang(id: "hr", label: "Croatian"),
         TranslateLang(id: "cs", label: "Czech"),
+        TranslateLang(id: "da", label: "Danish"),
+        TranslateLang(id: "dv", label: "Dhivehi"),
+        TranslateLang(id: "doi", label: "Dogri"),
+        TranslateLang(id: "nl", label: "Dutch"),
+        TranslateLang(id: "en", label: "English"),
+        TranslateLang(id: "eo", label: "Esperanto"),
+        TranslateLang(id: "et", label: "Estonian"),
+        TranslateLang(id: "ee", label: "Ewe"),
+        TranslateLang(id: "tl", label: "Filipino"),
+        TranslateLang(id: "fi", label: "Finnish"),
+        TranslateLang(id: "fr", label: "French"),
+        TranslateLang(id: "fy", label: "Frisian"),
+        TranslateLang(id: "gl", label: "Galician"),
+        TranslateLang(id: "ka", label: "Georgian"),
+        TranslateLang(id: "de", label: "German"),
+        TranslateLang(id: "el", label: "Greek"),
+        TranslateLang(id: "gn", label: "Guarani"),
+        TranslateLang(id: "gu", label: "Gujarati"),
+        TranslateLang(id: "ht", label: "Haitian Creole"),
+        TranslateLang(id: "ha", label: "Hausa"),
+        TranslateLang(id: "haw", label: "Hawaiian"),
+        TranslateLang(id: "he", label: "Hebrew"),
+        TranslateLang(id: "hi", label: "Hindi"),
+        TranslateLang(id: "hmn", label: "Hmong"),
         TranslateLang(id: "hu", label: "Hungarian"),
-        TranslateLang(id: "uk", label: "Ukrainian"),
+        TranslateLang(id: "is", label: "Icelandic"),
+        TranslateLang(id: "ig", label: "Igbo"),
+        TranslateLang(id: "ilo", label: "Ilocano"),
+        TranslateLang(id: "id", label: "Indonesian"),
+        TranslateLang(id: "ga", label: "Irish"),
+        TranslateLang(id: "it", label: "Italian"),
+        TranslateLang(id: "ja", label: "Japanese"),
+        TranslateLang(id: "jw", label: "Javanese"),
+        TranslateLang(id: "kn", label: "Kannada"),
+        TranslateLang(id: "kk", label: "Kazakh"),
+        TranslateLang(id: "km", label: "Khmer"),
+        TranslateLang(id: "rw", label: "Kinyarwanda"),
+        TranslateLang(id: "gom", label: "Konkani"),
+        TranslateLang(id: "ko", label: "Korean"),
+        TranslateLang(id: "kri", label: "Krio"),
+        TranslateLang(id: "ku", label: "Kurdish (Kurmanji)"),
+        TranslateLang(id: "ckb", label: "Kurdish (Sorani)"),
+        TranslateLang(id: "ky", label: "Kyrgyz"),
+        TranslateLang(id: "lo", label: "Lao"),
+        TranslateLang(id: "la", label: "Latin"),
+        TranslateLang(id: "lv", label: "Latvian"),
+        TranslateLang(id: "ln", label: "Lingala"),
+        TranslateLang(id: "lt", label: "Lithuanian"),
+        TranslateLang(id: "lg", label: "Luganda"),
+        TranslateLang(id: "lb", label: "Luxembourgish"),
+        TranslateLang(id: "mk", label: "Macedonian"),
+        TranslateLang(id: "mai", label: "Maithili"),
+        TranslateLang(id: "mg", label: "Malagasy"),
+        TranslateLang(id: "ms", label: "Malay"),
+        TranslateLang(id: "ml", label: "Malayalam"),
+        TranslateLang(id: "mt", label: "Maltese"),
+        TranslateLang(id: "mi", label: "Maori"),
+        TranslateLang(id: "mr", label: "Marathi"),
+        TranslateLang(id: "mni-Mtei", label: "Meiteilon (Manipuri)"),
+        TranslateLang(id: "lus", label: "Mizo"),
+        TranslateLang(id: "mn", label: "Mongolian"),
+        TranslateLang(id: "my", label: "Myanmar (Burmese)"),
+        TranslateLang(id: "ne", label: "Nepali"),
+        TranslateLang(id: "no", label: "Norwegian"),
+        TranslateLang(id: "or", label: "Odia (Oriya)"),
+        TranslateLang(id: "om", label: "Oromo"),
+        TranslateLang(id: "ps", label: "Pashto"),
+        TranslateLang(id: "fa", label: "Persian"),
+        TranslateLang(id: "pl", label: "Polish"),
+        TranslateLang(id: "pt", label: "Portuguese"),
+        TranslateLang(id: "pa", label: "Punjabi"),
+        TranslateLang(id: "qu", label: "Quechua"),
+        TranslateLang(id: "ro", label: "Romanian"),
         TranslateLang(id: "ru", label: "Russian"),
+        TranslateLang(id: "sm", label: "Samoan"),
+        TranslateLang(id: "sa", label: "Sanskrit"),
+        TranslateLang(id: "gd", label: "Scots Gaelic"),
+        TranslateLang(id: "nso", label: "Sepedi"),
+        TranslateLang(id: "sr", label: "Serbian"),
+        TranslateLang(id: "st", label: "Sesotho"),
+        TranslateLang(id: "sn", label: "Shona"),
+        TranslateLang(id: "sd", label: "Sindhi"),
+        TranslateLang(id: "si", label: "Sinhala"),
+        TranslateLang(id: "sk", label: "Slovak"),
+        TranslateLang(id: "sl", label: "Slovenian"),
+        TranslateLang(id: "so", label: "Somali"),
+        TranslateLang(id: "es", label: "Spanish"),
+        TranslateLang(id: "su", label: "Sundanese"),
+        TranslateLang(id: "sw", label: "Swahili"),
+        TranslateLang(id: "sv", label: "Swedish"),
+        TranslateLang(id: "tg", label: "Tajik"),
+        TranslateLang(id: "ta", label: "Tamil"),
+        TranslateLang(id: "tt", label: "Tatar"),
+        TranslateLang(id: "te", label: "Telugu"),
+        TranslateLang(id: "th", label: "Thai"),
+        TranslateLang(id: "ti", label: "Tigrinya"),
+        TranslateLang(id: "ts", label: "Tsonga"),
+        TranslateLang(id: "tr", label: "Turkish"),
+        TranslateLang(id: "tk", label: "Turkmen"),
+        TranslateLang(id: "ak", label: "Twi"),
+        TranslateLang(id: "uk", label: "Ukrainian"),
+        TranslateLang(id: "ur", label: "Urdu"),
+        TranslateLang(id: "ug", label: "Uyghur"),
+        TranslateLang(id: "uz", label: "Uzbek"),
+        TranslateLang(id: "vi", label: "Vietnamese"),
+        TranslateLang(id: "cy", label: "Welsh"),
+        TranslateLang(id: "xh", label: "Xhosa"),
+        TranslateLang(id: "yi", label: "Yiddish"),
+        TranslateLang(id: "yo", label: "Yoruba"),
+        TranslateLang(id: "zu", label: "Zulu"),
     ]
 
     static func label(for id: String) -> String {
@@ -46,8 +151,12 @@ struct TranslateLang: Identifiable, Hashable {
     static var deviceTo: String {
         let code = Locale.current.language.languageCode?.identifier ?? "en"
         if spoken.contains(where: { $0.id == code }) { return code }
-        if code == "zh" { return "zh-CN" }
-        return "en"
+        switch code {
+        case "zh": return "zh-CN"
+        case "nb", "nn": return "no"
+        case "fil": return "tl"
+        default: return "en"
+        }
     }
 }
 
@@ -163,9 +272,28 @@ enum TranslateService {
         } else if let ask {
             translated = try await askTranslate(payloads, from: from, to: to, settings: ask)
         } else {
-            throw YourMarkError.invalidInput("Add an Ask key or a Google Translate key in Settings.")
+            throw YourMarkError.invalidInput("Add an Ask AI key or a Google Translate key in Settings.")
         }
         return render(blocks: pieces, translations: translated, mode: mode)
+    }
+
+    /// Same count and order as `titles`. Used so Translate keeps the original bookmark tree.
+    static func translateTitles(
+        _ titles: [String],
+        from: String,
+        to: String,
+        engine: String,
+        ask: AskService.Settings?,
+        googleKey: String
+    ) async throws -> [String] {
+        guard !titles.isEmpty else { return [] }
+        if engine == "google" {
+            return try await googleTranslate(titles, from: from, to: to, key: googleKey)
+        } else if let ask {
+            return try await askTranslateTitles(titles, from: from, to: to, settings: ask)
+        } else {
+            throw YourMarkError.invalidInput("Add an Ask AI key or a Google Translate key in Settings.")
+        }
     }
 
     static func testGoogleKey(_ key: String) async -> AskService.KeyTest {
@@ -286,7 +414,7 @@ enum TranslateService {
     private static func askTranslate(_ texts: [String], from: String, to: String, settings: AskService.Settings) async throws -> [String] {
         let key = AskService.normalizeKey(settings.apiKey)
         if key.isEmpty {
-            throw YourMarkError.invalidInput("Add an Ask key in Settings, or switch Translate to Google.")
+            throw YourMarkError.invalidInput("Add an Ask AI key in Settings, or switch Translate to Google.")
         }
         let target = TranslateLang.label(for: to)
         let source = from == "auto" ? "the language of the text" : TranslateLang.label(for: from)
@@ -295,7 +423,25 @@ enum TranslateService {
         while i < texts.count {
             let end = min(i + 5, texts.count)
             let batch = Array(texts[i..<end])
-            out.append(contentsOf: try await askBatch(batch, source: source, target: target, settings: settings, key: key))
+            out.append(contentsOf: try await askBatch(batch, source: source, target: target, settings: settings, key: key, titlesOnly: false))
+            i = end
+        }
+        return out
+    }
+
+    private static func askTranslateTitles(_ titles: [String], from: String, to: String, settings: AskService.Settings) async throws -> [String] {
+        let key = AskService.normalizeKey(settings.apiKey)
+        if key.isEmpty {
+            throw YourMarkError.invalidInput("Add an Ask AI key in Settings, or switch Translate to Google.")
+        }
+        let target = TranslateLang.label(for: to)
+        let source = from == "auto" ? "the language of the text" : TranslateLang.label(for: from)
+        var out: [String] = []
+        var i = 0
+        while i < titles.count {
+            let end = min(i + 20, titles.count)
+            let batch = Array(titles[i..<end])
+            out.append(contentsOf: try await askBatch(batch, source: source, target: target, settings: settings, key: key, titlesOnly: true))
             i = end
         }
         return out
@@ -306,7 +452,8 @@ enum TranslateService {
         source: String,
         target: String,
         settings: AskService.Settings,
-        key: String
+        key: String,
+        titlesOnly: Bool
     ) async throws -> [String] {
         let base = settings.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -326,7 +473,9 @@ enum TranslateService {
             "messages": [
                 [
                     "role": "system",
-                    "content": "Translate Markdown from \(source) to \(target). Keep # headings, **bold**, lists, and links. Do not translate file paths or figure links. Do not add commentary. Return one block per input, each starting with the same <<<n>>> tag.",
+                    "content": titlesOnly
+                        ? "Translate these document outline titles from \(source) to \(target). Keep numbers and codes such as 14.2. Return one title per input, each starting with the same <<<n>>> tag. Same count and order. Do not add, remove, or reorder titles. Do not replace a title with a page number."
+                        : "Translate Markdown from \(source) to \(target). Translate heading words only — do not add, remove, or reorder headings. Keep the same number of # marks on each heading. Keep **bold**, lists, and links. Do not translate file paths or figure links. Do not turn <!-- page N --> comments into headings. Do not invent a new outline or page-number headings. Do not add commentary. Return one block per input, each starting with the same <<<n>>> tag.",
                 ],
                 [
                     "role": "user",

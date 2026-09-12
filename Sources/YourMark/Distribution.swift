@@ -46,4 +46,12 @@ enum Distribution {
     static var privacyURL: URL {
         URL(string: "https://burbank.github.io/yourMark/privacy.html")!
     }
+
+    /// App Store listing Support URL. Do not open this from the GitHub disk.
+    static var supportURL: URL {
+        URL(string: "https://burbank.github.io/yourMark/support.html")!
+    }
+
+    /// App Store crash / support mail. Same inbox as the listing Support page.
+    static var supportMail: String { "dunia@tutamail.com" }
 }

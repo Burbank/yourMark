@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct DeckTheme {
@@ -13,12 +14,20 @@ struct DeckTheme {
     let btnText: Color
     let border: CGFloat
 
-    static func resolve(_ appearance: String, _ scheme: ColorScheme) -> DeckTheme {
+    static func resolve(_ appearance: String, macIsDark: Bool, brightLook: String) -> DeckTheme {
         switch appearance {
-        case "bright": return .bright
-        case "dim": return .dim
-        default: return scheme == .dark ? .dim : .systemLight
+        case "bright":
+            return brightLook == "white" ? .whiteBright : .bright
+        case "dim":
+            return .dim
+        default:
+            return macIsDark ? .dim : .systemLight
         }
+    }
+
+    /// macOS light/dark, not the forced app scheme (avoids a white flash after DIM).
+    static func macSystemIsDark() -> Bool {
+        UserDefaults.standard.string(forKey: "AppleInterfaceStyle")?.lowercased() == "dark"
     }
 
     /// Indoor paper — not a blast of white.
@@ -33,6 +42,21 @@ struct DeckTheme {
         cyan: Color(hex: "1e4a73"),
         btn: Color(hex: "1e4a73"),
         btnText: Color(hex: "f4ead8"),
+        border: 1
+    )
+
+    /// White page for people who want Bright without paper.
+    static let whiteBright = DeckTheme(
+        page: Color(hex: "ffffff"),
+        panel: Color(hex: "f4f4f4"),
+        field: Color(hex: "f7f7f7"),
+        ink: Color(hex: "1a1a1a"),
+        muted: Color(hex: "4a4a4a"),
+        line: Color(hex: "d0d0d0"),
+        navy: Color(hex: "003d7a"),
+        cyan: Color(hex: "00a1e4"),
+        btn: Color(hex: "003d7a"),
+        btnText: .white,
         border: 1
     )
 

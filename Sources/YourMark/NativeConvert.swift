@@ -111,7 +111,8 @@ enum NativeConvert {
         let result = try ProcessRun.run(
             executable: "/usr/bin/unzip",
             arguments: ["-p", zip.path, member],
-            captureStdout: true
+            captureStdout: true,
+            cancellable: true
         )
         if result.status != 0 {
             throw YourMarkError.processFailed(result.stderr.isEmpty ? "Could not open that Office file." : result.stderr)

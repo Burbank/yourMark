@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 enum IncomingURLs {
     /// File drops, `open -a`, and `yourmark://convert?file=/path/to.pdf`.
@@ -14,6 +16,36 @@ enum IncomingURLs {
             else { return nil }
             return fileURL(fromParameter: raw)
         }
+    }
+
+    /// Shared SwiftUI drop loader. FileDropCatcher is the main window path.
+    static func collect(from providers: [NSItemProvider], convertiblesOnly: Bool = false, then deliver: @escaping ([URL]) -> Void) -> Bool {
+        let lock = NSLock()
+        var urls: [URL] = []
+        let group = DispatchGroup()
+        for provider in providers {
+            group.enter()
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                defer { group.leave() }
+                let url: URL?
+                if let value = item as? URL {
+                    url = value
+                } else if let data = item as? Data {
+                    url = URL(dataRepresentation: data, relativeTo: nil)
+                } else {
+                    url = nil
+                }
+                guard let url else { return }
+                if convertiblesOnly, !ConvertibleKind.allows(url) { return }
+                lock.lock()
+                urls.append(url)
+                lock.unlock()
+            }
+        }
+        group.notify(queue: .main) {
+            if !urls.isEmpty { deliver(urls) }
+        }
+        return true
     }
 
     private static func fileURL(fromParameter raw: String) -> URL? {

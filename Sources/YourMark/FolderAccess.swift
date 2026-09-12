@@ -41,6 +41,17 @@ enum FolderAccess {
 
     static func accessPath(_ path: String) -> URL? {
         guard !path.isEmpty else { return nil }
+        if let existing = held.first(where: { $0.path == path }) { return existing }
+        if let restored = restoreCustomFolder(), restored.path == path { return restored }
         return access(URL(fileURLWithPath: path))
+    }
+
+    /// App Group used by the Share extension so a sandboxed convert can read the file.
+    static let appGroupID = "group.com.burbank.yourmark"
+
+    static var appGroupInbox: URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
+            .appendingPathComponent("Inbox", isDirectory: true)
     }
 }

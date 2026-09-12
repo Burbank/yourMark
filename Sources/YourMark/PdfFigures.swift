@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -64,8 +65,14 @@ enum PdfFigures {
         var fingerprintCount: [Int: Int] = [:]
         var extracted = 0
         var rasters = 0
+        let deadline = Date().addingTimeInterval(20 * 60)
 
         for i in 1...pageCount {
+            if ProcessRun.convertWasCancelled { return extracted + rasters }
+            if Date() > deadline {
+                onStatus("Pictures stopped after 20 minutes — placing what was found…")
+                break
+            }
             if i == 1 || i % 8 == 0 || i == pageCount {
                 onStatus("Pictures — page \(i) of \(pageCount) (\(extracted + rasters) saved)…")
             }
@@ -86,10 +93,11 @@ enum PdfFigures {
             // A scan is a photograph of the whole page. Do not save that photo
             // as a "figure" — OCR is supposed to turn it into words.
             let looksLikeScan = chars < 120 && sink.hasLargeImage
+            let draws = imageCTMs(page)
 
             var files: [String] = []
             if !looksLikeScan {
-                for (n, img) in sink.images.enumerated() {
+                for img in sink.images {
                     let seen = fingerprintCount[img.fp, default: 0]
                     let logoCap = stripChrome ? 1 : 12
                     if seen >= logoCap { continue }
@@ -98,8 +106,13 @@ enum PdfFigures {
                     let imgArea = CGFloat(max(img.wide, 1) * max(img.tall, 1))
                     if chars < 200, imgArea > pageArea * 0.35 { continue }
                     let name = String(format: "figure-%03d.%@", extracted + files.count + 1, img.ext)
+                    let dest = figDir.appendingPathComponent(name)
+                    let data = uprightData(img.data, ctm: draws[img.name]) ?? img.data
                     do {
-                        try img.data.write(to: figDir.appendingPathComponent(name), options: .atomic)
+                        try data.write(to: dest, options: .atomic)
+                        if imgArea > pageArea * 0.25, let kit = pdfDoc?.page(at: i - 1) {
+                            correctIfInverted(file: dest, page: kit)
+                        }
                         files.append(name)
                         extracted += 1
                     } catch { continue }
@@ -327,10 +340,14 @@ enum PdfFigures {
 
     private static func rasterize(_ page: CGPDFPage, index: Int, into dir: URL) -> String? {
         let box = page.getBoxRect(.mediaBox)
-        let long = max(box.width, box.height)
+        let angle = Int(page.rotationAngle)
+        let swapped = angle % 180 != 0
+        let drawW = swapped ? box.height : box.width
+        let drawH = swapped ? box.width : box.height
+        let long = max(abs(drawW), abs(drawH))
         let scale = min(1.6, 1600 / max(long, 1))
-        let width = max(1, Int((box.width * scale).rounded()))
-        let height = max(1, Int((box.height * scale).rounded()))
+        let width = max(1, Int((abs(drawW) * scale).rounded()))
+        let height = max(1, Int((abs(drawH) * scale).rounded()))
         let cs = CGColorSpaceCreateDeviceRGB()
         guard let ctx = CGContext(
             data: nil,
@@ -343,9 +360,8 @@ enum PdfFigures {
         ) else { return nil }
         ctx.setFillColor(gray: 1, alpha: 1)
         ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        ctx.translateBy(x: 0, y: CGFloat(height))
-        ctx.scaleBy(x: scale, y: -scale)
-        ctx.translateBy(x: -box.origin.x, y: -box.origin.y)
+        let dest = CGRect(x: 0, y: 0, width: width, height: height)
+        ctx.concatenate(page.getDrawingTransform(.mediaBox, rect: dest, rotate: 0, preserveAspectRatio: true))
         ctx.drawPDFPage(page)
         guard let image = ctx.makeImage(), let data = jpeg(image, quality: 0.78) else { return nil }
         let name = String(format: "page-%04d.jpg", index)
@@ -355,6 +371,189 @@ enum PdfFigures {
         } catch {
             return nil
         }
+    }
+
+    private static func imageCTMs(_ page: CGPDFPage) -> [String: CGAffineTransform] {
+        let stream = CGPDFContentStreamCreateWithPage(page)
+        guard let table = CGPDFOperatorTableCreate() else {
+            CGPDFContentStreamRelease(stream)
+            return [:]
+        }
+        let sink = ImageDraws()
+        let info = Unmanaged.passUnretained(sink).toOpaque()
+        let concat: CGPDFOperatorCallback = { scanner, raw in
+            guard let raw else { return }
+            let s = Unmanaged<ImageDraws>.fromOpaque(raw).takeUnretainedValue()
+            var f: CGPDFReal = 0, e: CGPDFReal = 0, d: CGPDFReal = 0
+            var c: CGPDFReal = 0, b: CGPDFReal = 0, a: CGPDFReal = 0
+            guard CGPDFScannerPopNumber(scanner, &f),
+                  CGPDFScannerPopNumber(scanner, &e),
+                  CGPDFScannerPopNumber(scanner, &d),
+                  CGPDFScannerPopNumber(scanner, &c),
+                  CGPDFScannerPopNumber(scanner, &b),
+                  CGPDFScannerPopNumber(scanner, &a)
+            else { return }
+            let t = CGAffineTransform(a: a, b: b, c: c, d: d, tx: e, ty: f)
+            s.current = t.concatenating(s.current)
+        }
+        let save: CGPDFOperatorCallback = { _, raw in
+            guard let raw else { return }
+            let s = Unmanaged<ImageDraws>.fromOpaque(raw).takeUnretainedValue()
+            s.stack.append(s.current)
+        }
+        let restore: CGPDFOperatorCallback = { _, raw in
+            guard let raw else { return }
+            let s = Unmanaged<ImageDraws>.fromOpaque(raw).takeUnretainedValue()
+            if let last = s.stack.popLast() { s.current = last }
+        }
+        let draw: CGPDFOperatorCallback = { scanner, raw in
+            guard let raw else { return }
+            let s = Unmanaged<ImageDraws>.fromOpaque(raw).takeUnretainedValue()
+            var name: UnsafePointer<CChar>?
+            guard CGPDFScannerPopName(scanner, &name), let name else { return }
+            s.ctmByName[String(cString: name)] = s.current
+        }
+        CGPDFOperatorTableSetCallback(table, "cm", concat)
+        CGPDFOperatorTableSetCallback(table, "q", save)
+        CGPDFOperatorTableSetCallback(table, "Q", restore)
+        CGPDFOperatorTableSetCallback(table, "Do", draw)
+        let scanner = CGPDFScannerCreate(stream, table, info)
+        CGPDFScannerScan(scanner)
+        CGPDFScannerRelease(scanner)
+        CGPDFOperatorTableRelease(table)
+        CGPDFContentStreamRelease(stream)
+        return sink.ctmByName
+    }
+
+    private static func uprightData(_ data: Data, ctm: CGAffineTransform?) -> Data? {
+        guard let ctm, let image = cgImage(from: data) else { return nil }
+        let upright = applyCTM(image, ctm: ctm)
+        if upright === image { return nil }
+        return jpeg(upright, quality: 0.82)
+    }
+
+    private static func applyCTM(_ image: CGImage, ctm: CGAffineTransform) -> CGImage {
+        let swapped = abs(ctm.b) > abs(ctm.a) && abs(ctm.c) > abs(ctm.d)
+        if swapped {
+            return rotate90(image, clockwise: ctm.b > 0) ?? image
+        }
+        let flipH = ctm.a < 0
+        let flipV = ctm.d < 0
+        if flipH && flipV { return rotate180(image) ?? image }
+        if flipV { return flip(image, horizontal: false, vertical: true) ?? image }
+        if flipH { return flip(image, horizontal: true, vertical: false) ?? image }
+        return image
+    }
+
+    private static func correctIfInverted(file: URL, page: PDFPage) {
+        let pageThumb = page.thumbnail(of: CGSize(width: 48, height: 48), for: .mediaBox)
+        guard let pageCG = pageThumb.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let fileCG = cgImage(fromFile: file, maxPixel: 48)
+        else { return }
+        let d0 = lumaMAD(pageCG, fileCG)
+        guard let flipped = rotate180(fileCG) else { return }
+        let d1 = lumaMAD(pageCG, flipped)
+        guard d1 + 8 < d0 else { return }
+        guard let full = cgImage(fromFile: file, maxPixel: 2200),
+              let rotated = rotate180(full),
+              let data = jpeg(rotated, quality: 0.82)
+        else { return }
+        try? data.write(to: file, options: .atomic)
+    }
+
+    private static func cgImage(from data: Data) -> CGImage? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(src) > 0
+        else { return nil }
+        return CGImageSourceCreateImageAtIndex(src, 0, [kCGImageSourceShouldCache: false] as CFDictionary)
+    }
+
+    private static func cgImage(fromFile url: URL, maxPixel: CGFloat) -> CGImage? {
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCache: false,
+        ]
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
+    }
+
+    private static func rotate180(_ image: CGImage) -> CGImage? {
+        draw(width: image.width, height: image.height) { ctx, w, h in
+            ctx.translateBy(x: w, y: h)
+            ctx.rotate(by: .pi)
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        }
+    }
+
+    private static func rotate90(_ image: CGImage, clockwise: Bool) -> CGImage? {
+        draw(width: image.height, height: image.width) { ctx, w, h in
+            if clockwise {
+                ctx.translateBy(x: w, y: 0)
+                ctx.rotate(by: .pi / 2)
+            } else {
+                ctx.translateBy(x: 0, y: h)
+                ctx.rotate(by: -.pi / 2)
+            }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: h, height: w))
+        }
+    }
+
+    private static func flip(_ image: CGImage, horizontal: Bool, vertical: Bool) -> CGImage? {
+        draw(width: image.width, height: image.height) { ctx, w, h in
+            ctx.translateBy(x: horizontal ? w : 0, y: vertical ? h : 0)
+            ctx.scaleBy(x: horizontal ? -1 : 1, y: vertical ? -1 : 1)
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        }
+    }
+
+    private static func draw(
+        width: Int,
+        height: Int,
+        body: (CGContext, CGFloat, CGFloat) -> Void
+    ) -> CGImage? {
+        let w = max(1, width)
+        let h = max(1, height)
+        let cs = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: nil,
+            width: w,
+            height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: cs,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        body(ctx, CGFloat(w), CGFloat(h))
+        return ctx.makeImage()
+    }
+
+    private static func lumaMAD(_ a: CGImage, _ b: CGImage) -> Double {
+        let side = 32
+        guard let pa = pixels32(a, side: side), let pb = pixels32(b, side: side) else { return .greatestFiniteMagnitude }
+        var sum = 0
+        for i in 0..<pa.count { sum += abs(Int(pa[i]) - Int(pb[i])) }
+        return Double(sum) / Double(pa.count)
+    }
+
+    private static func pixels32(_ image: CGImage, side: Int) -> [UInt8]? {
+        var out = [UInt8](repeating: 0, count: side * side)
+        let cs = CGColorSpaceCreateDeviceGray()
+        out.withUnsafeMutableBytes { buf in
+            guard let ctx = CGContext(
+                data: buf.baseAddress,
+                width: side,
+                height: side,
+                bitsPerComponent: 8,
+                bytesPerRow: side,
+                space: cs,
+                bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return }
+            ctx.interpolationQuality = .low
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
+        }
+        return out
     }
 
     fileprivate static func jpeg(_ image: CGImage, quality: CGFloat = 0.78) -> Data? {
@@ -375,7 +574,14 @@ enum PdfFigures {
     }
 }
 
+private final class ImageDraws {
+    var ctmByName: [String: CGAffineTransform] = [:]
+    var current = CGAffineTransform.identity
+    var stack: [CGAffineTransform] = []
+}
+
 private struct ExtractedImage {
+    var name: String
     var data: Data
     var ext: String
     var fp: Int
@@ -399,13 +605,13 @@ private final class XSink {
         var xobject: CGPDFDictionaryRef?
         guard CGPDFDictionaryGetDictionary(resources, "XObject", &xobject), let xobject else { return }
         let ptr = Unmanaged.passUnretained(self).toOpaque()
-        CGPDFDictionaryApplyFunction(xobject, { _, object, info in
+        CGPDFDictionaryApplyFunction(xobject, { key, object, info in
             guard let info else { return }
-            Unmanaged<XSink>.fromOpaque(info).takeUnretainedValue().consume(object)
+            Unmanaged<XSink>.fromOpaque(info).takeUnretainedValue().consume(String(cString: key), object)
         }, ptr)
     }
 
-    private func consume(_ object: CGPDFObjectRef) {
+    private func consume(_ name: String, _ object: CGPDFObjectRef) {
         visits += 1
         if visits > 8000 { return }
         let key = withUnsafeBytes(of: object) { raw -> Int in
@@ -443,15 +649,15 @@ private final class XSink {
         guard data.count > 60 else { return }
 
         if format == .jpegEncoded {
-            images.append(ExtractedImage(data: data, ext: "jpg", fp: fingerprint(data), wide: Int(width), tall: Int(height)))
+            images.append(ExtractedImage(name: name, data: data, ext: "jpg", fp: fingerprint(data), wide: Int(width), tall: Int(height)))
             return
         }
         if format.rawValue == 2 { // JPEG2000
-            images.append(ExtractedImage(data: data, ext: "jp2", fp: fingerprint(data), wide: Int(width), tall: Int(height)))
+            images.append(ExtractedImage(name: name, data: data, ext: "jp2", fp: fingerprint(data), wide: Int(width), tall: Int(height)))
             return
         }
         if let jpeg = imageIOJPEG(data) ?? rawBitmapJPEG(data: data, width: Int(width), height: Int(height), dict: sdict) {
-            images.append(ExtractedImage(data: jpeg, ext: "jpg", fp: fingerprint(jpeg), wide: Int(width), tall: Int(height)))
+            images.append(ExtractedImage(name: name, data: jpeg, ext: "jpg", fp: fingerprint(jpeg), wide: Int(width), tall: Int(height)))
             return
         }
         hasUndecodedImage = true

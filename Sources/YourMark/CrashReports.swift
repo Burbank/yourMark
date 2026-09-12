@@ -31,6 +31,10 @@ enum CrashReports {
         """
         let url = dir.appendingPathComponent("uncaught-\(stamp).txt")
         try? text.write(to: url, atomically: true, encoding: .utf8)
+        let lang = UserDefaults.standard.string(forKey: "interfaceLang") ?? "en"
+        if lang != "en", lang != "es", lang != "nl" {
+            UserDefaults.standard.set(true, forKey: "interfaceLangUnhealthy")
+        }
     }
 
     static func latestUnsent() -> CrashReport? {
@@ -86,6 +90,32 @@ enum CrashReports {
     static func copyLog(_ report: CrashReport) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(report.log, forType: .string)
+    }
+
+    static func openMail(for report: CrashReport) {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        let os = ProcessInfo.processInfo.operatingSystemVersionString
+        let clipped = String(report.log.prefix(3500))
+        let body = """
+        yourMark \(version) (\(build))
+        \(os)
+        \(report.summary)
+
+        The full report is also on the clipboard.
+
+        \(clipped)
+        """
+        var parts = URLComponents()
+        parts.scheme = "mailto"
+        parts.path = Distribution.supportMail
+        parts.queryItems = [
+            URLQueryItem(name: "subject", value: "yourMark crash: \(report.summary)"),
+            URLQueryItem(name: "body", value: body),
+        ]
+        if let url = parts.url {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     private static var supportDir: URL {

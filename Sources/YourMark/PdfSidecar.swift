@@ -288,9 +288,17 @@ enum PdfSidecar {
         return lineCount
     }
 
-    private static func indexOfHeading(_ title: String, in lines: [String], from start: Int) -> Int? {
+    private static func indexOfHeading(
+        _ title: String,
+        in lines: [String],
+        from start: Int,
+        skipping: Set<Int> = []
+    ) -> Int? {
         let from = min(max(0, start), lines.count)
-        return lines[from...].firstIndex { headingText($0).map { folded($0) } == folded(title) }
+        return lines[from...].indices.first { idx in
+            guard !skipping.contains(idx) else { return false }
+            return headingText(lines[idx]).map { folded($0) } == folded(title)
+        }
     }
 
     private static func indexOfTitle(_ title: String, in lines: [String], from start: Int, until end: Int? = nil) -> Int? {
@@ -332,7 +340,10 @@ enum PdfSidecar {
     }
 
     static func headingText(_ line: String) -> String? {
-        let t = line.trimmingCharacters(in: .whitespaces)
+        var t = line.trimmingCharacters(in: .whitespaces)
+        if t.hasPrefix(TranslateService.marker) {
+            t = String(t.dropFirst(TranslateService.marker.count)).trimmingCharacters(in: .whitespaces)
+        }
         guard t.hasPrefix("#") else { return nil }
         var n = 0
         for ch in t {
@@ -341,6 +352,71 @@ enum PdfSidecar {
         guard (1...6).contains(n) else { return nil }
         let title = t.drop(while: { $0 == "#" || $0 == " " }).trimmingCharacters(in: .whitespaces)
         return title.isEmpty ? nil : title
+    }
+
+    /// Page-number headings the model sometimes invents. Not a real outline.
+    static func isPageLikeHeading(_ title: String) -> Bool {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return false }
+        let patterns = [
+            #"^(page|página|pagina|seite|pág\.?|стр\.?|страница)\s*\d+$"#,
+            #"^第\s*\d+\s*页$"#,
+            #"^\d+\s*(ページ|페이지)$"#,
+        ]
+        return patterns.contains {
+            t.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil
+        }
+    }
+
+    /// Keep `outline` as the bookmark tree. Retitle matching headings; ignore invented ones.
+    static func applyTranslatedOutline(
+        _ outline: [ManualBookmark],
+        to markdown: String
+    ) -> (text: String, bookmarks: [ManualBookmark]) {
+        guard !outline.isEmpty else { return (markdown, outline) }
+        var lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var headingIdxs: [Int] = []
+        for (i, line) in lines.enumerated() {
+            guard let title = headingText(line) else { continue }
+            if isPageLikeHeading(title) { continue }
+            if title.caseInsensitiveCompare("Outline") == .orderedSame { continue }
+            headingIdxs.append(i)
+        }
+
+        var located = outline
+        var claimed = Set<Int>()
+        for i in located.indices {
+            let title = located[i].title
+            guard !title.isEmpty,
+                  let idx = indexOfHeading(title, in: lines, from: 0, skipping: claimed)
+            else { continue }
+            located[i].lineIndex = idx
+            claimed.insert(idx)
+        }
+
+        let unused = headingIdxs.filter { !claimed.contains($0) }
+        var ui = 0
+        for i in located.indices where located[i].lineIndex == nil {
+            guard ui < unused.count else { break }
+            let idx = unused[ui]
+            ui += 1
+            let hashes = min(6, max(1, located[i].level))
+            let raw = lines[idx]
+            let prefix = raw.trimmingCharacters(in: .whitespaces).hasPrefix(TranslateService.marker)
+                ? TranslateService.marker
+                : ""
+            lines[idx] = prefix + String(repeating: "#", count: hashes) + " " + located[i].title
+            located[i].lineIndex = idx
+            claimed.insert(idx)
+        }
+
+        let comments = pageCommentMap(lines)
+        for i in located.indices where located[i].lineIndex == nil {
+            if let page = located[i].pageIndex, let idx = comments[page] {
+                located[i].lineIndex = idx
+            }
+        }
+        return (lines.joined(separator: "\n"), located)
     }
 
     static func bodyStart(in lines: [String]) -> Int {

@@ -20,6 +20,12 @@ DISTRIBUTION="${DISTRIBUTION:-direct}"
 if [[ "$DISTRIBUTION" != "mas" ]]; then
   DISTRIBUTION="direct"
 fi
+# App Store listing is "yourMark AI" (yourMark was taken). GitHub disk stays yourMark.
+if [[ "$DISTRIBUTION" == "mas" ]]; then
+  DISPLAY_NAME="yourMark AI"
+else
+  DISPLAY_NAME="yourMark"
+fi
 
 echo "→ Building $EXEC_NAME (release)…"
 if [[ "$DISTRIBUTION" == "mas" ]]; then
@@ -96,15 +102,17 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<key>CFBundleName</key>
 	<string>yourMark</string>
 	<key>CFBundleDisplayName</key>
-	<string>yourMark</string>
+	<string>${DISPLAY_NAME}</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.5.0</string>
+	<string>0.5.1</string>
 	<key>CFBundleVersion</key>
-	<string>63</string>${ICON_PLIST}
+	<string>66</string>${ICON_PLIST}
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
 	<key>YourMarkDistribution</key>
 	<string>${DISTRIBUTION}</string>
 	<key>NSHumanReadableCopyright</key>
@@ -121,6 +129,10 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<string>yourMark writes converted Markdown next to files you open, including Documents.</string>
 	<key>NSDesktopFolderUsageDescription</key>
 	<string>yourMark writes converted Markdown next to files you open on the Desktop.</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>yourMark tells you when a file has finished converting to Markdown.</string>
+	<key>NSAppManagementUsageDescription</key>
+	<string>yourMark opens the Markdown in the editor you picked. It does not update or delete other apps.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CFBundleURLTypes</key>
@@ -196,9 +208,51 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 			</array>
 		</dict>
 	</array>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Convert with yourMark</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>convertWithYourMark</string>
+			<key>NSPortName</key>
+			<string>yourMark</string>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>com.adobe.pdf</string>
+				<string>org.openxmlformats.wordprocessingml.document</string>
+				<string>org.openxmlformats.presentationml.presentation</string>
+				<string>public.data</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
 PLIST
+
+echo "→ Building Share extension…"
+SDK="$(xcrun --show-sdk-path --sdk macosx)"
+SHARE_BIN="$WORK/ShareToYourMark"
+swiftc -O -parse-as-library \
+  -target arm64-apple-macosx14.0 \
+  -sdk "$SDK" \
+  -application-extension \
+  -module-name ShareToYourMark \
+  -framework AppKit -framework UniformTypeIdentifiers \
+  -Xlinker -e -Xlinker _NSExtensionMain \
+  -o "$SHARE_BIN" \
+  "$ROOT/Sources/ShareExtension/ShareViewController.swift"
+PLUGIN="$CONTENTS/PlugIns/ShareToYourMark.appex"
+mkdir -p "$PLUGIN/Contents/MacOS"
+cp "$SHARE_BIN" "$PLUGIN/Contents/MacOS/ShareToYourMark"
+cp "$ROOT/Resources/ShareExtension.Info.plist" "$PLUGIN/Contents/Info.plist"
+if [[ -f "$RESOURCES/AppIcon.icns" ]]; then
+  mkdir -p "$PLUGIN/Contents/Resources"
+  cp "$RESOURCES/AppIcon.icns" "$PLUGIN/Contents/Resources/AppIcon.icns"
+fi
 
 echo -n 'APPL????' > "$CONTENTS/PkgInfo"
 # iCloud Drive leaves Finder info that codesign rejects.
@@ -214,21 +268,46 @@ fi
 if [[ -z "${IDENTITY}" ]]; then
   if [[ "$DISTRIBUTION" == "mas" ]]; then
     IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/3rd Party Mac Developer Application|Apple Distribution/{print $2; exit}')
+    if [[ -z "${IDENTITY}" ]]; then
+      IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Apple Development/{print $2; exit}')
+      if [[ -n "${IDENTITY}" ]]; then
+        echo "→ No Mac App Store identity yet — signing as $IDENTITY for a local sandbox test"
+        echo "   Upload needs Apple Distribution + Mac Installer Distribution (team R4SB7G9A32)."
+      fi
+    fi
   else
     IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/Developer ID Application/{print $2; exit}')
   fi
 fi
 if [[ -n "${IDENTITY}" ]]; then
   echo "→ Signing as $IDENTITY ($DISTRIBUTION)…"
-  SIGN_ARGS=(--force --deep --options runtime --timestamp --sign "$IDENTITY")
+  if [[ "$DISTRIBUTION" == "mas" && -d "$RESOURCES/python" ]]; then
+    echo "→ Signing bundled Python with App Sandbox…"
+    chmod +x "$ROOT/Scripts/sign-nested-python.sh"
+    "$ROOT/Scripts/sign-nested-python.sh" "$RESOURCES/python" "$IDENTITY"
+  fi
+  # Do not --deep: that stamps the app entitlements on Python and the Share extension.
+  SIGN_ARGS=(--force --options runtime --timestamp --sign "$IDENTITY")
   if [[ -f "$ENTITLEMENTS" ]]; then
     SIGN_ARGS+=(--entitlements "$ENTITLEMENTS")
   fi
 else
   echo "→ Ad-hoc sign (no Developer ID / Mac App Store identity in this keychain)"
+  SIGN_ARGS=(--force --sign -)
   if [[ -f "$ENTITLEMENTS" ]]; then
     SIGN_ARGS+=(--entitlements "$ENTITLEMENTS")
   fi
+fi
+if [[ -d "$CONTENTS/PlugIns/ShareToYourMark.appex" ]]; then
+  SHARE_SIGN=(--force --sign -)
+  if [[ -n "${IDENTITY}" ]]; then
+    SHARE_SIGN=(--force --options runtime --timestamp --sign "$IDENTITY")
+  fi
+  if [[ -f "$ROOT/Resources/ShareExtension.entitlements" ]]; then
+    SHARE_SIGN+=(--entitlements "$ROOT/Resources/ShareExtension.entitlements")
+  fi
+  echo "→ Signing Share extension…"
+  codesign "${SHARE_SIGN[@]}" "$CONTENTS/PlugIns/ShareToYourMark.appex"
 fi
 codesign "${SIGN_ARGS[@]}" "$APP_DIR"
 

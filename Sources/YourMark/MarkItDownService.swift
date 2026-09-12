@@ -97,6 +97,8 @@ actor MarkItDownService {
                 if FileManager.default.fileExists(atPath: output.path) {
                     return output
                 }
+            } catch is ProcessRun.ConvertCancel {
+                throw ProcessRun.ConvertCancel.stopped
             } catch {
                 // Fall through to the CLI.
             }
@@ -292,8 +294,12 @@ actor MarkItDownService {
     private func readVersion(executable: String, module: Bool = false) async -> String {
         guard !executable.isEmpty else { return "unknown" }
         let argv = module ? ["-m", "markitdown", "--version"] : ["--version"]
-        let out = (try? await run(executable: executable, arguments: argv, captureStdout: true).stdout)
-            ?? ""
+        let out = (try? await run(
+            executable: executable,
+            arguments: argv,
+            captureStdout: true,
+            cancellable: false
+        ).stdout) ?? ""
         let trimmed = out.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "unknown" : trimmed
     }
@@ -303,7 +309,8 @@ actor MarkItDownService {
         executable: String,
         arguments: [String],
         captureStdout: Bool = false,
-        extraEnv: [String: String] = [:]
+        extraEnv: [String: String] = [:],
+        cancellable: Bool = true
     ) async throws -> (stdout: String, stderr: String) {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -312,7 +319,8 @@ actor MarkItDownService {
                         executable: executable,
                         arguments: arguments,
                         extraEnv: extraEnv,
-                        captureStdout: captureStdout
+                        captureStdout: captureStdout,
+                        cancellable: cancellable
                     )
                     if result.status == 0 {
                         continuation.resume(returning: (result.stdout, result.stderr))

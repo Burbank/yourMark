@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 enum ConvertibleKind {
     static let extensions: Set<String> = [
-        "pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "md", "txt",
+        "pdf", "docx", "pptx", "xlsx", "xls", "html", "htm", "md", "markdown", "txt",
         "epub", "csv", "json", "xml", "msg",
         "jpg", "jpeg", "png", "gif", "webp", "tif", "tiff",
         "zip", "rtf",
@@ -12,6 +12,12 @@ enum ConvertibleKind {
 
     static func allows(_ url: URL) -> Bool {
         extensions.contains(url.pathExtension.lowercased())
+    }
+
+    /// Already Markdown — skip the converter and add it to the library folder.
+    static func isReadyMarkdown(_ url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        return ext == "md" || ext == "markdown"
     }
 }
 

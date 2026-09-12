@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
 @main
 struct YourMarkApp: App {
@@ -15,11 +16,18 @@ struct YourMarkApp: App {
                 .onOpenURL { url in model.openIncoming([url]) }
         }
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 1180, height: 740)
+        .defaultSize(width: 1280, height: 800)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Open Files…") { model.pickFiles() }
                     .keyboardShortcut("o", modifiers: .command)
+            }
+            if !Distribution.isAppStore {
+                CommandGroup(after: .windowSize) {
+                    Button("Size window for App Store screenshot") {
+                        appDelegate.sizeWindowForAppStoreShot()
+                    }
+                }
             }
             CommandMenu("Settings") {
                 Button("Settings") { model.toggleSettings() }
@@ -61,7 +69,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashReports.installHandler()
+        UNUserNotificationCenter.current().delegate = self
+        ConvertNotice.requestAccess()
         NSApp.setActivationPolicy(.regular)
+        NSApp.servicesProvider = self
+        NSUpdateDynamicServices()
         NSWindow.allowsAutomaticWindowTabbing = false
         for window in NSApp.windows {
             window.tabbingMode = .disallowed
@@ -69,6 +81,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if MoveToApplications.relocateIfNeeded(opening: pending) {
             return
         }
+    }
+
+    @objc func convertWithYourMark(_ pboard: NSPasteboard, userData: String, error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        var urls: [URL] = []
+        if let paths = pboard.propertyList(forType: .init("NSFilenamesPboardType")) as? [String] {
+            urls = paths.map { URL(fileURLWithPath: $0) }
+        } else if let items = pboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            urls = items.filter(\.isFileURL)
+        }
+        guard !urls.isEmpty else { return }
+        if let model {
+            model.openIncoming(urls)
+        } else {
+            pending.append(contentsOf: urls)
+        }
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
@@ -100,6 +128,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        model?.stopHunterMonitor()
+        model?.cancelForageAutosave()
+        if model?.hunterOn == true || model?.harvestOpen == true {
+            model?.writeForageFile()
+            model?.hunterOn = false
+        }
+    }
+
     func upgradeEngine() {
         Task { await model?.upgradeEngine() }
     }
@@ -110,5 +147,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func checkUpdates() {
         Task { await model?.checkUpdates(force: true) }
+    }
+
+    /// Full window 1280×800. On this Mac that saves as 1280×800. On a 2× display it saves as 2560×1600. Both are valid for App Store Connect.
+    func sizeWindowForAppStoreShot() {
+        guard let window = NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain })
+                ?? NSApp.mainWindow
+                ?? NSApp.windows.first
+        else { return }
+        var frame = window.frame
+        frame.size = NSSize(width: 1280, height: 800)
+        if let screen = window.screen ?? NSScreen.main {
+            let vis = screen.visibleFrame
+            frame.origin.x = vis.midX - 640
+            frame.origin.y = vis.midY - 400
+            if frame.maxX > vis.maxX { frame.origin.x = vis.maxX - frame.width }
+            if frame.maxY > vis.maxY { frame.origin.y = vis.maxY - frame.height }
+            if frame.minX < vis.minX { frame.origin.x = vis.minX }
+            if frame.minY < vis.minY { frame.origin.y = vis.minY }
+        }
+        window.setFrame(frame, display: true, animate: false)
+    }
+}
+
+extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let path = response.notification.request.content.userInfo[ConvertNotice.markdownKey] as? String
+        model?.openConvertedFromNotice(path)
+        NSApp.activate(ignoringOtherApps: true)
+        completionHandler()
     }
 }
