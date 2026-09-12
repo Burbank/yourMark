@@ -54,7 +54,7 @@ Library at night — files, bookmarks, and the text. Pictures are blue links; ho
 
 <br>
 
-<img src="docs/shots/figure-hover.png" width="880" alt="Reader: hover over a blue Figure link to see the picture; use the slider to adjust the preview size">
+<img src="docs/shots/figure-hover.jpg" width="880" alt="Reader: hover over a blue Figure link to see the picture; use the slider to adjust the preview size">
 
 <br>
 
@@ -66,7 +66,7 @@ Pictures are blue links, not the photo in the page. Hover over a link to see it.
 
 <br>
 
-<img src="docs/shots/translate-toolbar.jpg" width="880" alt="SIDE BY SIDE: original Markdown on the left, Chinese translation on the right, each with its own bookmarks">
+<img src="docs/shots/translate-side.jpg" width="880" alt="SIDE BY SIDE: English landing-gear chapter on the left, Chinese translation on the right">
 
 <br>
 
