@@ -1,7 +1,7 @@
 # yourMark
 
 <p align="center">
-  <img src="docs/icon.png" width="112" height="112" alt="yourMark">
+  <img src="docs/icon.jpg" width="112" height="112" alt="yourMark">
 </p>
 
 A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, ask about, translate, and share with an AI. The file never leaves this computer unless you press Ask or Translate.
@@ -42,7 +42,7 @@ This Mac disk is signed and notarized by Apple. Open yourMark from Applications.
 
 <br>
 
-<img src="docs/shots/library-dim-now.jpg" width="880" alt="yourMark library at night: files, bookmarks, Markdown, and a figure preview">
+<img src="docs/shots/intro-library-dim.jpg" width="880" alt="yourMark library at night: files, bookmarks, Markdown, and a figure preview">
 
 <br>
 
@@ -50,13 +50,13 @@ Library at night — files, bookmarks, and the text. Pictures are blue links; ho
 
 <br>
 
-| <img src="docs/shots/library-bright-now.jpg" width="280" alt="Library in Bright"> | <img src="docs/shots/convert-bright.jpg" width="280" alt="Convert — drop a PDF"> | <img src="docs/shots/settings-dim.jpg" width="280" alt="Settings"> |
+| <img src="docs/shots/intro-library-bright.jpg" width="280" alt="Library in Bright"> | <img src="docs/shots/intro-convert.jpg" width="280" alt="Convert — drop a PDF"> | <img src="docs/shots/intro-settings.jpg" width="280" alt="Settings"> |
 | --- | --- | --- |
 | Library · Bright — three columns on paper. | Convert — drop a PDF. Nothing is uploaded. | Settings — folder, colours, MarkEdit, and your keys. |
 
 <br>
 
-<img src="docs/shots/figure-hover.jpg" width="880" alt="Reader: hover over a blue Figure link to see the picture; use the slider to adjust the preview size">
+<img src="docs/shots/intro-figure.jpg" width="880" alt="Reader: hover over a blue Figure link to see the picture; use the slider to adjust the preview size">
 
 <br>
 
@@ -68,7 +68,7 @@ Pictures are blue links, not the photo in the page. Hover over a link to see it.
 
 <br>
 
-<img src="docs/shots/translate-side.jpg" width="880" alt="SIDE BY SIDE: English landing-gear chapter on the left, Chinese translation on the right">
+<img src="docs/shots/intro-translate.jpg" width="880" alt="SIDE BY SIDE: English landing-gear chapter on the left, Chinese translation on the right">
 
 <br>
 
@@ -84,7 +84,7 @@ Lock a **Google Translate** key or an **Ask AI** key in Settings — either one 
 
 <br>
 
-<img src="docs/shots/ask-and-forage.jpg" width="880" alt="Ask and FORAGE: a question in the file, gathered clips, and Add to Forage">
+<img src="docs/shots/intro-ask.jpg" width="880" alt="Ask and FORAGE: a question in the file, gathered clips, and Add to Forage">
 
 <br>
 
@@ -100,7 +100,7 @@ yourMark is a **reader**. To change the file, press **Edit**. That opens [MarkEd
 
 <br>
 
-<img src="docs/shots/markedit-side.jpg" width="880" alt="yourMark on the left, MarkEdit on the right">
+<img src="docs/shots/intro-markedit.jpg" width="880" alt="yourMark on the left, MarkEdit on the right">
 
 <br>
 
@@ -127,7 +127,7 @@ yourMark on the left. MarkEdit on the right. Press Edit; what you save there sho
 Download the disk image, drag **yourMark** onto **Applications** (follow the arrow), then open it. First launch installs Microsoft MarkItDown. Then choose a folder for converted files — this Mac, iCloud, or anywhere you like.
 
 <p align="center">
-  <img src="docs/shots/first-open.png" width="273" alt="macOS: yourMark.app is an app downloaded from the internet. Are you sure you want to open it? Apple checked it for malicious software and none was detected. Cancel or Open.">
+  <img src="docs/shots/intro-first-open.jpg" width="273" alt="macOS: yourMark.app is an app downloaded from the internet. Are you sure you want to open it? Apple checked it for malicious software and none was detected. Cancel or Open.">
 </p>
 
 The first open may show this. That is normal. Click **Open**. The dim line is Apple saying it already scanned the disk — yourMark is notarized.
