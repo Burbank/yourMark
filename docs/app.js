@@ -1,18 +1,6 @@
 /* simpler yourMark — files stay in this tab */
 (() => {
   const GUIDE_ID = "guide";
-  const GUIDE_CARDS = [
-    ["Browser preview", "Files stay in this tab. Nothing is uploaded. No OCR here — scans need the Mac app."],
-    ["Mac app", "OCR, layout, Translate, and Finder. The Mac app link opens the GitHub intro."],
-    ["Convert", "Drop a PDF with selectable text, Word, or ready Markdown. Pictures in the PDF become blue Figure links."],
-    ["Library", "Cards on the left. Search in files filters them. × removes a file from this browser only."],
-    ["Hunter / FORAGE", "Turn Hunter on, select a passage, press Enter. Clips go on today’s FORAGE note."],
-    ["Ask", "Answers come from the open chapter. AND, OR, and NOT must be capitals, in the same sentence."],
-    ["Edit", "Download, then open in MarkEdit (Mac) or MarkText (Windows). Both are free."],
-    ["Languages", "US English, Spanish, or Dutch for this preview. The Mac app can add more with an Ask key."],
-    ["Translate", "From and To on the reader. Below, Replace, or SIDE BY SIDE. Save a copy writes a second card."],
-    ["Share", "Copy puts Markdown on the clipboard. Nothing is uploaded unless you press Ask or Translate."],
-  ];
 
   const DEMO_ID = "demo";
   const DEMO = `# Landing gear
@@ -55,13 +43,43 @@ Try: \`flaps AND landing NOT ice\`. AND, OR, and NOT must be capitals, in the sa
 
   const GUIDE = `# Getting started with yourMark
 
-This site is a **browser preview**. The browser version does **not** include OCR.
+This site is a **browser preview**. Files stay in this tab. Nothing is uploaded. The browser version does **not** include OCR.
 
-The [Mac app](https://github.com/Burbank/yourMark) is better for PDFs with graphics — OCR and layout. Scans, tables, and figures stay intact there.
+The [Mac app](https://github.com/Burbank/yourMark) is better for PDFs with graphics — OCR, layout, Translate keys, and Finder. Scans, tables, and figures stay intact there. That link opens the GitHub intro. It does not start a download.
 
-**Hunter-Gatherer:** select text and press Enter. Each clip keeps its heading and lands on a dated **FORAGE** note.
+## Convert
 
-**Ask:** AND, OR, and NOT must be capitals, and the words must sit in the same sentence.
+Drop a PDF with selectable text, Word, or ready Markdown. Repeating headers can be dropped in Settings. Numbered titles become headings. Pictures in a PDF become blue Figure links.
+
+## Library
+
+Cards on the left. Search in files filters them. Bookmarks sit in the middle. The double chevron hides the library. × removes a converted file from this browser only.
+
+Open **Landing gear (sample)** for a generic training note. It names no operator and no manufacturer.
+
+## Hunter / FORAGE
+
+Turn Hunter on, select a passage, press Enter. Each clip keeps its heading and lands on today’s dated **FORAGE** note beside the library.
+
+## Ask
+
+Answers come from the open chapter. AND, OR, and NOT must be capitals, and the words must sit in the same sentence. Recent Asks stay in this tab. After an answer, **Add to Forage** keeps it on today’s note.
+
+## Translate
+
+From and To on the reader. **Below** keeps the original. **Replace** shows only the translation. **SIDE BY SIDE** opens both. **Save a copy** writes a second card. The original stays.
+
+## Edit
+
+yourMark is a reader. Download the Markdown, then open it in [MarkEdit](https://github.com/MarkEdit-app/MarkEdit) on a Mac or [MarkText](https://github.com/marktext/marktext/releases/latest) on Windows. Both are free.
+
+## Languages
+
+US English, Spanish, or Dutch for this preview’s buttons. The Mac app can add more if you lock an Ask key.
+
+## Share
+
+**Copy** puts the Markdown on the clipboard for an AI you already use. Nothing is uploaded unless you press Ask or Translate.
 `;
 
   const I18N = {
@@ -534,7 +552,7 @@ The [Mac app](https://github.com/Burbank/yourMark) is better for PDFs with graph
 
   function currentFile() {
     if (state.current === GUIDE_ID) {
-      return { id: GUIDE_ID, title: "Getting started with yourMark", kind: "GUIDE", markdown: GUIDE, bookmarks: bookmarksFrom(GUIDE, []) };
+      return { id: GUIDE_ID, title: "Getting started with yourMark", kind: "MARKDOWN", markdown: GUIDE, bookmarks: bookmarksFrom(GUIDE, []) };
     }
     if (state.current === DEMO_ID) return demoFile();
     return state.files.find((f) => f.id === state.current) || null;
@@ -576,7 +594,7 @@ The [Mac app](https://github.com/Burbank/yourMark) is better for PDFs with graph
     const box = $("cards");
     const q = ($("lib-search") && $("lib-search").value) || "";
     const items = [
-      { id: GUIDE_ID, title: "Getting started with yourMark", kind: "GUIDE", markdown: GUIDE },
+      { id: GUIDE_ID, title: "Getting started with yourMark", kind: "MARKDOWN", markdown: GUIDE },
       demoFile(),
       ...state.files.map((f) => ({ id: f.id, title: f.title, kind: f.kind || "MARKDOWN", markdown: f.markdown })),
     ].filter((it) => !q || booleanHit(it.title + "\n" + (it.markdown || ""), q));
@@ -651,19 +669,12 @@ The [Mac app](https://github.com/Burbank/yourMark) is better for PDFs with graph
     $("md-src").textContent = f.markdown;
     const side = state.rendered && state.tr.mode === "side" && state.tr.text;
     if (pair) pair.hidden = !side;
-    if (f.id === GUIDE_ID && state.rendered && !side) {
-      $("md-view").innerHTML = GUIDE_CARDS.map(
-        ([h, p]) => `<article><h3>${h}</h3><p>${p}</p></article>`
-      ).join("");
-      $("md-view").classList.add("help-grid");
-    } else {
-      $("md-view").classList.remove("help-grid");
-      let md = f.markdown;
-      if (state.tr.text && state.tr.mode === "replace") md = state.tr.text;
-      else if (state.tr.text && state.tr.mode === "below") md = belowMarkdown(f.markdown, state.tr.text);
-      paintMarkdown($("md-view"), md);
-      highlightFind();
-    }
+    $("md-view").classList.remove("help-grid");
+    let md = f.markdown;
+    if (state.tr.text && state.tr.mode === "replace") md = state.tr.text;
+    else if (state.tr.text && state.tr.mode === "below") md = belowMarkdown(f.markdown, state.tr.text);
+    paintMarkdown($("md-view"), md);
+    highlightFind();
     if (side) {
       paintMarkdown($("md-left"), f.markdown);
       paintMarkdown($("md-right"), state.tr.text);
