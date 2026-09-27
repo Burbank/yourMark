@@ -23,6 +23,7 @@ final class AppModel {
     var appearance: String = UserDefaults.standard.string(forKey: "appearance") ?? "system"
     var brightLook = UserDefaults.standard.string(forKey: "brightLook") ?? "paper"
     var errorMessage: String?
+    private var epubExporting = false
     var showHelp = false
     var showSettings = false
     var jobs: [ConvertJob] = []
@@ -41,6 +42,8 @@ final class AppModel {
     var previewBaseURL: URL?
     var previewTruncated = false
     var showTranslateCostWarning = false
+    var showRejoinCostWarning = false
+    var rejoinBusy = false
     var pulseSaveCopy = false
     var lastUpgradeLog: String = ""
     var scrollToLine: Int?
@@ -147,10 +150,7 @@ final class AppModel {
     var harvestGen = 0
     var hunterMonitor: Any?
     var askNavMonitor: Any?
-    @ObservationIgnored
-    var hunterTextMemo: [Int: String] = [:]
-    @ObservationIgnored
-    var hunterLineMemo: (key: Int, map: [(id: Int, offset: Int)])?
+    var hunterDocMemo: (key: Int, layout: HunterLayout)?
     var interfaceStamp = 0
     var interfaceAddCode = "fr"
     var interfaceAddBusy = false
@@ -164,6 +164,7 @@ final class AppModel {
     var aiChaptersEnabled = UserDefaults.standard.object(forKey: "aiChaptersEnabled") as? Bool ?? false
     var askReadPictures = UserDefaults.standard.object(forKey: "askReadPictures") as? Bool ?? false
     var stripChrome = UserDefaults.standard.object(forKey: "stripChrome") as? Bool ?? true
+    var removePageNumbers = UserDefaults.standard.object(forKey: "removePageNumbers") as? Bool ?? false
     var previewFontName = UserDefaults.standard.string(forKey: "previewFontName") ?? "rounded"
     var editorChoice = UserDefaults.standard.string(forKey: "editorChoice") ?? "markedit"
     var customEditorName = UserDefaults.standard.string(forKey: "customEditorName") ?? ""
@@ -280,6 +281,10 @@ final class AppModel {
         // every new unsigned build. Presence is remembered in UserDefaults.
         askHasKey = UserDefaults.standard.bool(forKey: "askHasKey")
             || UserDefaults.standard.bool(forKey: "askKeyTestPassed")
+            || AskSecrets.hasSavedKey()
+        if askHasKey {
+            UserDefaults.standard.set(true, forKey: "askHasKey")
+        }
         askKeyDraft = ""
         askKeyKind = UserDefaults.standard.string(forKey: "askKeyKind") ?? ""
         askKeyTail = UserDefaults.standard.string(forKey: "askKeyTail") ?? ""
@@ -1587,6 +1592,7 @@ final class AppModel {
         UserDefaults.standard.set(aiChaptersEnabled, forKey: "aiChaptersEnabled")
         UserDefaults.standard.set(askReadPictures, forKey: "askReadPictures")
         UserDefaults.standard.set(stripChrome, forKey: "stripChrome")
+        UserDefaults.standard.set(removePageNumbers, forKey: "removePageNumbers")
         UserDefaults.standard.set(previewFontName, forKey: "previewFontName")
     }
 
@@ -2301,6 +2307,208 @@ final class AppModel {
         Task { await runTranslate(entireFile: true) }
     }
 
+    var canRejoinOpenFile: Bool {
+        guard let item = library.first(where: { $0.id == selectedLibraryID }),
+              item.id != Self.guideID,
+              !item.markdownPath.isEmpty
+        else { return false }
+        return FileManager.default.isReadableFile(atPath: item.markdownPath)
+    }
+
+    func applyRemovePageNumbersToOpenFile() {
+        guard let id = selectedLibraryID,
+              let item = library.first(where: { $0.id == id }),
+              item.id != Self.guideID
+        else {
+            statusText = "Open a file in Library first."
+            return
+        }
+        let url = URL(fileURLWithPath: item.markdownPath)
+        _ = FolderAccess.access(url.deletingLastPathComponent())
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            statusText = "Could not read the open file."
+            return
+        }
+        let pass = PdfCleanup.hidePageNumbers(text)
+        let originalCount = text.trimmingCharacters(in: .whitespacesAndNewlines).count
+        let nextCount = pass.text.trimmingCharacters(in: .whitespacesAndNewlines).count
+        if pass.text == text || (nextCount < 40 && originalCount >= 40) {
+            statusText = "No page-number lines in the open file."
+            return
+        }
+        quietWatch(8)
+        do {
+            try pass.text.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            statusText = "Could not update the open file."
+            return
+        }
+        if let idx = library.firstIndex(where: { $0.id == id }) {
+            var marks = library[idx].bookmarks
+            for i in marks.indices {
+                if let line = marks[i].lineIndex {
+                    marks[i].lineIndex = pass.lineIndex(line)
+                }
+            }
+            library[idx].bookmarks = marks
+            if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                library[idx].byteCount = Int64(size)
+            }
+            saveLibrary()
+            PdfSidecar.writeSidecar(marks, nextTo: url)
+        }
+        lastDiskFingerprint[url.path] = ""
+        statusText = "Page numbers removed from the open file."
+        Task { await refreshPreviewFromDisk(url.path) }
+    }
+
+    func requestRejoin(entireFile: Bool) {
+        guard canRejoinOpenFile else {
+            statusText = "Open a file in Library first."
+            return
+        }
+        if entireFile, translateEntireFileIsCostly {
+            showRejoinCostWarning = true
+            return
+        }
+        Task { await runRejoin(entireFile: entireFile) }
+    }
+
+    func confirmCostlyRejoin() {
+        showRejoinCostWarning = false
+        Task { await runRejoin(entireFile: true) }
+    }
+
+    func runRejoin(entireFile: Bool) async {
+        guard askHasKey else {
+            statusText = "Add an Ask AI key in Settings first."
+            return
+        }
+        guard let item = library.first(where: { $0.id == selectedLibraryID }),
+              item.id != Self.guideID
+        else {
+            statusText = "Open a file in Library first."
+            return
+        }
+        rejoinBusy = true
+        statusText = entireFile ? "Rejoining this file…" : "Rejoining this chapter…"
+        defer { rejoinBusy = false }
+        let path = item.markdownPath
+        let marks = item.bookmarks
+        let heading = entireFile ? "Entire file" : chapterHeadingForTranslate()
+        _ = FolderAccess.access(URL(fileURLWithPath: path).deletingLastPathComponent())
+        let loaded: (text: String, lines: [String])? = await Task.detached(priority: .userInitiated) {
+            guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            return (text, lines)
+        }.value
+        guard let loaded else {
+            statusText = "Could not read the open file."
+            return
+        }
+        let range = rejoinLineRange(heading: heading, lines: loaded.lines, marks: marks)
+        let hits = SplitWords.suspectIndexes(in: loaded.lines, range: range)
+        if hits.isEmpty {
+            statusText = entireFile
+                ? "No split words in this file."
+                : "No split words in this chapter."
+            return
+        }
+        let items: [(line: String, before: String, after: String)] = hits.map { index in
+            let neighbors = SplitWords.neighborWords(lines: loaded.lines, index: index)
+            return (loaded.lines[index], neighbors.before, neighbors.after)
+        }
+        let settings = AskService.Settings(
+            provider: askProvider,
+            model: askModel,
+            baseURL: askBaseURL,
+            apiKey: AskSecrets.load()
+        )
+        let proposed: [String]
+        do {
+            proposed = try await askService.rejoinLines(items, settings: settings)
+        } catch {
+            statusText = "Rejoin failed — the file was not changed."
+            return
+        }
+        guard proposed.count == hits.count else {
+            statusText = "Rejoin failed — the file was not changed."
+            return
+        }
+        var lines = loaded.lines
+        var changed = 0
+        for (offset, index) in hits.enumerated() {
+            let next = SplitWords.accept(original: lines[index], proposed: proposed[offset])
+            if next != lines[index] {
+                lines[index] = next
+                changed += 1
+            }
+        }
+        if changed == 0 {
+            statusText = entireFile
+                ? "No split words needed a change in this file."
+                : "No split words needed a change in this chapter."
+            return
+        }
+        let rewritten = lines.joined(separator: "\n")
+        let url = URL(fileURLWithPath: path)
+        quietWatch(8)
+        do {
+            try rewritten.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            statusText = "Rejoin failed — the file was not changed."
+            return
+        }
+        if let idx = library.firstIndex(where: { $0.id == item.id }),
+           let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+            library[idx].byteCount = Int64(size)
+            saveLibrary()
+        }
+        lastDiskFingerprint[path] = ""
+        statusText = entireFile
+            ? "Rejoined words in this file."
+            : "Rejoined words in this chapter."
+        await refreshPreviewFromDisk(path)
+    }
+
+    private func rejoinLineRange(heading: String, lines: [String], marks: [ManualBookmark]) -> Range<Int> {
+        if heading.isEmpty || heading == "Entire file" { return 0..<lines.count }
+        if let startMark = marks.firstIndex(where: { $0.title.caseInsensitiveCompare(heading) == .orderedSame }) {
+            let level = marks[startMark].level
+            let start = marks[startMark].lineIndex ?? 0
+            var end = lines.count
+            if startMark + 1 < marks.count {
+                for later in marks[(startMark + 1)...] {
+                    if later.level <= level, let idx = later.lineIndex {
+                        end = idx
+                        break
+                    }
+                }
+            }
+            let lo = min(max(0, start), lines.count)
+            let hi = min(max(lo, end), lines.count)
+            if lo < hi { return lo..<hi }
+        }
+        let needle = heading.lowercased()
+        if let found = lines.firstIndex(where: {
+            $0.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).lowercased().contains(needle)
+        }) {
+            let startLevel = lines[found].prefix(while: { $0 == "#" }).count
+            var end = lines.count
+            if found + 1 < lines.count {
+                for i in (found + 1)..<lines.count {
+                    let lvl = lines[i].prefix(while: { $0 == "#" }).count
+                    if lines[i].hasPrefix("#"), lvl > 0, lvl <= startLevel {
+                        end = i
+                        break
+                    }
+                }
+            }
+            return found..<end
+        }
+        return 0..<lines.count
+    }
+
     func runTranslate(entireFile: Bool) async {
         guard let item = library.first(where: { $0.id == selectedLibraryID }) else {
             statusText = "Open a file in Library first."
@@ -2831,7 +3039,7 @@ final class AppModel {
                 self.previewBaseURL = leftPack.base
                 self.previewBackup = (leftPack.lines, leftPack.headings)
                 self.previewTruncated = leftPack.truncated
-                self.hunterTextMemo.removeAll(keepingCapacity: true)
+                self.hunterDocMemo = nil
                 self.translateMarkdown = rightPack.text
                 self.translateLines = rightPack.lines
                 self.translateHeadings = self.outlineForOpenedTranslation(right: right, left: left, lines: rightPack.lines, scanned: rightPack.headings)
@@ -3929,12 +4137,32 @@ final class AppModel {
     }
 
     private func finalizeMarkdown(_ url: URL, original: URL, bookmarks: [ManualBookmark]) async -> (URL, [ManualBookmark]) {
+        let dropPages = removePageNumbers
         let located = await PdfWork.runAsync { () -> [ManualBookmark] in
-            guard let text = try? String(contentsOf: url, encoding: .utf8) else { return bookmarks }
+            guard var text = try? String(contentsOf: url, encoding: .utf8) else { return bookmarks }
+            text = PdfCleanup.joinLineEndHyphens(text)
+            text = PdfCleanup.collapseEmptyLines(text).text
+            text = PdfCleanup.promoteSubheadings(text)
+            text = PdfCleanup.dropEmptyTableColumns(text).text
             let stitched = PdfSidecar.stitch(bookmarks: bookmarks, markdown: text, pdf: original)
-            try? stitched.text.write(to: url, atomically: true, encoding: .utf8)
-            PdfSidecar.writeSidecar(stitched.bookmarks, nextTo: url)
-            return stitched.bookmarks
+            var finalText = stitched.text
+            var located = stitched.bookmarks
+            if dropPages {
+                let pass = PdfCleanup.hidePageNumbers(finalText)
+                let originalCount = finalText.trimmingCharacters(in: .whitespacesAndNewlines).count
+                let nextCount = pass.text.trimmingCharacters(in: .whitespacesAndNewlines).count
+                if nextCount >= 40 || originalCount < 40 {
+                    finalText = pass.text
+                    for i in located.indices {
+                        if let line = located[i].lineIndex {
+                            located[i].lineIndex = pass.lineIndex(line)
+                        }
+                    }
+                }
+            }
+            try? finalText.write(to: url, atomically: true, encoding: .utf8)
+            PdfSidecar.writeSidecar(located, nextTo: url)
+            return located
         }
         let after = await maybeAddAIChapters(markdownURL: url, hasOutline: !located.isEmpty)
         return (after, located)
@@ -4232,6 +4460,55 @@ final class AppModel {
         NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
 
+    /// One EPUB per card, beside that Markdown. A failure is named and the rest still run.
+    func makeEpubs(for items: [LibraryItem], align: String = "left") {
+        let jobs = items.map { EpubExport.Job(title: $0.title, path: $0.markdownPath, align: align) }
+        makeEpubJobs(jobs)
+    }
+
+    func makeEpub(title: String, path: String, align: String = "left") {
+        makeEpubJobs([EpubExport.Job(title: title, path: path, align: align)])
+    }
+
+    private func makeEpubJobs(_ jobs: [EpubExport.Job]) {
+        guard !epubExporting, !jobs.isEmpty else { return }
+        epubExporting = true
+        if filePlace == "custom", !customFolderPath.isEmpty {
+            _ = FolderAccess.accessPath(customFolderPath)
+        }
+        for job in jobs {
+            let folder = URL(fileURLWithPath: job.path).deletingLastPathComponent()
+            _ = FolderAccess.access(folder)
+        }
+        statusText = jobs.count == 1
+            ? L("Making EPUB…")
+            : String(format: L("Making %d EPUBs…"), jobs.count)
+        let wrote = L("Wrote %@")
+        let wroteMany = L("Wrote %d EPUBs. Last file: %@")
+        let failed = L("Could not make an EPUB for %@")
+        let mixed = L("Wrote %@. Could not make an EPUB for %@")
+        Task {
+            let batch = await Task.detached(priority: .userInitiated) {
+                EpubExport.exportAll(jobs)
+            }.value
+            epubExporting = false
+            let note: String
+            if batch.failed.isEmpty, batch.written.count == 1, let name = batch.written.first {
+                note = String(format: wrote, name)
+            } else if batch.failed.isEmpty, let name = batch.written.last {
+                note = String(format: wroteMany, batch.written.count, name)
+            } else if batch.written.isEmpty {
+                note = String(format: failed, batch.failed.joined(separator: "; "))
+            } else {
+                note = String(format: mixed, batch.written.last ?? "", batch.failed.joined(separator: "; "))
+            }
+            statusText = note
+            if !batch.failed.isEmpty {
+                showToast(note, sticky: true)
+            }
+        }
+    }
+
     func moveLibraryItems(_ items: [LibraryItem]) {
         let panel = NSOpenPanel()
         panel.title = "Move Markdown here"
@@ -4467,10 +4744,19 @@ final class AppModel {
         previewBaseURL = URL(fileURLWithPath: item.markdownPath).deletingLastPathComponent()
         let path = item.markdownPath
         let scanHeadings = item.bookmarks.isEmpty
+        let tidy = item.id != Self.guideID
+        quietWatch(8)
+        if tidy {
+            _ = FolderAccess.access(URL(fileURLWithPath: path).deletingLastPathComponent())
+        }
         Task.detached {
+            let spacing = tidy ? AppModel.collapseSpacing(at: path) : nil
             let pack = AppModel.buildPreview(path: path, scanHeadings: scanHeadings)
             await MainActor.run {
                 guard gen == self.previewGen else { return }
+                if let spacing {
+                    self.applySpacingMap(spacing, path: path)
+                }
                 if pack.missing, !self.previewMarkdown.isEmpty, self.previewMarkdown != "Loading…" {
                     return
                 }
@@ -4480,7 +4766,7 @@ final class AppModel {
                 self.previewBaseURL = pack.base
                 self.previewBackup = (pack.lines, pack.headings)
                 self.previewTruncated = pack.truncated
-                self.hunterTextMemo.removeAll(keepingCapacity: true)
+                self.hunterDocMemo = nil
                 self.refreshFileHits(in: pack.lines)
                 if self.hunterOn {
                     self.hunterGatheredRanges = self.hunterGatheredByPath[path] ?? []
@@ -4492,6 +4778,49 @@ final class AppModel {
                 self.startWatching()
             }
         }
+    }
+
+    /// Remove blank lines that split a sentence. Returns nil when the file is already clean.
+    nonisolated static func collapseSpacing(at path: String) -> PageNumberHide? {
+        guard FileManager.default.isReadableFile(atPath: path),
+              let text = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+        let pass = PdfCleanup.collapseEmptyLines(text)
+        let promoted = PdfCleanup.promoteSubheadings(pass.text)
+        let columns = PdfCleanup.dropEmptyTableColumns(promoted)
+        if columns.text == text { return nil }
+        let before = text.trimmingCharacters(in: .whitespacesAndNewlines).count
+        let after = columns.text.trimmingCharacters(in: .whitespacesAndNewlines).count
+        if before > 200, after < before / 2 { return nil }
+        let url = URL(fileURLWithPath: path)
+        _ = FolderAccess.access(url.deletingLastPathComponent())
+        do {
+            try columns.text.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            return nil
+        }
+        let composed = pass.oldToNew.map { collapsed in
+            let index = min(max(0, collapsed), max(0, columns.oldToNew.count - 1))
+            return columns.oldToNew.isEmpty ? collapsed : columns.oldToNew[index]
+        }
+        return PageNumberHide(text: columns.text, oldToNew: composed)
+    }
+
+    private func applySpacingMap(_ pass: PageNumberHide, path: String) {
+        guard let idx = library.firstIndex(where: { $0.markdownPath == path }) else { return }
+        var marks = library[idx].bookmarks
+        for i in marks.indices {
+            if let line = marks[i].lineIndex {
+                marks[i].lineIndex = pass.lineIndex(line)
+            }
+        }
+        library[idx].bookmarks = marks
+        let url = URL(fileURLWithPath: path)
+        if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+            library[idx].byteCount = Int64(size)
+        }
+        saveLibrary()
+        PdfSidecar.writeSidecar(marks, nextTo: url)
+        lastDiskFingerprint[path] = ""
     }
 
     /// Read a prefix for the reader. Default is 2 MB — a full NAT-sized manual.
@@ -5415,7 +5744,7 @@ final class AppModel {
             previewBaseURL = pack.base
             previewBackup = (pack.lines, pack.headings)
             previewTruncated = pack.truncated
-            hunterTextMemo.removeAll(keepingCapacity: true)
+            hunterDocMemo = nil
             setStatus("Updated from disk", important: true)
             return
         }

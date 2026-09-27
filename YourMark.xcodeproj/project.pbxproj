@@ -14,6 +14,7 @@
 		8BAB1E90D8AF949EDCB1C572 /* ConvertNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 557DC280ECDA15D4C9661AC6 /* ConvertNotice.swift */; };
 		735CEED51B4B1C951D53C5D6 /* CrashReports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 667C493D64A302D1687CEEDC /* CrashReports.swift */; };
 		3A6350A7A85D88FA1C0A2FB7 /* Distribution.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F0EC30B948CC8B78C38D46D /* Distribution.swift */; };
+		7246543084512B777D45C13C /* EpubExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 420212A9DB020B2F0819F4B0 /* EpubExport.swift */; };
 		11D72424EB65E0D4FF8B8870 /* FileDropCatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BEA8820A1EDB8D105C717A /* FileDropCatcher.swift */; };
 		DBB3E2ED90E6840ADA3A4606 /* FileWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70F5C8593D4E82DFF87FAEC0 /* FileWatcher.swift */; };
 		D01F692259FF08FCB5990D98 /* FolderAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC666809FAF002BF2BA5B858 /* FolderAccess.swift */; };
@@ -72,6 +73,7 @@
 		557DC280ECDA15D4C9661AC6 /* ConvertNotice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvertNotice.swift; sourceTree = "<group>"; };
 		667C493D64A302D1687CEEDC /* CrashReports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReports.swift; sourceTree = "<group>"; };
 		9F0EC30B948CC8B78C38D46D /* Distribution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Distribution.swift; sourceTree = "<group>"; };
+		420212A9DB020B2F0819F4B0 /* EpubExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpubExport.swift; sourceTree = "<group>"; };
 		B9BEA8820A1EDB8D105C717A /* FileDropCatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDropCatcher.swift; sourceTree = "<group>"; };
 		70F5C8593D4E82DFF87FAEC0 /* FileWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileWatcher.swift; sourceTree = "<group>"; };
 		AC666809FAF002BF2BA5B858 /* FolderAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderAccess.swift; sourceTree = "<group>"; };
@@ -131,6 +133,7 @@
 				557DC280ECDA15D4C9661AC6 /* ConvertNotice.swift */,
 				667C493D64A302D1687CEEDC /* CrashReports.swift */,
 				9F0EC30B948CC8B78C38D46D /* Distribution.swift */,
+				420212A9DB020B2F0819F4B0 /* EpubExport.swift */,
 				B9BEA8820A1EDB8D105C717A /* FileDropCatcher.swift */,
 				70F5C8593D4E82DFF87FAEC0 /* FileWatcher.swift */,
 				AC666809FAF002BF2BA5B858 /* FolderAccess.swift */,
@@ -247,7 +250,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/zsh;
-			shellScript = "set -euo pipefail\nif [ \"${CONFIGURATION}\" != \"AppStore\" ]; then\n  echo \"note: skip MarkItDown bundle for ${CONFIGURATION}\"\n  exit 0\nfi\nENGINE=\"${SRCROOT}/Resources/BundledEngine\"\nDEST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/python\"\nif [ ! -x \"${ENGINE}/bin/python3\" ] && [ ! -x \"${ENGINE}/bin/python3.12\" ]; then\n  echo \"error: Resources/BundledEngine is missing. Run Scripts/bundle-engine.sh first.\" >&2\n  exit 1\nfi\necho \"note: copying bundled MarkItDown into the app\"\nrm -rf \"${DEST}\"\nditto --norsrc --noextattr --noqtn \"${ENGINE}\" \"${DEST}\"\nIDENT=\"${EXPANDED_CODE_SIGN_IDENTITY:-}\"\nif [ -z \"${IDENT}\" ]; then IDENT=\"${CODE_SIGN_IDENTITY:-}\"; fi\nchmod +x \"${SRCROOT}/Scripts/sign-nested-python.sh\"\n\"${SRCROOT}/Scripts/sign-nested-python.sh\" \"${DEST}\" \"${IDENT}\"\n";
+			shellScript = "set -euo pipefail\nif [ \"${CONFIGURATION}\" != \"AppStore\" ]; then\n  echo \"note: skip MarkItDown bundle for ${CONFIGURATION}\"\n  exit 0\nfi\nENGINE=\"${SRCROOT}/Resources/BundledEngine\"\nDEST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/python\"\nif [ ! -x \"${ENGINE}/bin/python3\" ] && [ ! -x \"${ENGINE}/bin/python3.12\" ]; then\n  echo \"error: Resources/BundledEngine is missing. Run Scripts/bundle-engine.sh first.\" >&2\n  exit 1\nfi\necho \"note: copying bundled MarkItDown into the app\"\nrm -rf \"${DEST}\"\nditto --norsrc --noextattr --noqtn \"${ENGINE}\" \"${DEST}\"\nchmod +x \"${SRCROOT}/Scripts/strip-tk.sh\"\n\"${SRCROOT}/Scripts/strip-tk.sh\" \"${DEST}\"\nchmod +x \"${SRCROOT}/Scripts/appstore-python-compliance.sh\"\n\"${SRCROOT}/Scripts/appstore-python-compliance.sh\" \"${DEST}\"\nIDENT=\"${EXPANDED_CODE_SIGN_IDENTITY:-}\"\nif [ -z \"${IDENT}\" ]; then IDENT=\"${CODE_SIGN_IDENTITY:-}\"; fi\nchmod +x \"${SRCROOT}/Scripts/sign-nested-python.sh\"\n\"${SRCROOT}/Scripts/sign-nested-python.sh\" \"${DEST}\" \"${IDENT}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -264,6 +267,7 @@
 				8BAB1E90D8AF949EDCB1C572 /* ConvertNotice.swift in Sources */,
 				735CEED51B4B1C951D53C5D6 /* CrashReports.swift in Sources */,
 				3A6350A7A85D88FA1C0A2FB7 /* Distribution.swift in Sources */,
+				7246543084512B777D45C13C /* EpubExport.swift in Sources */,
 				11D72424EB65E0D4FF8B8870 /* FileDropCatcher.swift in Sources */,
 				DBB3E2ED90E6840ADA3A4606 /* FileWatcher.swift in Sources */,
 				D01F692259FF08FCB5990D98 /* FolderAccess.swift in Sources */,
@@ -334,7 +338,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/YourMark.direct.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 66;
+				CURRENT_PROJECT_VERSION = 70;
 				DEVELOPMENT_TEAM = R4SB7G9A32;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -344,7 +348,7 @@
 				INFOPLIST_KEY_NSHighResolutionCapable = YES;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.5.1;
+				MARKETING_VERSION = 0.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.burbank.yourmark;
 				PRODUCT_NAME = yourMark;
 				SDKROOT = macosx;
@@ -360,7 +364,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/YourMark.direct.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 66;
+				CURRENT_PROJECT_VERSION = 70;
 				DEVELOPMENT_TEAM = R4SB7G9A32;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -370,7 +374,7 @@
 				INFOPLIST_KEY_NSHighResolutionCapable = YES;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.5.1;
+				MARKETING_VERSION = 0.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.burbank.yourmark;
 				PRODUCT_NAME = yourMark;
 				SDKROOT = macosx;
@@ -386,14 +390,14 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/YourMark.mas.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 66;
+				CURRENT_PROJECT_VERSION = 70;
 				DEVELOPMENT_TEAM = R4SB7G9A32;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Resources/Info-mas.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.5.1;
+				MARKETING_VERSION = 0.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.burbank.yourmark;
 				PRODUCT_NAME = yourMark;
 				PROVISIONING_PROFILE_SPECIFIER = "";

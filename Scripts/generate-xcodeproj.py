@@ -87,7 +87,7 @@ direct_target = """
 				CODE_SIGN_ENTITLEMENTS = Resources/YourMark.direct.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 66;
+				CURRENT_PROJECT_VERSION = 70;
 				DEVELOPMENT_TEAM = R4SB7G9A32;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -97,7 +97,7 @@ direct_target = """
 				INFOPLIST_KEY_NSHighResolutionCapable = YES;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.5.1;
+				MARKETING_VERSION = 0.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.burbank.yourmark;
 				PRODUCT_NAME = yourMark;
 				SDKROOT = macosx;
@@ -109,14 +109,14 @@ store_target = """
 				CODE_SIGN_ENTITLEMENTS = Resources/YourMark.mas.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 66;
+				CURRENT_PROJECT_VERSION = 70;
 				DEVELOPMENT_TEAM = R4SB7G9A32;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Resources/Info-mas.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.5.1;
+				MARKETING_VERSION = 0.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.burbank.yourmark;
 				PRODUCT_NAME = yourMark;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -140,6 +140,10 @@ fi
 echo "note: copying bundled MarkItDown into the app"
 rm -rf "${DEST}"
 ditto --norsrc --noextattr --noqtn "${ENGINE}" "${DEST}"
+chmod +x "${SRCROOT}/Scripts/strip-tk.sh"
+"${SRCROOT}/Scripts/strip-tk.sh" "${DEST}"
+chmod +x "${SRCROOT}/Scripts/appstore-python-compliance.sh"
+"${SRCROOT}/Scripts/appstore-python-compliance.sh" "${DEST}"
 IDENT="${EXPANDED_CODE_SIGN_IDENTITY:-}"
 if [ -z "${IDENT}" ]; then IDENT="${CODE_SIGN_IDENTITY:-}"; fi
 chmod +x "${SRCROOT}/Scripts/sign-nested-python.sh"

@@ -29,6 +29,14 @@ find "$DEST" -name EXTERNALLY-MANAGED -delete
 echo "→ Installing markitdown[all] into the copy (no network after the app is built)…"
 "$UV" pip install --python "$BUNDLE_PY" --upgrade "markitdown[all]"
 
+echo "→ Dropping Tcl/Tk (App Review rejects _NSWindowDidOrderOnScreenNotification)…"
+chmod +x "$ROOT/Scripts/strip-tk.sh"
+"$ROOT/Scripts/strip-tk.sh" "$DEST"
+
+echo "→ App Store Python compliance (no itms-services)…"
+chmod +x "$ROOT/Scripts/appstore-python-compliance.sh"
+"$ROOT/Scripts/appstore-python-compliance.sh" "$DEST"
+
 echo "→ Checking…"
 "$BUNDLE_PY" -m markitdown --version
 echo "✓ Bundled engine: $DEST"

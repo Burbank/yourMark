@@ -6,7 +6,7 @@
 
 A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, ask about, translate, and share with an AI. The file never leaves this computer unless you press Ask or Translate.
 
-**[Download yourMark-0.5.1.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.5.1.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
+**[Download yourMark-0.6.0.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.6.0.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
 
 [Test a simpler version in your browser](https://burbank.github.io/yourMark/) (preview only — no OCR)
 
@@ -24,10 +24,10 @@ Keep the original PDF. Markdown is the working copy.
 
 ## A look inside
 
-- **Convert** — drop a PDF, Word, slides, or Excel. The words are written on your Mac, not online. A `.md` you already have skips the converter: File → Open, drop it, or put it in the folder you chose.
+- **Convert** — drop a PDF, Word, slides, or Excel. The words are written on your Mac, not online. A `.md` you already have skips the converter: File → Open, drop it, or put it in the folder you chose. Rendered shows headings and tables as a grid. Make EPUB writes an EPUB next to the Markdown.
 - **Library** — file on the left, bookmarks in the middle, the text on the right. Search in files stays on this Mac. Ask a chapter at the bottom if you add a key.
 - **Translate** — From and To in the reader. A Google Translate key or an Ask AI key is enough; you do not need both. Below keeps the original; Replace shows only the translation. **SIDE BY SIDE** opens both languages and they can scroll together.
-- **Hunter-Gatherer / FORAGE** — select text, press Enter, keep clips on a dated note beside the reader.
+- **Hunter-Gatherer / FORAGE** — select text, press Enter, keep clips on a dated note beside the reader. Headings and tables match the rendered reader. A drag across cells keeps the table.
 - **Settings** — choose the folder once (iCloud if you want). New Markdown in that folder appears in the library. Interface language is US English, Spanish, or Dutch — an Ask AI key can add more. Bright, Dim, or System in the header; your keys; extra help for scanned pages.
 
 yourMark is the window. [Microsoft MarkItDown](https://github.com/microsoft/markitdown) does the converting, on this Mac. If Microsoft publishes an update, yourMark can install it for you.

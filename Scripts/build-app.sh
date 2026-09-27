@@ -65,6 +65,10 @@ if [[ "$DISTRIBUTION" == "mas" ]]; then
   fi
   echo "→ Copying bundled converter…"
   ditto --norsrc --noextattr --noqtn "$ENGINE" "$RESOURCES/python"
+  chmod +x "$ROOT/Scripts/strip-tk.sh"
+  "$ROOT/Scripts/strip-tk.sh" "$RESOURCES/python"
+  chmod +x "$ROOT/Scripts/appstore-python-compliance.sh"
+  "$ROOT/Scripts/appstore-python-compliance.sh" "$RESOURCES/python"
 fi
 
 if [[ -f "$ROOT/Resources/AppIcon.png" ]]; then
@@ -106,9 +110,9 @@ cat > "$CONTENTS/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.5.1</string>
+	<string>0.6.0</string>
 	<key>CFBundleVersion</key>
-	<string>66</string>${ICON_PLIST}
+	<string>70</string>${ICON_PLIST}
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSApplicationCategoryType</key>

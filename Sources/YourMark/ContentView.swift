@@ -113,6 +113,15 @@ struct ContentView: View {
                 .environment(model)
                 .environment(\.deck, deck)
         }
+        .alert(model.L("This file is large"), isPresented: Binding(
+            get: { model.showRejoinCostWarning },
+            set: { if !$0 { model.showRejoinCostWarning = false } }
+        )) {
+            Button(model.L("Cancel"), role: .cancel) { model.showRejoinCostWarning = false }
+            Button(model.L("Rejoin entire file")) { model.confirmCostlyRejoin() }
+        } message: {
+            Text(model.L("Rejoining this whole file can send many lines to your AI and can cost a lot. Prefer This chapter. The reader can show a long file. Entire file still checks the whole Markdown."))
+        }
         .alert("Something went wrong", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.clearError() } }
@@ -148,6 +157,24 @@ private struct StatusBar: View {
                 .disabled(model.isBusy || model.jobs.isEmpty)
                 .buttonStyle(.borderedProminent)
                 .tint(deck.btn)
+                if model.askHasKey {
+                    Menu {
+                        Button(model.L("This chapter")) {
+                            model.requestRejoin(entireFile: false)
+                        }
+                        Button(model.L("Entire file")) {
+                            model.requestRejoin(entireFile: true)
+                        }
+                    } label: {
+                        Text(model.rejoinBusy ? model.L("Rejoining…") : model.L("Rejoin"))
+                    }
+                    .menuStyle(.borderedButton)
+                    .fixedSize()
+                    .disabled(model.rejoinBusy || model.isBusy || !model.canRejoinOpenFile)
+                    .help(model.translateEntireFileIsCostly
+                          ? model.L("Entire file can cost a lot on your Ask AI key. Prefer This chapter.")
+                          : model.L("Rejoin words the converter split. This chapter is the start."))
+                }
                 Button(model.L("Clear Recent List")) {
                     model.clearRecentConvertJobs()
                 }
@@ -1040,8 +1067,15 @@ private struct ReaderWorkTools: View {
         .font(.system(size: 11, weight: .semibold, design: .monospaced))
         .padding(.horizontal, 8)
         .frame(height: BarFit.h)
-        .background(RoundedRectangle(cornerRadius: 8).fill(previewRendered ? deck.btn : deck.field))
-        .foregroundStyle(previewRendered ? deck.btnText : deck.ink)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(previewRendered ? deck.btn : deck.panel)
+        )
+        .foregroundStyle(previewRendered ? deck.btnText : deck.muted)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(deck.line, lineWidth: previewRendered ? 0 : deck.border)
+        )
         .help("Rendered shows headings. Plain shows the raw Markdown.")
     }
 
@@ -1072,6 +1106,51 @@ private struct ReaderWorkTools: View {
             .frame(height: BarFit.h)
             .background(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: deck.border))
             .help("Show this file in Finder")
+            Menu {
+                Button(model.L("Left, like Markdown")) {
+                    makeReaderEpub(align: "left")
+                }
+                Button(model.L("Justified")) {
+                    makeReaderEpub(align: "justify")
+                }
+            } label: {
+                Text(model.L("Make EPUB"))
+                    .font(.body.weight(.bold))
+                    .padding(.horizontal, 12)
+                    .frame(height: BarFit.h)
+                    .background(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: deck.border))
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help(model.L("Write an EPUB next to this Markdown. Left keeps the uneven right edge. Justified is the other choice."))
+            if model.askHasKey {
+                Menu {
+                    Button(model.L("This chapter")) {
+                        model.requestRejoin(entireFile: false)
+                    }
+                    Button(model.L("Entire file")) {
+                        model.requestRejoin(entireFile: true)
+                    }
+                } label: {
+                    Text(model.rejoinBusy ? model.L("Rejoining…") : model.L("Rejoin"))
+                        .font(.body.weight(.bold))
+                        .padding(.horizontal, 12)
+                        .frame(height: BarFit.h)
+                        .background(RoundedRectangle(cornerRadius: 8).stroke(deck.line, lineWidth: deck.border))
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .disabled(model.rejoinBusy || !model.canRejoinOpenFile)
+                .help(model.L("Rejoin words the converter split. This chapter is the start."))
+            }
+        }
+    }
+
+    private func makeReaderEpub(align: String) {
+        if let item = selected {
+            model.makeEpubs(for: [item], align: align)
+        } else if let url = model.forageEditURL {
+            model.makeEpub(title: url.deletingPathExtension().lastPathComponent, path: url.path, align: align)
         }
     }
 
@@ -1801,6 +1880,10 @@ struct LibraryPanel: View {
         .contextMenu {
             Button(model.L("Open in FORAGE")) { model.openForageInPanel(item) }
             Button("Show in Finder") { model.revealLibraryItems([item]) }
+            Menu(model.L("Make EPUB")) {
+                Button(model.L("Left, like Markdown")) { model.makeEpubs(for: [item], align: "left") }
+                Button(model.L("Justified")) { model.makeEpubs(for: [item], align: "justify") }
+            }
             Divider()
             Button(model.L("Delete"), role: .destructive) { model.requestDelete([item]) }
         }
@@ -1849,6 +1932,12 @@ struct LibraryPanel: View {
                 }
                 Button(targets.count > 1 ? "Move to… (\(targets.count))" : "Move to…") {
                     model.moveLibraryItems(targets)
+                }
+                Menu(targets.count > 1
+                     ? String(format: model.L("Make EPUB (%d)"), targets.count)
+                     : model.L("Make EPUB")) {
+                    Button(model.L("Left, like Markdown")) { model.makeEpubs(for: targets, align: "left") }
+                    Button(model.L("Justified")) { model.makeEpubs(for: targets, align: "justify") }
                 }
                 Button(model.L("Add tag…")) {
                     model.beginTagEditor(for: item)
@@ -2010,8 +2099,12 @@ struct LibraryPanel: View {
             let plan = model.hunterHighlightPlan(in: lines)
             HunterSelectView(
                 text: model.hunterReaderText(from: lines),
+                tables: model.hunterTables(from: lines),
+                marks: model.hunterMarks(from: lines),
                 pointSize: previewPointSize,
+                fontName: model.previewFontName,
                 ink: NSColor(deck.ink),
+                muted: NSColor(deck.muted),
                 paper: NSColor(deck.field),
                 gathered: model.hunterGatheredRanges,
                 markStamp: model.hunterMarkStamp,
@@ -2030,15 +2123,26 @@ struct LibraryPanel: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(lines) { row in
-                        markdownLine(row.text, pane: pane, lineID: row.id)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(pane != .harvest && (model.isCurrentFileHit(lineID: row.id) || model.isAskHitLine(row.id))
-                                ? Color(red: 1, green: 0.93, blue: 0.2).opacity(model.isCurrentFileHit(lineID: row.id) ? 0.22 : 0.12)
-                                : deck.field)
-                            .id(row.id)
+                    ForEach(readerRuns(lines, pane: pane)) { run in
+                        Group {
+                            if run.table {
+                                readerTable(run.rows)
+                            } else if run.flow {
+                                flowText(run.rows)
+                            } else if let row = run.rows.first {
+                                markdownLine(row.text, pane: pane, lineID: row.id)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, run.flow ? 1 : 3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(runBackground(run, pane: pane))
+                        .id(run.id)
+                        .background(alignment: .top) {
+                            ForEach(run.rows.dropFirst()) { row in
+                                Color.clear.frame(width: 0, height: 0).id(row.id)
+                            }
+                        }
                     }
                     if pane == .harvest {
                         Color.clear.frame(height: 28)
@@ -2082,6 +2186,135 @@ struct LibraryPanel: View {
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
             .background(deck.panel)
             .overlay(Rectangle().frame(height: deck.border).foregroundStyle(deck.line), alignment: .bottom)
+    }
+
+    /// One drag can cross every sentence in a run. A heading, page rule, figure, callout, or table starts a new run.
+    private struct ReaderRun: Identifiable {
+        let id: Int
+        let rows: [PreviewLine]
+        let flow: Bool
+        var table: Bool = false
+    }
+
+    private func readerRuns(_ lines: [PreviewLine], pane: LinkPane) -> [ReaderRun] {
+        let searching = pane != .harvest && (
+            !model.fileSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !model.askHitsInReader.isEmpty
+        )
+        if searching {
+            return lines.map { ReaderRun(id: $0.id, rows: [$0], flow: false) }
+        }
+        var runs: [ReaderRun] = []
+        var flow: [PreviewLine] = []
+        func flush() {
+            guard let first = flow.first else { return }
+            runs.append(ReaderRun(id: first.id, rows: flow, flow: true))
+            flow.removeAll(keepingCapacity: true)
+        }
+        var index = 0
+        while index < lines.count {
+            if previewRendered, let end = tableSpan(lines, from: index) {
+                flush()
+                let rows = Array(lines[index..<end])
+                runs.append(ReaderRun(id: rows[0].id, rows: rows, flow: false, table: true))
+                index = end
+                continue
+            }
+            let row = lines[index]
+            if isReaderBreak(row.text) {
+                flush()
+                runs.append(ReaderRun(id: row.id, rows: [row], flow: false))
+            } else if isHiddenComment(row.text) {
+                index += 1
+                continue
+            } else {
+                flow.append(row)
+                if flow.count >= 80 { flush() }
+            }
+            index += 1
+        }
+        flush()
+        return runs
+    }
+
+    private func tableSpan(_ lines: [PreviewLine], from start: Int) -> Int? {
+        guard start + 1 < lines.count,
+              PdfCleanup.isTableRowLine(lines[start].text),
+              PdfCleanup.isTableSeparatorLine(lines[start + 1].text) else { return nil }
+        var end = start + 2
+        while end < lines.count {
+            let trimmed = lines[end].text.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") || !PdfCleanup.isTableRowLine(lines[end].text) { break }
+            end += 1
+        }
+        return end
+    }
+
+    private func readerTable(_ rows: [PreviewLine]) -> some View {
+        let header = PdfCleanup.tableCells(rows.first?.text ?? "")
+        let body = rows.dropFirst(2).map { PdfCleanup.tableCells($0.text) }
+        let grid = PdfCleanup.compactTable(header: header, rows: body)
+        return ReaderTableGrid(
+            header: grid.header,
+            rows: grid.rows,
+            pointSize: CGFloat(previewPointSize),
+            fontName: model.previewFontName,
+            ink: deck.ink,
+            panel: deck.panel,
+            field: deck.field,
+            rule: deck.line,
+            textFont: { model.readerFont(size: $0, weight: $1) }
+        )
+    }
+
+    private func isHiddenComment(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix("<!--") && pageMark(line) == nil
+    }
+
+    private func isReaderBreak(_ line: String) -> Bool {
+        if line.hasPrefix(TranslateService.marker) { return true }
+        if markdownImage(line, base: model.previewBaseURL) != nil { return true }
+        if pageMark(line) != nil { return true }
+        if atxHeading(line) != nil { return true }
+        if wholeLineBold(line) != nil { return true }
+        return false
+    }
+
+    private func runBackground(_ run: ReaderRun, pane: LinkPane) -> Color {
+        guard pane != .harvest else { return deck.field }
+        let current = run.rows.contains { model.isCurrentFileHit(lineID: $0.id) }
+        let marked = current || run.rows.contains { model.isAskHitLine($0.id) }
+        guard marked else { return deck.field }
+        return Color(red: 1, green: 0.93, blue: 0.2).opacity(current ? 0.22 : 0.12)
+    }
+
+    private func flowText(_ rows: [PreviewLine]) -> some View {
+        let size = CGFloat(previewPointSize)
+        let mono = Font.system(size: size, design: .monospaced)
+        var text = Text("")
+        var started = false
+        for row in rows {
+            if row.text.trimmingCharacters(in: .whitespaces).isEmpty {
+                if started { text = text + Text("\n") }
+                continue
+            }
+            let piece: Text = previewRendered
+                ? inlineMarkdown(row.text, size: size)
+                : Text(row.text).font(mono).foregroundStyle(deck.ink)
+            if started {
+                text = text + Text("\n") + piece
+            } else {
+                text = piece
+                started = true
+            }
+        }
+        if !started {
+            text = Text(" ").font(model.readerFont(size: size))
+        }
+        return text
+            .textSelection(.enabled)
+            .lineSpacing(3)
     }
 
     @ViewBuilder
@@ -2331,6 +2564,119 @@ private struct TranslateLangPicker: View {
     }
 }
 
+/// Columns hug their text. When that is wider than the reader, they shrink in proportion and wrap.
+private struct ReaderTableGrid: View {
+    var header: [String]
+    var rows: [[String]]
+    var pointSize: CGFloat
+    var fontName: String
+    var ink: Color
+    var panel: Color
+    var field: Color
+    var rule: Color
+    var textFont: (CGFloat, Font.Weight) -> Font
+    @State private var available: CGFloat = 0
+
+    var body: some View {
+        let widths = fittedWidths(available: available)
+        VStack(alignment: .leading, spacing: 0) {
+            Color.clear.frame(maxWidth: .infinity).frame(height: 0)
+            if available > 40 {
+                Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+                    GridRow {
+                        ForEach(Array(header.enumerated()), id: \.offset) { index, cell in
+                            cellView(cell, width: widths[safe: index] ?? 80, header: true)
+                        }
+                    }
+                    ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                        GridRow {
+                            ForEach(Array(row.enumerated()), id: \.offset) { index, cell in
+                                cellView(cell, width: widths[safe: index] ?? 80, header: false)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { available = geo.size.width }
+                    .onChange(of: geo.size.width) { _, width in
+                        available = width
+                    }
+            }
+        }
+    }
+
+    private func cellView(_ text: String, width: CGFloat, header: Bool) -> some View {
+        Text(text.isEmpty ? " " : text)
+            .font(textFont(pointSize, header ? .semibold : .regular))
+            .foregroundStyle(ink)
+            .textSelection(.enabled)
+            .frame(width: max(24, width - 16), alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(header ? panel : field)
+            .overlay(Rectangle().stroke(rule, lineWidth: 0.5))
+    }
+
+    private func fittedWidths(available: CGFloat) -> [CGFloat] {
+        let ideals = idealWidths()
+        guard !ideals.isEmpty else { return [] }
+        let room = available > 40 ? available : ideals.reduce(0, +)
+        let sum = ideals.reduce(0, +)
+        if sum <= room { return ideals }
+        return ideals.map { $0 / sum * room }
+    }
+
+    private func idealWidths() -> [CGFloat] {
+        let count = header.count
+        guard count > 0 else { return [] }
+        var widths = Array(repeating: CGFloat(0), count: count)
+        for (index, cell) in header.enumerated() {
+            widths[index] = max(widths[index], measured(cell, bold: true))
+        }
+        for row in rows {
+            for (index, cell) in row.enumerated() where index < count {
+                widths[index] = max(widths[index], measured(cell, bold: false))
+            }
+        }
+        return widths.map { $0 + 20 }
+    }
+
+    private func measured(_ text: String, bold: Bool) -> CGFloat {
+        let shown = text.isEmpty ? " " : text
+        let font = nsFont(bold: bold)
+        return ceil((shown as NSString).size(withAttributes: [.font: font]).width)
+    }
+
+    private func nsFont(bold: Bool) -> NSFont {
+        let weight: NSFont.Weight = bold ? .semibold : .regular
+        switch fontName {
+        case "system":
+            return NSFont.systemFont(ofSize: pointSize, weight: weight)
+        case "rounded", "":
+            let described = NSFont.systemFont(ofSize: pointSize, weight: weight)
+                .fontDescriptor
+                .withDesign(.rounded)
+            if let described, let font = NSFont(descriptor: described, size: pointSize) {
+                return font
+            }
+            return NSFont.systemFont(ofSize: pointSize, weight: weight)
+        default:
+            return NSFont(name: fontName, size: pointSize) ?? NSFont.systemFont(ofSize: pointSize, weight: weight)
+        }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+
 private struct VisibleHit: Equatable {
     var title: String
     var y: CGFloat
@@ -2361,7 +2707,7 @@ private struct VisibleHeadingPref: PreferenceKey {
     }
 }
 
-private func atxHeading(_ line: String) -> (level: Int, text: String)? {
+func atxHeading(_ line: String) -> (level: Int, text: String)? {
     let t = line.trimmingCharacters(in: .whitespaces)
     guard t.hasPrefix("#") else { return nil }
     var n = 0
@@ -2376,7 +2722,7 @@ private func atxHeading(_ line: String) -> (level: Int, text: String)? {
     return (n, text)
 }
 
-private func wholeLineBold(_ line: String) -> String? {
+func wholeLineBold(_ line: String) -> String? {
     let t = line.trimmingCharacters(in: .whitespaces)
     guard t.hasPrefix("**"), t.hasSuffix("**"), t.count > 4 else { return nil }
     let inner = String(t.dropFirst(2).dropLast(2))
@@ -3299,6 +3645,21 @@ struct EnginePanel: View {
                     }
                 ))
                 Text(model.L("Drops the repeating page title, page number, date, revision line, and header logos. Chapter headings and the real text stay. On by default — manuals look much cleaner."))
+                    .foregroundStyle(.secondary)
+                Toggle(model.L("Remove page numbers"), isOn: Binding(
+                    get: { model.removePageNumbers },
+                    set: {
+                        model.removePageNumbers = $0
+                        UserDefaults.standard.set($0, forKey: "removePageNumbers")
+                    }
+                ))
+                Text(model.L("Off unless you turn it on. A later convert hides a Page heading as a comment and drops a line that is only a number. Chapter headings stay. The PDF is not changed."))
+                    .foregroundStyle(.secondary)
+                Button(model.L("Apply to the open file")) {
+                    model.applyRemovePageNumbersToOpenFile()
+                }
+                .disabled(model.selectedLibraryID == nil || model.selectedLibraryID == AppModel.guideID)
+                Text(model.L("Does this once on the card you have open. Turning the switch off does not put page numbers back. The hidden comment still points at the PDF page."))
                     .foregroundStyle(.secondary)
             }
             Section(model.L("Reader")) {

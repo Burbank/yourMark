@@ -89,7 +89,7 @@ extension AppModel {
             stopForageLink()
             hunterOn = true
             hunterSnippets = []
-            hunterTextMemo.removeAll(keepingCapacity: true)
+            hunterDocMemo = nil
             let continueOpen = harvestOpen && existingHarvestURL() != nil
             if continueOpen {
                 forageSessionIsNew = false
@@ -359,25 +359,170 @@ extension AppModel {
     }
 
     func hunterReaderText(from lines: [PreviewLine]) -> String {
+        hunterLayout(from: lines).text
+    }
+
+    func hunterTables(from lines: [PreviewLine]) -> [HunterTableSpan] {
+        hunterLayout(from: lines).tables
+    }
+
+    func hunterMarks(from lines: [PreviewLine]) -> [HunterMark] {
+        hunterLayout(from: lines).marks
+    }
+
+    private func hunterLayout(from lines: [PreviewLine]) -> HunterLayout {
+        let title = library.first { $0.id == selectedLibraryID }?.title ?? ""
         let key = lines.count
             &+ (lines.first?.id ?? 0)
             &+ ((lines.last?.id ?? 0) &* 1_009)
             &+ (lines.first?.text.hashValue ?? 0)
-        if let hit = hunterTextMemo[key] { return hit }
-        var parts: [String] = []
-        parts.reserveCapacity(lines.count)
-        for row in lines {
-            if let page = Self.pageToken(row.text) { parts.append("Page \(page)") }
-            else {
-                let t = row.text.trimmingCharacters(in: .whitespaces)
-                if t.hasPrefix("<!--") { continue }
-                parts.append(row.text)
+            &+ title.hashValue
+        if let memo = hunterDocMemo, memo.key == key { return memo.layout }
+        let texts = lines.map(\.text)
+        var chunks: [String] = []
+        var map: [(id: Int, offset: Int)] = []
+        var tables: [HunterTableSpan] = []
+        var marks: [HunterMark] = []
+        var offset = 0
+        var index = 0
+
+        func emit(_ piece: String, id: Int, mark: HunterMark.Kind? = nil, extra: [HunterMark] = []) {
+            map.append((id, offset))
+            if let mark {
+                let shown = piece.hasSuffix("\n") ? String(piece.dropLast()) : piece
+                let length = (shown as NSString).length
+                if length > 0 {
+                    marks.append(HunterMark(location: offset, length: length, kind: mark))
+                }
+            }
+            for item in extra {
+                marks.append(HunterMark(location: offset + item.location, length: item.length, kind: item.kind))
+            }
+            chunks.append(piece)
+            offset += (piece as NSString).length
+        }
+
+        while index < lines.count {
+            let row = lines[index]
+            if let page = Self.pageToken(row.text) {
+                emit("Page \(page)\n", id: row.id, mark: .page)
+                index += 1
+                continue
+            }
+            let translated = row.text.hasPrefix(TranslateService.marker)
+            let source = translated
+                ? String(row.text.dropFirst(TranslateService.marker.count))
+                : row.text
+            let trimmed = source.trimmingCharacters(in: .whitespaces)
+            if !translated, trimmed.hasPrefix("<!--") {
+                index += 1
+                continue
+            }
+            if Self.isPictureLine(trimmed) {
+                map.append((row.id, offset))
+                index += 1
+                continue
+            }
+            if let end = PdfCleanup.tableEnd(texts, from: index) {
+                let header = PdfCleanup.tableCells(lines[index].text)
+                let body = (index + 2..<end).map { PdfCleanup.tableCells(lines[$0].text) }
+                let grid = PdfCleanup.compactTable(header: header, rows: body)
+                let columns = max(grid.header.count, 1)
+                func pad(_ cells: [String]) -> [String] {
+                    if cells.count >= columns { return Array(cells.prefix(columns)) }
+                    return cells + Array(repeating: "", count: columns - cells.count)
+                }
+                var cells: [String] = []
+                cells.append(contentsOf: pad(grid.header))
+                for gridRow in grid.rows { cells.append(contentsOf: pad(gridRow)) }
+                tables.append(HunterTableSpan(location: offset, columns: columns, cells: cells))
+                map.append((lines[index].id, offset))
+                let headerPiece = pad(grid.header).map { $0 + "\n" }.joined()
+                let headerLen = (headerPiece as NSString).length
+                if index + 1 < end {
+                    map.append((lines[index + 1].id, offset + headerLen))
+                }
+                var bodyOffset = offset + headerLen
+                for (rowIndex, gridRow) in grid.rows.enumerated() {
+                    let lineIndex = index + 2 + rowIndex
+                    if lineIndex < end {
+                        map.append((lines[lineIndex].id, bodyOffset))
+                    }
+                    bodyOffset += (pad(gridRow).map { $0 + "\n" }.joined() as NSString).length
+                }
+                let piece = cells.map { $0 + "\n" }.joined()
+                chunks.append(piece)
+                offset += (piece as NSString).length
+                index = end
+                continue
+            }
+            if let heading = atxHeading(source) {
+                if !translated, heading.level == 1,
+                   !title.isEmpty,
+                   heading.text.caseInsensitiveCompare(title) == .orderedSame {
+                    map.append((row.id, offset))
+                    index += 1
+                    continue
+                }
+                emit(
+                    heading.text + "\n",
+                    id: row.id,
+                    mark: .heading(heading.level, muted: translated)
+                )
+                index += 1
+                continue
+            }
+            if let callout = wholeLineBold(source) {
+                emit(callout + "\n", id: row.id, mark: .callout(muted: translated))
+                index += 1
+                continue
+            }
+            let inline = Self.inlineBoldRuns(source)
+            var extra: [HunterMark] = inline.bolds.map {
+                HunterMark(location: $0.location, length: $0.length, kind: .bold)
+            }
+            if translated, !inline.text.isEmpty {
+                extra.append(HunterMark(location: 0, length: (inline.text as NSString).length, kind: .translated))
+            }
+            emit(inline.text + "\n", id: row.id, extra: extra)
+            index += 1
+        }
+        let layout = HunterLayout(text: chunks.joined(), map: map, tables: tables, marks: marks)
+        hunterDocMemo = (key, layout)
+        return layout
+    }
+
+    /// A picture line stays out of Hunter-Gatherer. A drag cannot take the figure with it.
+    private static func isPictureLine(_ trimmed: String) -> Bool {
+        trimmed.hasPrefix("![") && trimmed.contains("](")
+    }
+
+    /// Same `**bold**` pairs the rendered reader draws, with the stars removed.
+    private static func inlineBoldRuns(_ line: String) -> (text: String, bolds: [NSRange]) {
+        var text = ""
+        var bolds: [NSRange] = []
+        var rest = line
+        var pairs = 0
+        while pairs < 24, let start = rest.range(of: "**") {
+            pairs += 1
+            text += String(rest[rest.startIndex..<start.lowerBound])
+            let afterStart = start.upperBound
+            if let end = rest.range(of: "**", range: afterStart..<rest.endIndex) {
+                let chunk = String(rest[afterStart..<end.lowerBound])
+                let loc = (text as NSString).length
+                let len = (chunk as NSString).length
+                if len > 0 {
+                    bolds.append(NSRange(location: loc, length: len))
+                }
+                text += chunk
+                rest = String(rest[end.upperBound...])
+            } else {
+                text += "**" + String(rest[afterStart...])
+                rest = ""
             }
         }
-        let text = parts.joined(separator: "\n")
-        if hunterTextMemo.count > 4 { hunterTextMemo.removeAll(keepingCapacity: true) }
-        hunterTextMemo[key] = text
-        return text
+        text += rest
+        return (text, bolds)
     }
 
     func startHunterMonitor() {
@@ -428,7 +573,8 @@ extension AppModel {
             statusText = L("Select text in the reader, then press Enter.")
             return false
         }
-        let snippet = formatHunterSnippet(hit.text)
+        let page = pageNearOffset(hit.range.location, lines: previewLines)
+        let snippet = formatHunterSnippet(hit.text, pageHint: page)
         hunterSnippets.append(snippet)
         let path = currentReaderPath
         if !path.isEmpty {
@@ -494,7 +640,10 @@ extension AppModel {
         for tv in views {
             let range = tv.selectedRange()
             guard range.length > 0, range.location != NSNotFound else { continue }
-            let raw = (tv.string as NSString).substring(with: range)
+            let reader = hunterReaderText(from: previewLines)
+            let raw = tv.string == reader
+                ? forageText(tv.string, range: range)
+                : (tv.string as NSString).substring(with: range)
             let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { continue }
             if tv.isFieldEditor, (tv.string as NSString).length < 160 { continue }
@@ -547,7 +696,60 @@ extension AppModel {
         NSPasteboard.general.setString(body, forType: .string)
     }
 
-    func formatHunterSnippet(_ raw: String) -> String {
+    /// A drag through a table becomes a Markdown table. One cell stays as the words you selected.
+    private func forageText(_ full: String, range: NSRange) -> String {
+        let tables = hunterTables(from: previewLines)
+        let ns = full as NSString
+        guard range.location >= 0, range.length > 0, NSMaxRange(range) <= ns.length else {
+            return ""
+        }
+        let end = NSMaxRange(range)
+        let hits = tables
+            .filter { $0.endLocation > range.location && $0.location < end }
+            .sorted { $0.location < $1.location }
+        guard !hits.isEmpty else { return ns.substring(with: range) }
+        var parts: [String] = []
+        var cursor = range.location
+        for table in hits {
+            let tableEnd = table.endLocation
+            if table.location > cursor {
+                let cut = min(table.location, end)
+                if cut > cursor {
+                    parts.append(ns.substring(with: NSRange(location: cursor, length: cut - cursor)))
+                }
+            }
+            if let markdown = table.markdown(selected: range) {
+                if let last = parts.indices.last, !parts[last].isEmpty, !parts[last].hasSuffix("\n") {
+                    parts[last] += "\n"
+                }
+                parts.append(markdown)
+                if end > tableEnd { parts.append("\n") }
+            } else {
+                let loc = max(cursor, table.location)
+                let sliceEnd = min(end, tableEnd)
+                if sliceEnd > loc {
+                    parts.append(ns.substring(with: NSRange(location: loc, length: sliceEnd - loc)))
+                }
+            }
+            cursor = min(max(tableEnd, cursor), end)
+        }
+        if cursor < end {
+            parts.append(ns.substring(with: NSRange(location: cursor, length: end - cursor)))
+        }
+        return parts.joined()
+    }
+
+    private func pageNearOffset(_ offset: Int, lines: [PreviewLine]) -> String? {
+        let map = hunterLineMap(from: lines)
+        guard let id = map.last(where: { $0.offset <= offset })?.id,
+              let idx = lines.firstIndex(where: { $0.id == id }) else { return nil }
+        for i in stride(from: idx, through: 0, by: -1) {
+            if let page = Self.pageToken(lines[i].text) { return page }
+        }
+        return nil
+    }
+
+    func formatHunterSnippet(_ raw: String, pageHint: String? = nil) -> String {
         let cleaned = raw
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\u{00a0}", with: " ")
@@ -557,7 +759,7 @@ extension AppModel {
             .replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let chapter = activeHeading(for: .main)
-        let page = pageNearSelection(cleaned)
+        let page = pageHint ?? pageNearSelection(cleaned)
         let source = library.first(where: { $0.id == selectedLibraryID })?.title ?? ""
         var parts: [String] = []
         if !chapter.isEmpty {
@@ -748,27 +950,7 @@ extension AppModel {
     }
 
     func hunterLineMap(from lines: [PreviewLine]) -> [(id: Int, offset: Int)] {
-        let key = lines.count
-            &+ (lines.first?.id ?? 0)
-            &+ ((lines.last?.id ?? 0) &* 1_009)
-            &+ (lines.first?.text.hashValue ?? 0)
-        if hunterLineMemo?.key == key { return hunterLineMemo!.map }
-        var map: [(id: Int, offset: Int)] = []
-        map.reserveCapacity(lines.count)
-        var offset = 0
-        for row in lines {
-            if let page = Self.pageToken(row.text) {
-                map.append((row.id, offset))
-                offset += (("Page \(page)" as NSString).length + 1)
-            } else {
-                let t = row.text.trimmingCharacters(in: .whitespaces)
-                if t.hasPrefix("<!--") { continue }
-                map.append((row.id, offset))
-                offset += ((row.text as NSString).length + 1)
-            }
-        }
-        hunterLineMemo = (key, map)
-        return map
+        hunterLayout(from: lines).map
     }
 
     func rememberForageFile(id: UUID?, path: String) {
@@ -941,11 +1123,253 @@ extension AppModel {
     }
 }
 
+struct HunterTableSpan: Equatable {
+    var location: Int
+    var columns: Int
+    var cells: [String]
+
+    var endLocation: Int {
+        cells.reduce(location) { $0 + ($1 as NSString).length + 1 }
+    }
+
+    func cellRanges() -> [NSRange] {
+        var cursor = location
+        var ranges: [NSRange] = []
+        ranges.reserveCapacity(cells.count)
+        for cell in cells {
+            let length = (cell as NSString).length
+            ranges.append(NSRange(location: cursor, length: length == 0 ? 1 : length))
+            cursor += length + 1
+        }
+        return ranges
+    }
+
+    /// Two or more touched cells become a Markdown table. A phrase inside one cell stays plain.
+    func markdown(selected: NSRange) -> String? {
+        guard columns > 0, !cells.isEmpty else { return nil }
+        let ranges = cellRanges()
+        let picked = ranges.indices.filter { index in
+            let hit = NSIntersectionRange(ranges[index], selected)
+            return hit.length > 0
+        }
+        guard picked.count >= 2 else { return nil }
+        var rows = Set(picked.map { $0 / columns })
+        let body = picked.contains { $0 / columns > 0 }
+        let headerHasWords = cells.prefix(columns).contains {
+            !$0.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+        let headerAdded = body && headerHasWords && !picked.contains { $0 / columns == 0 }
+        if headerAdded { rows.insert(0) }
+        let ordered = rows.sorted()
+        guard let first = ordered.first else { return nil }
+        func cellText(_ index: Int) -> String {
+            guard cells.indices.contains(index) else { return "" }
+            return cells[index]
+                .replacingOccurrences(of: "|", with: "\\|")
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespaces)
+        }
+        func line(_ row: Int) -> String {
+            let parts = (0..<columns).map { column -> String in
+                let index = row * columns + column
+                let include = picked.contains(index) || (headerAdded && row == 0)
+                return include ? cellText(index) : ""
+            }
+            return "| " + parts.joined(separator: " | ") + " |"
+        }
+        var lines = [line(first), "| " + Array(repeating: "---", count: columns).joined(separator: " | ") + " |"]
+        for row in ordered.dropFirst() {
+            lines.append(line(row))
+        }
+        return lines.joined(separator: "\n")
+    }
+}
+
+struct HunterMark: Equatable {
+    enum Kind: Equatable {
+        case heading(Int, muted: Bool)
+        case callout(muted: Bool)
+        case page
+        case bold
+        case translated
+    }
+    var location: Int
+    var length: Int
+    var kind: Kind
+}
+
+struct HunterLayout {
+    var text: String
+    var map: [(id: Int, offset: Int)]
+    var tables: [HunterTableSpan]
+    var marks: [HunterMark]
+}
+
+enum HunterTableStyle {
+    static func apply(
+        _ text: String,
+        tables: [HunterTableSpan],
+        marks: [HunterMark],
+        pointSize: CGFloat,
+        fontName: String,
+        ink: NSColor,
+        muted: NSColor
+    ) -> NSAttributedString {
+        let font = readerFont(name: fontName, size: pointSize, weight: .regular)
+        let headerFont = readerFont(name: fontName, size: pointSize, weight: .semibold)
+        let body = NSMutableParagraphStyle()
+        body.lineSpacing = 3
+        let base = NSMutableAttributedString(string: text, attributes: [
+            .font: font,
+            .foregroundColor: ink,
+            .paragraphStyle: body
+        ])
+        let ns = text as NSString
+        for mark in marks {
+            guard mark.location >= 0, mark.length > 0, mark.location + mark.length <= ns.length else { continue }
+            let textRange = NSRange(location: mark.location, length: mark.length)
+            switch mark.kind {
+            case .heading(let level, let isMuted):
+                let style = NSMutableParagraphStyle()
+                style.lineSpacing = 3
+                style.paragraphSpacingBefore = level <= 2 ? 14 : 8
+                style.paragraphSpacing = 2
+                if isMuted {
+                    style.headIndent = 12
+                    style.firstLineHeadIndent = 12
+                }
+                base.addAttribute(.paragraphStyle, value: style, range: paragraphRange(ns, textRange))
+                let weight: NSFont.Weight = level <= 2 ? .bold : .semibold
+                base.addAttribute(.font, value: readerFont(name: fontName, size: headingSize(level, base: pointSize), weight: weight), range: textRange)
+                if isMuted {
+                    base.addAttribute(.foregroundColor, value: muted, range: textRange)
+                }
+            case .callout(let isMuted):
+                let style = NSMutableParagraphStyle()
+                style.lineSpacing = 3
+                style.paragraphSpacingBefore = 6
+                if isMuted {
+                    style.headIndent = 12
+                    style.firstLineHeadIndent = 12
+                }
+                base.addAttribute(.paragraphStyle, value: style, range: paragraphRange(ns, textRange))
+                base.addAttribute(.font, value: headerFont, range: textRange)
+                if isMuted {
+                    base.addAttribute(.foregroundColor, value: muted, range: textRange)
+                }
+            case .page:
+                let style = NSMutableParagraphStyle()
+                style.lineSpacing = 3
+                style.paragraphSpacingBefore = 10
+                style.paragraphSpacing = 4
+                base.addAttribute(.paragraphStyle, value: style, range: paragraphRange(ns, textRange))
+                base.addAttribute(.font, value: NSFont.monospacedSystemFont(ofSize: max(10, pointSize - 4), weight: .semibold), range: textRange)
+                base.addAttribute(.foregroundColor, value: muted, range: textRange)
+            case .bold:
+                base.addAttribute(.font, value: headerFont, range: textRange)
+            case .translated:
+                let style = NSMutableParagraphStyle()
+                style.lineSpacing = 3
+                style.headIndent = 12
+                style.firstLineHeadIndent = 12
+                base.addAttribute(.paragraphStyle, value: style, range: paragraphRange(ns, textRange))
+                base.addAttribute(.foregroundColor, value: muted, range: textRange)
+            }
+        }
+        for table in tables where table.columns > 0 && !table.cells.isEmpty {
+            let widths = columnWeights(table)
+            let grid = NSTextTable()
+            grid.numberOfColumns = table.columns
+            grid.collapsesBorders = true
+            grid.hidesEmptyCells = false
+            var cursor = table.location
+            for (index, cell) in table.cells.enumerated() {
+                let length = (cell as NSString).length
+                let range = NSRange(location: cursor, length: length + 1)
+                guard range.location >= 0, NSMaxRange(range) <= ns.length else { break }
+                let row = index / table.columns
+                let column = index % table.columns
+                let block = NSTextTableBlock(table: grid, startingRow: row, rowSpan: 1, startingColumn: column, columnSpan: 1)
+                let share = widths[column]
+                block.setValue(share, type: .percentageValueType, for: .width)
+                block.setWidth(4, type: .absoluteValueType, for: .padding)
+                let border = NSColor(calibratedWhite: ink.brightnessComponent > 0.6 ? 0.45 : 0.55, alpha: 1)
+                for edge in [NSRectEdge.minX, .maxX, .minY, .maxY] {
+                    block.setWidth(0.6, type: .absoluteValueType, for: .border, edge: edge)
+                    block.setBorderColor(border, for: edge)
+                }
+                if row == 0 {
+                    block.backgroundColor = ink.withAlphaComponent(0.08)
+                }
+                let style = NSMutableParagraphStyle()
+                style.lineSpacing = 3
+                style.textBlocks = [block]
+                base.addAttribute(.paragraphStyle, value: style, range: range)
+                if row == 0 {
+                    base.addAttribute(.font, value: headerFont, range: NSRange(location: cursor, length: length))
+                }
+                cursor += length + 1
+            }
+        }
+        return base
+    }
+
+    private static func paragraphRange(_ ns: NSString, _ textRange: NSRange) -> NSRange {
+        var length = textRange.length
+        let next = textRange.location + textRange.length
+        if next < ns.length, ns.character(at: next) == 10 {
+            length += 1
+        }
+        return NSRange(location: textRange.location, length: length)
+    }
+
+    private static func headingSize(_ level: Int, base: CGFloat) -> CGFloat {
+        switch level {
+        case 1: return base + 10
+        case 2: return base + 7
+        case 3: return base + 4
+        case 4: return base + 2
+        default: return base + 1
+        }
+    }
+
+    static func readerFont(name: String, size: CGFloat, weight: NSFont.Weight) -> NSFont {
+        switch name {
+        case "system":
+            return NSFont.systemFont(ofSize: size, weight: weight)
+        case "rounded", "":
+            let described = NSFont.systemFont(ofSize: size, weight: weight)
+                .fontDescriptor
+                .withDesign(.rounded)
+            if let described, let font = NSFont(descriptor: described, size: size) {
+                return font
+            }
+            return NSFont.systemFont(ofSize: size, weight: weight)
+        default:
+            return NSFont(name: name, size: size) ?? NSFont.systemFont(ofSize: size, weight: weight)
+        }
+    }
+
+    private static func columnWeights(_ table: HunterTableSpan) -> [CGFloat] {
+        var longest = Array(repeating: 1, count: table.columns)
+        for (index, cell) in table.cells.enumerated() {
+            let column = index % table.columns
+            longest[column] = max(longest[column], max(1, cell.count))
+        }
+        let sum = longest.reduce(0, +)
+        return longest.map { CGFloat($0) / CGFloat(sum) * 100 }
+    }
+}
+
 /// One selectable reader so click-and-drag can cover as much text as you like.
 struct HunterSelectView: NSViewRepresentable {
     var text: String
+    var tables: [HunterTableSpan] = []
+    var marks: [HunterMark] = []
     var pointSize: Double
+    var fontName: String = "rounded"
     var ink: NSColor
+    var muted: NSColor = .secondaryLabelColor
     var paper: NSColor
     var gathered: [NSRange]
     var markStamp: Int
@@ -976,9 +1400,11 @@ struct HunterSelectView: NSViewRepresentable {
         tv.drawsBackground = true
         tv.backgroundColor = paper
         tv.textColor = ink
-        tv.font = NSFont.systemFont(ofSize: pointSize)
-        tv.string = text
+        tv.font = HunterTableStyle.readerFont(name: fontName, size: pointSize, weight: .regular)
+        let styled = HunterTableStyle.apply(text, tables: tables, marks: marks, pointSize: pointSize, fontName: fontName, ink: ink, muted: muted)
+        tv.textStorage?.setAttributedString(styled)
         context.coordinator.appliedLength = (text as NSString).length
+        context.coordinator.appliedStyle = context.coordinator.styleKey(pointSize: pointSize, tables: tables, marks: marks, fontName: fontName, ink: ink, muted: muted)
         AppModel.paintHunterMarks(tv, ranges: gathered, search: searchMarks, current: currentMarks)
         tv.isVerticallyResizable = true
         tv.isHorizontallyResizable = false
@@ -999,13 +1425,16 @@ struct HunterSelectView: NSViewRepresentable {
         guard let tv = scroll.documentView as? NSTextView else { return }
         tv.backgroundColor = paper
         tv.textColor = ink
-        tv.font = NSFont.systemFont(ofSize: pointSize)
+        tv.font = HunterTableStyle.readerFont(name: fontName, size: pointSize, weight: .regular)
         context.coordinator.lineMap = lineMap
         context.coordinator.onTopLine = onTopLine
         let next = (text as NSString).length
-        if context.coordinator.appliedLength != next {
-            tv.string = text
+        let style = context.coordinator.styleKey(pointSize: pointSize, tables: tables, marks: marks, fontName: fontName, ink: ink, muted: muted)
+        if context.coordinator.appliedLength != next || context.coordinator.appliedStyle != style {
+            let styled = HunterTableStyle.apply(text, tables: tables, marks: marks, pointSize: pointSize, fontName: fontName, ink: ink, muted: muted)
+            tv.textStorage?.setAttributedString(styled)
             context.coordinator.appliedLength = next
+            context.coordinator.appliedStyle = style
             AppModel.paintHunterMarks(tv, ranges: gathered, search: searchMarks, current: currentMarks)
         }
         if context.coordinator.paintedStamp != markStamp || context.coordinator.searchStamp != searchStamp {
@@ -1035,6 +1464,21 @@ struct HunterSelectView: NSViewRepresentable {
 
     final class Coordinator {
         var appliedLength = -1
+        var appliedStyle = 0
+
+        func styleKey(pointSize: Double, tables: [HunterTableSpan], marks: [HunterMark], fontName: String, ink: NSColor, muted: NSColor) -> Int {
+            var hasher = Hasher()
+            hasher.combine(pointSize)
+            hasher.combine(fontName)
+            hasher.combine(tables.count)
+            hasher.combine(tables.first?.location ?? 0)
+            hasher.combine(tables.first?.columns ?? 0)
+            hasher.combine(marks.count)
+            hasher.combine(marks.reduce(0) { $0 &+ $1.location &+ $1.length })
+            hasher.combine(ink.hueComponent)
+            hasher.combine(muted.hueComponent)
+            return hasher.finalize()
+        }
         var scrollStamp = -1
         var paintedStamp = -1
         var searchStamp = -1

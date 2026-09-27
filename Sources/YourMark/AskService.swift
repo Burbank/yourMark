@@ -547,4 +547,110 @@ struct AskService {
         }
         return text
     }
+
+    /// Rejoin words a converter split (`Ma ny`). One batch at a time. Throws if a reply is unusable.
+    func rejoinLines(
+        _ items: [(line: String, before: String, after: String)],
+        settings: Settings
+    ) async throws -> [String] {
+        guard !items.isEmpty else { return [] }
+        let batchSize = 20
+        var out: [String] = []
+        var start = 0
+        while start < items.count {
+            let end = min(items.count, start + batchSize)
+            let batch = Array(items[start..<end])
+            let fixed = try await rejoinBatch(batch, settings: settings)
+            guard fixed.count == batch.count else {
+                throw YourMarkError.processFailed("Rejoin returned an unexpected reply. The file was not changed.")
+            }
+            out.append(contentsOf: fixed)
+            start = end
+        }
+        return out
+    }
+
+    private func rejoinBatch(
+        _ items: [(line: String, before: String, after: String)],
+        settings: Settings
+    ) async throws -> [String] {
+        let key = Self.normalizeKey(settings.apiKey)
+        guard !key.isEmpty else {
+            throw YourMarkError.processFailed("Add an Ask AI key in Settings first.")
+        }
+        let base = settings.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(base)/chat/completions") else {
+            throw YourMarkError.invalidInput("Ask base URL is not valid.")
+        }
+        let payload = items.map { item -> [String: String] in
+            [
+                "before": item.before,
+                "line": item.line,
+                "after": item.after,
+            ]
+        }
+        let dataIn = try JSONSerialization.data(withJSONObject: payload)
+        guard let list = String(data: dataIn, encoding: .utf8) else {
+            throw YourMarkError.processFailed("Could not prepare the lines.")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 90
+        let body: [String: Any] = [
+            "model": settings.model,
+            "max_tokens": 4096,
+            "temperature": 0,
+            "messages": [
+                [
+                    "role": "system",
+                    "content": "You rejoin words a PDF converter split with a space. Example: \"Ma ny\" becomes \"Many\". \"Wh en\" becomes \"When\". Reply with one JSON array of strings only, same count and order as the input lines. You may delete a space that sits inside one word. You may not paraphrase, add or drop words, change spelling, change a heading, or remove an HTML comment. before and after are context only — do not include them in the output. If a line is already fine, copy it unchanged. No markdown fences.",
+                ],
+                [
+                    "role": "user",
+                    "content": list,
+                ],
+            ],
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if let auth = Self.friendlyAuthError(code: code, body: data, key: key, provider: settings.provider) {
+            throw YourMarkError.processFailed(auth)
+        }
+        guard (200...299).contains(code) else {
+            throw YourMarkError.processFailed(Self.friendlyHTTPError(code: code, body: data, model: settings.model, provider: settings.provider))
+        }
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let choices = json?["choices"] as? [[String: Any]]
+        let message = choices?.first?["message"] as? [String: Any]
+        let text = message?["content"] as? String ?? ""
+        guard let parsed = Self.parseStringArray(text), parsed.count == items.count else {
+            throw YourMarkError.processFailed("Rejoin returned an unexpected reply. The file was not changed.")
+        }
+        return parsed
+    }
+
+    private static func parseStringArray(_ raw: String) -> [String]? {
+        guard let start = raw.firstIndex(of: "["), let end = raw.lastIndex(of: "]"), start <= end else {
+            return nil
+        }
+        let slice = String(raw[start...end])
+        guard let data = slice.data(using: .utf8),
+              let rows = try? JSONSerialization.jsonObject(with: data) as? [Any]
+        else { return nil }
+        var out: [String] = []
+        for row in rows {
+            if let s = row as? String {
+                out.append(s)
+            } else if let obj = row as? [String: Any], let s = obj["line"] as? String {
+                out.append(s)
+            } else {
+                return nil
+            }
+        }
+        return out
+    }
 }

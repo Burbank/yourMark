@@ -61,7 +61,7 @@ struct HelpView: View {
         convert += [
             (
                 "Tables",
-                "Real tables become Markdown tables.\nColours and merged cells flatten.\nDrawn “tables” that are only lines often become plain rows."
+                "Real tables become Markdown tables.\nColours and merged cells flatten.\nDrawn “tables” that are only lines often become plain rows.\nThe reader and the EPUB draw that table as a grid. A column that is empty in every row is dropped."
             ),
             (
                 "Pictures",
@@ -74,6 +74,14 @@ struct HelpView: View {
             (
                 "Bookmarks",
                 "The PDF’s own outline becomes Markdown headings — we keep that tree.\nThe item at the top of the page lights, including sub-chapters.\nA large tree starts collapsed.\nNo outline: large-font lines, then AI only if you tick it.\nTo change the tree, press Edit and open the Markdown in MarkEdit (or the editor you picked).\nThe bookmarks are the heading lines — #, ##, ###.\nRename, add, or delete those. More # marks means a lower level."
+            ),
+            (
+                "Make EPUB",
+                "Right-click a card → Make EPUB. Several selected cards write one EPUB each.\nThe reader has the same button, next to Finder.\nThe file sits beside the Markdown. Contents follow the headings.\nPictures in the figures folder go in. A missing picture is skipped.\nThe Markdown and the original PDF stay put."
+            ),
+            (
+                "Page numbers and split words",
+                "Settings → This document → Remove page numbers is off unless you turn it on.\nOn, a later convert hides a Page heading as a comment and drops a line that is only a number. Chapter headings stay. The PDF is not changed.\nApply to the open file does that once on the card you have open. Turning the switch off does not put page numbers back.\nThe hidden comment still points at the PDF page.\nA hyphen at the end of a line is joined on every convert.\nA blank line that splits a sentence is removed, including when the next word is a name. A real paragraph break stays.\nA title on its own line becomes a heading.\nRejoin sits to the right of Convert, and also in the reader, after you save an Ask key. It spends that key. This chapter is the start. Entire file can cost more.\nIt only rejoins a word the converter split, such as Ma ny. It does not rewrite the book.\nMake EPUB → Left, like Markdown is the usual page. The right edge stays uneven. Justified is the other choice."
             ),
         ]
 

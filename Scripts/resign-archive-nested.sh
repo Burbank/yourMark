@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Re-apply App Sandbox on nested Python executables inside an .app or .xcarchive.
+# Re-sign nested Python Mach-O (executables + dylibs) inside an .app or .xcarchive.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

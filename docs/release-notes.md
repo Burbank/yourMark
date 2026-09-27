@@ -2,6 +2,10 @@
 
 Drag yourMark onto Applications (follow the arrow). This disk is signed and notarized by Apple. First launch installs Microsoft MarkItDown from PyPI.
 
+**0.6.0** — Rendered draws a Markdown table as a grid and drops a column that is empty in every row. Make EPUB writes that table into an EPUB beside the Markdown. A plain-text copy of a table is removed, and a sentence that a table split is placed back above it. Hunter-Gatherer uses the same headings, bold, page marks, and tables. Foraging across two or more cells copies a Markdown table.
+
+Rejoin, beside Convert, repairs split words such as “Ma ny”. Every convert also joins a hyphen at the end of a line to the next line. Remove page numbers is its own switch under Remove headers and footers, off unless you turn it on. The regular reader lets a drag cross more than one sentence.
+
 **0.5.1** — Open or drop a Markdown file you already have; it skips the converter. Choose a folder on first launch; new `.md` files there appear in the library. Show in Finder highlights the little folder when there are pictures, so you can compress that for AI. Translate appears with a Google Translate key or an Ask AI key — either one is enough.
 
 **Translate** sits in the reader toolbar: pick From and To, then This chapter or Entire file. Below keeps the original; Replace shows only the translation. Save a copy writes a second file. The original Markdown is not overwritten. Convert still stays on this Mac.

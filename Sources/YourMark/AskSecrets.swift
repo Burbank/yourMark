@@ -13,6 +13,11 @@ enum AskSecrets {
         return dir.appendingPathComponent("ask-key")
     }
 
+    /// True when a key is already on disk. Does not read it, so launch stays quiet.
+    static func hasSavedKey() -> Bool {
+        FileManager.default.fileExists(atPath: fileURL.path)
+    }
+
     static func load() -> String {
         if let fromFile = readFile(), !fromFile.isEmpty {
             return fromFile

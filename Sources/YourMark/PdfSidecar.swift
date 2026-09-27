@@ -112,13 +112,15 @@ enum PdfSidecar {
 
     static func insertPageComments(_ markdown: String, pdf: URL?) -> String {
         let text = promotePageBreaks(markdown)
-        let existing = pageCommentMap(
-            text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        )
-        if existing.count >= 2 { return text }
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        // MarkItDown already wrote "## Page N", or we already have page comments.
+        // Guessing from the first matching sentence lands on the contents page.
+        if pageCommentMap(lines).count >= 2 || pageHeadingCount(lines) >= 2 {
+            return text
+        }
         guard let pdf, pdf.pathExtension.lowercased() == "pdf",
               let doc = PDFDocument(url: pdf), doc.pageCount > 0 else { return text }
-        var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var editable = lines
         let deadline = Date().addingTimeInterval(20)
         var cursor = 0
         var inserts: [(Int, Int)] = []
@@ -128,30 +130,31 @@ enum PdfSidecar {
             var found: Int?
             if let sample, sample.count >= 16 {
                 let needle = folded(sample)
-                found = lines[cursor...].firstIndex { line in
+                found = editable[cursor...].firstIndex { line in
+                    if isContentsLine(line) { return false }
                     let a = folded(line)
                     return a.contains(needle) || needle.contains(a) && a.count >= 16
                 }
             }
             if found == nil {
                 let remainPages = max(1, doc.pageCount - i)
-                let remainLines = max(1, lines.count - cursor)
-                found = min(lines.count, cursor + max(0, remainLines / remainPages))
+                let remainLines = max(1, editable.count - cursor)
+                found = min(editable.count, cursor + max(0, remainLines / remainPages))
             }
             if let at = found {
                 inserts.append((i + 1, at))
-                cursor = min(lines.count, at + 1)
+                cursor = min(editable.count, at + 1)
             }
         }
         guard !inserts.isEmpty else { return text }
         for (page, at) in inserts.reversed() {
-            let idx = min(max(0, at), lines.count)
-            let already = lines.indices.contains(idx) && lines[idx].contains("<!-- page")
-            let before = idx > 0 && lines[idx - 1].contains("<!-- page \(page)")
+            let idx = min(max(0, at), editable.count)
+            let already = editable.indices.contains(idx) && editable[idx].contains("<!-- page")
+            let before = idx > 0 && editable[idx - 1].contains("<!-- page \(page)")
             if already || before { continue }
-            lines.insert("<!-- page \(page) -->", at: idx)
+            editable.insert("<!-- page \(page) -->", at: idx)
         }
-        return lines.joined(separator: "\n")
+        return editable.joined(separator: "\n")
     }
 
     /// Insert the PDF outline as ATX headings at the matching page / title.
@@ -165,7 +168,7 @@ enum PdfSidecar {
             return (text, bookmarks)
         }
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var pageStarts = pageCommentMap(lines)
+        var pageStarts = pageStartMap(lines)
         if pageStarts.isEmpty, let pdf {
             pageStarts = pageLineMap(pdf: pdf, lines: lines, from: 0)
         }
@@ -178,22 +181,32 @@ enum PdfSidecar {
             let title = mark.title.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !title.isEmpty else { continue }
             let hashes = min(6, max(1, mark.level))
-            if let existing = indexOfHeading(title, in: lines, from: cursor) {
+            let pageLo = mark.pageIndex.flatMap { pageStarts[$0] }
+            let pageHi = mark.pageIndex.map { nextPageStart(after: $0, in: pageStarts, lineCount: lines.count) }
+            let searchFrom = pageLo ?? cursor
+            if let existing = indexOfHeading(title, in: lines, from: searchFrom),
+               pageHi == nil || existing < pageHi! {
                 located[order].lineIndex = existing
                 cursor = existing + 1
                 continue
             }
-            var found = indexOfTitle(title, in: lines, from: cursor)
-            if found == nil, let page = mark.pageIndex, let start = pageStarts[page] {
-                let end = nextPageStart(after: page, in: pageStarts, lineCount: lines.count)
-                found = indexOfTitle(title, in: lines, from: start, until: end) ?? start
+            // A known PDF page wins. Do not search the front of the file:
+            // the contents list repeats every title before the chapter does.
+            let at: Int
+            if let pageLo {
+                let hi = pageHi ?? lines.count
+                if let onPage = indexOfTitle(title, in: lines, from: pageLo, until: hi) {
+                    at = onPage
+                } else {
+                    at = min(pageLo + 1, lines.count)
+                }
+            } else if let later = indexOfTitle(title, in: lines, from: cursor) {
+                at = later
+            } else {
+                at = min(cursor, lines.count)
             }
-            if found == nil {
-                found = indexOfTitle(title, in: lines, from: 0)
-            }
-            let at = min(found ?? min(cursor, lines.count), lines.count)
             insertAt[at, default: []].append((order, hashes, title))
-            cursor = at
+            cursor = min(lines.count, at + 1)
         }
 
         var out: [String] = [
@@ -266,6 +279,40 @@ enum PdfSidecar {
         return chunks.joined(separator: "\n\n")
     }
 
+    /// 0-based PDF page → line. `## Page N` wins over a comment, because the
+    /// heading is where MarkItDown actually broke the page.
+    static func pageStartMap(_ lines: [String]) -> [Int: Int] {
+        var map = pageCommentMap(lines)
+        for (i, line) in lines.enumerated() {
+            guard let title = headingText(line), let n = printedPageNumber(title) else { continue }
+            map[n - 1] = i
+        }
+        return map
+    }
+
+    private static func pageHeadingCount(_ lines: [String]) -> Int {
+        lines.reduce(0) { count, line in
+            guard let title = headingText(line), printedPageNumber(title) != nil else { return count }
+            return count + 1
+        }
+    }
+
+    private static func printedPageNumber(_ title: String) -> Int? {
+        let t = folded(title)
+        guard t.hasPrefix("page ") else { return nil }
+        let rest = t.dropFirst("page ".count).trimmingCharacters(in: .whitespaces)
+        guard !rest.isEmpty, rest.allSatisfy(\.isNumber), let n = Int(rest), n > 0 else { return nil }
+        return n
+    }
+
+    /// Contents rows repeat the chapter title, then dot leaders or a page number.
+    static func isContentsLine(_ line: String) -> Bool {
+        if line.range(of: #"\.{3,}"#, options: .regularExpression) != nil { return true }
+        let t = line.trimmingCharacters(in: .whitespaces)
+        if headingText(line) != nil { return false }
+        return t.range(of: #"\s{2,}\d{1,4}\s*$"#, options: .regularExpression) != nil
+    }
+
     static func pageCommentMap(_ lines: [String]) -> [Int: Int] {
         var map: [Int: Int] = [:]
         for (i, line) in lines.enumerated() {
@@ -327,12 +374,16 @@ enum PdfSidecar {
     }
 
     private static func lineMatches(_ line: String, needle: String) -> Bool {
+        if isContentsLine(line) { return false }
         let a = folded(line)
         guard a.count >= 3 else { return false }
         if a == needle { return true }
         if a.hasPrefix(needle) {
             let rest = a.dropFirst(needle.count)
             return rest.isEmpty || rest.first?.isLetter == false
+        }
+        if needle.hasPrefix(a), a.count >= 16, !a.hasPrefix("page ") {
+            return true
         }
         if headingText(line) != nil { return false }
         if a.count > 120 { return false }
@@ -458,7 +509,7 @@ enum PdfSidecar {
             if Date() > deadline { break }
             if let sample = distinctiveLine(doc.page(at: i)?.string), sample.count >= 16 {
                 if let idx = lines[cursor...].firstIndex(where: {
-                    $0.localizedCaseInsensitiveContains(sample)
+                    !isContentsLine($0) && $0.localizedCaseInsensitiveContains(sample)
                 }) {
                     map[i] = idx
                     cursor = idx + 1
