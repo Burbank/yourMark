@@ -4,7 +4,7 @@
   <img src="docs/icon.jpg" width="112" height="112" alt="yourMark">
 </p>
 
-A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, ask about, translate, and share with an AI. The file never leaves this computer unless you press Ask or Translate.
+A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, ask about, translate, and share with an AI. The file never leaves this computer unless you press Ask or Translate. You can export that Markdown as an EPUB.
 
 **[Download yourMark-0.6.1.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.6.1.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
 
