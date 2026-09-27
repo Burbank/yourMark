@@ -4462,12 +4462,15 @@ final class AppModel {
 
     /// One EPUB per card, beside that Markdown. A failure is named and the rest still run.
     func makeEpubs(for items: [LibraryItem], align: String = "left") {
-        let jobs = items.map { EpubExport.Job(title: $0.title, path: $0.markdownPath, align: align) }
+        let jobs = items.map {
+            EpubExport.Job(title: $0.title, path: $0.markdownPath, align: align, sourcePath: $0.sourcePath)
+        }
         makeEpubJobs(jobs)
     }
 
     func makeEpub(title: String, path: String, align: String = "left") {
-        makeEpubJobs([EpubExport.Job(title: title, path: path, align: align)])
+        let source = library.first { $0.markdownPath == path }?.sourcePath ?? ""
+        makeEpubJobs([EpubExport.Job(title: title, path: path, align: align, sourcePath: source)])
     }
 
     private func makeEpubJobs(_ jobs: [EpubExport.Job]) {
@@ -4479,6 +4482,9 @@ final class AppModel {
         for job in jobs {
             let folder = URL(fileURLWithPath: job.path).deletingLastPathComponent()
             _ = FolderAccess.access(folder)
+            if !job.sourcePath.isEmpty {
+                _ = FolderAccess.access(URL(fileURLWithPath: job.sourcePath).deletingLastPathComponent())
+            }
         }
         statusText = jobs.count == 1
             ? L("Making EPUB…")
@@ -4784,7 +4790,8 @@ final class AppModel {
     nonisolated static func collapseSpacing(at path: String) -> PageNumberHide? {
         guard FileManager.default.isReadableFile(atPath: path),
               let text = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
-        let pass = PdfCleanup.collapseEmptyLines(text)
+        let prepared = PdfCleanup.joinLineEndHyphens(text)
+        let pass = PdfCleanup.collapseEmptyLines(prepared)
         let promoted = PdfCleanup.promoteSubheadings(pass.text)
         let columns = PdfCleanup.dropEmptyTableColumns(promoted)
         if columns.text == text { return nil }

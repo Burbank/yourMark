@@ -12,6 +12,45 @@ enum PdfFigures {
     static let folderSuffix = "-figures"
     static let folderName = "figures"
 
+    /// The front page of the PDF, as a JPEG. That is the book’s own cover art.
+    static func coverJPEG(at url: URL) -> Data? {
+        guard url.pathExtension.lowercased() == "pdf",
+              FileManager.default.isReadableFile(atPath: url.path) else { return nil }
+        return PdfWork.sync { drawCover(url) }
+    }
+
+    private static func drawCover(_ url: URL) -> Data? {
+        guard let doc = PDFDocument(url: url), let page = doc.page(at: 0) else { return nil }
+        let box = page.bounds(for: .cropBox)
+        guard box.width > 1, box.height > 1 else { return nil }
+        let scale = 1400 / box.width
+        let width = max(1, Int(box.width * scale))
+        let height = max(1, Int(box.height * scale))
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: space,
+                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+              ) else { return nil }
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        ctx.saveGState()
+        ctx.scaleBy(x: scale, y: scale)
+        ctx.translateBy(x: -box.origin.x, y: -box.origin.y)
+        page.draw(with: .cropBox, to: ctx)
+        ctx.restoreGState()
+        guard let image = ctx.makeImage() else { return nil }
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.86] as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return data as Data
+    }
+
     @discardableResult
     static func embed(
         markdownURL: URL,

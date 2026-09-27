@@ -342,7 +342,7 @@ enum PdfCleanup {
             out.append(line)
             i = j + 1
         }
-        return out.joined(separator: "\n")
+        return SplitWords.rejoinKnownWords(out.joined(separator: "\n"))
     }
 
     /// After bookmarks are placed: `## Page N` becomes `<!-- page N -->`,
@@ -1033,6 +1033,62 @@ enum SplitWords {
         return (before, after)
     }
 
+    /// `Wh en` becomes `When` when the two pieces are one real word.
+    /// Two real words side by side, such as `in to`, stay apart.
+    static func rejoinKnownWords(_ markdown: String) -> String {
+        var lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var fence = false
+        for i in lines.indices {
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                fence.toggle()
+                continue
+            }
+            if fence || trimmed.hasPrefix("<!--") { continue }
+            lines[i] = rejoinLine(lines[i])
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func rejoinLine(_ line: String) -> String {
+        let chars = Array(line)
+        var out = ""
+        var i = 0
+        while i < chars.count {
+            guard chars[i].isLetter else {
+                out.append(chars[i])
+                i += 1
+                continue
+            }
+            let start = i
+            while i < chars.count, chars[i].isLetter { i += 1 }
+            let first = String(chars[start..<i])
+            let canTry = (1...8).contains(first.count)
+                && i < chars.count && chars[i] == " "
+                && i + 1 < chars.count && chars[i + 1].isLetter && chars[i + 1].isLowercase
+            if canTry {
+                let secondStart = i + 1
+                var j = secondStart
+                while j < chars.count, chars[j].isLetter { j += 1 }
+                let second = String(chars[secondStart..<j])
+                let joined = (first + second).lowercased()
+                let firstKnown = words.contains(first.lowercased())
+                let secondKnown = words.contains(second.lowercased())
+                if (1...6).contains(second.count), words.contains(joined), !(firstKnown && secondKnown) {
+                    var word = joined
+                    if first.first?.isUppercase == true {
+                        word = word.prefix(1).uppercased() + word.dropFirst()
+                    }
+                    out += word
+                    i = j
+                    continue
+                }
+            }
+            out += first
+        }
+        return out
+    }
+
     /// Same letters means the model only removed spaces. Anything else stays.
     static func accept(original: String, proposed: String) -> String {
         let next = proposed.trimmingCharacters(in: .newlines)
@@ -1114,6 +1170,11 @@ enum PdfWork {
         q.setSpecific(key: key, value: 1)
         return q
     }()
+
+    static func sync<T>(_ body: () -> T) -> T {
+        if DispatchQueue.getSpecific(key: key) != nil { return body() }
+        return queue.sync(execute: body)
+    }
 
     static func runAsync<T: Sendable>(_ body: @escaping @Sendable () -> T) async -> T {
         await withCheckedContinuation { cont in

@@ -12,6 +12,7 @@ enum EpubExport {
         var title: String
         var path: String
         var align: String = "left"
+        var sourcePath: String = ""
     }
 
     struct Batch: Sendable {
@@ -25,7 +26,7 @@ enum EpubExport {
         for job in jobs {
             let url = URL(fileURLWithPath: job.path)
             do {
-                let out = try write(markdownURL: url, title: job.title, align: job.align)
+                let out = try write(markdownURL: url, title: job.title, align: job.align, sourcePath: job.sourcePath)
                 written.append(out.lastPathComponent)
             } catch {
                 let why = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -37,7 +38,7 @@ enum EpubExport {
 
     /// Writes `Name.epub` beside the Markdown. Does not replace the Markdown or a PDF.
     @discardableResult
-    static func write(markdownURL: URL, title: String, align: String = "left") throws -> URL {
+    static func write(markdownURL: URL, title: String, align: String = "left", sourcePath: String = "") throws -> URL {
         let md = markdownURL.standardizedFileURL
         guard FileManager.default.fileExists(atPath: md.path) else {
             throw ExportError.missingFile
@@ -56,7 +57,8 @@ enum EpubExport {
             markdown: text,
             baseURL: folder,
             title: title.isEmpty ? safeStem : title,
-            align: align
+            align: align,
+            sourcePDF: sourcePath.isEmpty ? nil : URL(fileURLWithPath: sourcePath)
         )
         let partial = folder.appendingPathComponent(".\(safeStem).epub.partial")
         do {
@@ -72,8 +74,8 @@ enum EpubExport {
         return dest
     }
 
-    static func package(markdown: String, baseURL: URL, title: String, align: String = "left") throws -> Data {
-        let lines = markdown
+    static func package(markdown: String, baseURL: URL, title: String, align: String = "left", sourcePDF: URL? = nil) throws -> Data {
+        let lines = PdfCleanup.joinLineEndHyphens(markdown)
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
             .split(separator: "\n", omittingEmptySubsequences: false)
@@ -82,12 +84,15 @@ enum EpubExport {
         var headings = scanHeadings(lines)
         let chapters = makeChapters(lines: lines, headings: &headings, bookTitle: bookTitle)
         var images = ImageStore()
+        let pages = pageFiles(lines: lines, chapters: chapters)
         var docs: [(file: String, title: String, xhtml: String)] = []
         for chapter in chapters {
             let body = render(
                 lines: lines,
                 range: chapter.range,
                 headings: headings,
+                file: chapter.file,
+                pages: pages,
                 base: baseURL,
                 images: &images
             )
@@ -97,6 +102,7 @@ enum EpubExport {
                 chapterDocument(title: chapter.title, body: body)
             ))
         }
+        let cover = sourcePDF.flatMap { PdfFigures.coverJPEG(at: $0) }
         let navNodes = navTree(headings: headings, chapters: chapters)
         let nav = navDocument(title: bookTitle, nodes: navNodes)
         var entries: [ZipEntry] = [
@@ -111,10 +117,15 @@ enum EpubExport {
         for image in images.ordered {
             entries.append(ZipEntry(name: "OEBPS/" + image.href, data: image.data))
         }
+        if let cover {
+            entries.append(ZipEntry(name: "OEBPS/images/cover.jpg", data: cover))
+            entries.append(ZipEntry(name: "OEBPS/cover.xhtml", data: Data(coverDocument(title: bookTitle).utf8)))
+        }
         let opf = packageDocument(
             title: bookTitle,
             chapters: chapters,
-            images: images.ordered
+            images: images.ordered,
+            hasCover: cover != nil
         )
         entries.insert(ZipEntry(name: "OEBPS/content.opf", data: Data(opf.utf8)), at: 3)
         return try Zip.write(entries)
@@ -334,10 +345,45 @@ enum EpubExport {
         return roots
     }
 
+    /// Printed page `N` lives in this spine file. The contents line links there.
+    private static func pageFiles(lines: [String], chapters: [Chapter]) -> [Int: String] {
+        var map: [Int: String] = [:]
+        for chapter in chapters {
+            let name = (chapter.file as NSString).lastPathComponent
+            for i in chapter.range {
+                guard let page = pageCommentNumber(lines[i]), map[page] == nil else { continue }
+                map[page] = name
+            }
+        }
+        return map
+    }
+
+    private static func pageCommentNumber(_ line: String) -> Int? {
+        let t = line.trimmingCharacters(in: .whitespaces)
+        guard t.hasPrefix("<!-- page "), t.hasSuffix("-->") else { return nil }
+        let inner = t.dropFirst(10).dropLast(3).trimmingCharacters(in: .whitespaces)
+        guard !inner.isEmpty, inner.allSatisfy(\.isNumber) else { return nil }
+        return Int(inner)
+    }
+
+    /// `Chapter 1: Title ........ 13` is a contents row, not a sentence.
+    private static func contentsEntry(_ line: String) -> (title: String, page: Int)? {
+        let t = line.trimmingCharacters(in: .whitespaces)
+        guard let regex = try? NSRegularExpression(pattern: #"^(.*?)\.{2,}\s*(\d{1,4})\s*$"#) else { return nil }
+        let ns = t as NSString
+        let full = NSRange(location: 0, length: ns.length)
+        guard let match = regex.firstMatch(in: t, range: full), match.numberOfRanges == 3 else { return nil }
+        let title = ns.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespaces)
+        guard title.count > 1, let page = Int(ns.substring(with: match.range(at: 2))) else { return nil }
+        return (title, page)
+    }
+
     private static func render(
         lines: [String],
         range: Range<Int>,
         headings: [Heading],
+        file: String,
+        pages: [Int: String],
         base: URL,
         images: inout ImageStore
     ) -> String {
@@ -402,6 +448,24 @@ enum EpubExport {
             }
 
             if trimmed.hasPrefix("<!--"), trimmed.hasSuffix("-->") {
+                if let page = pageCommentNumber(trimmed) {
+                    html += "<a id=\"page-\(page)\"></a>\n"
+                }
+                index += 1
+                continue
+            }
+
+            if let entry = contentsEntry(trimmed) {
+                flushPara()
+                closeLists()
+                let label = xmlEscape(entry.title) + " · " + String(entry.page)
+                if let target = pages[entry.page] {
+                    let here = (file as NSString).lastPathComponent
+                    let href = target == here ? "#page-\(entry.page)" : "\(target)#page-\(entry.page)"
+                    html += "<p class=\"tocline\"><a href=\"\(xmlEscape(href))\">\(label)</a></p>\n"
+                } else {
+                    html += "<p class=\"tocline\">\(label)</p>\n"
+                }
                 index += 1
                 continue
             }
@@ -785,7 +849,22 @@ enum EpubExport {
         return html
     }
 
-    private static func packageDocument(title: String, chapters: [Chapter], images: [StoredImage]) -> String {
+    private static func coverDocument(title: String) -> String {
+        """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+        <head>
+        <title>\(xmlEscape(title))</title>
+        <link rel="stylesheet" type="text/css" href="style.css"/>
+        </head>
+        <body class="coverpage">
+        <img src="images/cover.jpg" alt="\(xmlEscape(title))"/>
+        </body>
+        </html>
+        """
+    }
+
+    private static func packageDocument(title: String, chapters: [Chapter], images: [StoredImage], hasCover: Bool) -> String {
         let stamp = isoStamp(Date())
         let uid = "urn:uuid:\(UUID().uuidString.lowercased())"
         var manifest = """
@@ -793,6 +872,11 @@ enum EpubExport {
         <item id="css" href="style.css" media-type="text/css"/>
         """
         var spine = ""
+        if hasCover {
+            manifest += "\n<item id=\"cover\" href=\"cover.xhtml\" media-type=\"application/xhtml+xml\"/>"
+            manifest += "\n<item id=\"cover-img\" href=\"images/cover.jpg\" media-type=\"image/jpeg\" properties=\"cover-image\"/>"
+            spine += "<itemref idref=\"cover\"/>"
+        }
         for chapter in chapters {
             manifest += "\n<item id=\"\(chapter.manifestID)\" href=\"\(chapter.file)\" media-type=\"application/xhtml+xml\"/>"
             spine += "<itemref idref=\"\(chapter.manifestID)\"/>"
@@ -808,6 +892,7 @@ enum EpubExport {
         <dc:title>\(xmlEscape(title))</dc:title>
         <dc:language>und</dc:language>
         <meta property="dcterms:modified">\(stamp)</meta>
+        \(hasCover ? "<meta name=\"cover\" content=\"cover-img\"/>" : "")
         </metadata>
         <manifest>
         \(manifest)
@@ -834,6 +919,8 @@ enum EpubExport {
         let hyphens = align == "justify" ? "auto" : "manual"
         return """
         body { font-family: serif; line-height: 1.45; margin: 1em; }
+        body.coverpage { margin: 0; padding: 0; text-align: center !important; }
+        body.coverpage img { width: 100%; height: auto; }
         body, p, li, blockquote { text-align: \(mode) !important; hyphens: \(hyphens); -webkit-hyphens: \(hyphens); }
         img { max-width: 100%; height: auto; }
         table { border-collapse: collapse; margin: 1em 0; width: auto; max-width: 100%; table-layout: auto; }
@@ -842,6 +929,8 @@ enum EpubExport {
         pre { white-space: pre-wrap; font-family: monospace; text-align: left !important; }
         code { font-family: monospace; }
         h1, h2, h3, h4, h5, h6 { line-height: 1.2; text-align: left !important; }
+        p.tocline { margin: 0.35em 0; text-align: left !important; hyphens: manual; -webkit-hyphens: manual; }
+        p.tocline a { color: inherit; text-decoration: underline; }
         """
     }
 
