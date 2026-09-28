@@ -838,6 +838,15 @@ enum PdfCleanup {
         return false
     }
 
+    private static func markCount(_ line: String) -> Int {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        var n = 0
+        for ch in trimmed {
+            if ch == "#" { n += 1 } else { break }
+        }
+        return n
+    }
+
     private static func hashCount(_ line: String) -> Int {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         var n = 0
@@ -854,6 +863,309 @@ enum PdfCleanup {
             i -= 1
         }
         return nil
+    }
+
+    /// A Roman numeral under a chapter heading is the PDF’s chapter ornament.
+    /// The title lines under it repeat the heading, so they are removed and the
+    /// heading is what the reader shows. A heading that stopped mid-phrase
+    /// (“…and”, “…of the”) takes the next short line. A long sentence that was
+    /// marked as a heading goes back to body text.
+    static func tidyDisplayedHeadings(_ markdown: String) -> PageNumberHide {
+        let original = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let joined = joinSplitHeadings(original)
+        let absorbed = absorbRomanTitles(joined.text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))
+        let demoted = demoteSentenceHeadings(absorbed.text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))
+        let map = original.indices.map { index in
+            demoted.lineIndex(absorbed.lineIndex(joined.lineIndex(index)))
+        }
+        return PageNumberHide(text: demoted.text, oldToNew: map)
+    }
+
+    private static let danglingTitleWords: Set<String> = [
+        "and", "or", "the", "of", "a", "an", "as", "to", "for", "which", "where", "through", "but", "not", "yet"
+    ]
+
+    /// "…Corrupted and" / "Why Sons of God…" becomes one heading.
+    private static func joinSplitHeadings(_ lines: [String]) -> PageNumberHide {
+        var out: [String] = []
+        var resolved = Array(repeating: -1, count: lines.count)
+        var i = 0
+        while i < lines.count {
+            let line = lines[i]
+            if let title = PdfSidecar.headingText(line),
+               danglingTitleWords.contains(titleWords(title).last ?? ""),
+               let j = nextContentIndex(lines, after: i),
+               isShortTitleLine(lines[j]) {
+                let extra = PdfSidecar.headingText(lines[j]) ?? lines[j].trimmingCharacters(in: .whitespaces)
+                let marks = String(repeating: "#", count: markCount(line))
+                resolved[i] = out.count
+                out.append(marks + " " + title + " " + extra)
+                var k = i + 1
+                while k <= j {
+                    if k == j {
+                        resolved[k] = out.count - 1
+                    }
+                    k += 1
+                }
+                i = j + 1
+                continue
+            }
+            resolved[i] = out.count
+            out.append(line)
+            i += 1
+        }
+        fillUnresolved(&resolved, count: out.count)
+        return PageNumberHide(text: out.joined(separator: "\n"), oldToNew: resolved)
+    }
+
+    /// Drop "IV" and "The Failure of" / "Sensory Living" when the heading already says that.
+    private static func absorbRomanTitles(_ lines: [String]) -> PageNumberHide {
+        var drop = Set<Int>()
+        var i = 0
+        while i < lines.count {
+            guard isChapterRoman(lines[i]) else {
+                i += 1
+                continue
+            }
+            guard let heading = previousContentIndex(lines, before: i),
+                  PdfSidecar.headingText(lines[heading]) != nil
+            else {
+                i += 1
+                continue
+            }
+            drop.insert(i)
+            let target = titleWords(PdfSidecar.headingText(lines[heading]) ?? "")
+            var need = bag(target)
+            var j = i + 1
+            var taken: [Int] = []
+            while j < lines.count, !need.isEmpty {
+                if lines[j].trimmingCharacters(in: .whitespaces).isEmpty {
+                    j += 1
+                    continue
+                }
+                guard isShortTitleLine(lines[j]) || PdfSidecar.headingText(lines[j]) != nil else { break }
+                let piece = titleWords(PdfSidecar.headingText(lines[j]) ?? lines[j])
+                guard !piece.isEmpty, canTake(piece, from: &need) else { break }
+                taken.append(j)
+                j += 1
+            }
+            if need.isEmpty {
+                drop.formUnion(taken)
+                i = (taken.last ?? i) + 1
+            } else {
+                i += 1
+            }
+        }
+        return applyLineEdits(lines, drop: drop)
+    }
+
+    /// A heading that is really the start of a sentence goes back to the paragraph.
+    private static func demoteSentenceHeadings(_ lines: [String]) -> PageNumberHide {
+        var replace: [Int: String] = [:]
+        for i in lines.indices {
+            guard let title = PdfSidecar.headingText(lines[i]) else { continue }
+            if isCitationLine(title) {
+                replace[i] = title
+                continue
+            }
+            guard isSentenceHeading(title) else { continue }
+            guard let j = nextContentIndex(lines, after: i) else { continue }
+            let next = lines[j].trimmingCharacters(in: .whitespaces)
+            if PdfSidecar.headingText(next) != nil || next.hasPrefix("<!--") || next.hasPrefix("•") || next.hasPrefix("![") {
+                continue
+            }
+            let continues = titleWords(next).count >= 4 || titleWords(title).count >= 12
+            if continues {
+                replace[i] = title
+            }
+        }
+        return applyLineEdits(lines, replace: replace)
+    }
+
+    private static func isSentenceHeading(_ title: String) -> Bool {
+        if title.range(of: #"[.?!]\s+\S"#, options: .regularExpression) != nil { return true }
+        let count = titleWords(title).count
+        if count >= 14 { return true }
+        if count >= 10, title.contains(",") || title.contains("\"") || title.contains("“") { return true }
+        if count >= 8, danglingTitleWords.contains(titleWords(title).last ?? "") { return true }
+        return false
+    }
+
+    private static func isChapterRoman(_ line: String) -> Bool {
+        var text = line.trimmingCharacters(in: .whitespaces)
+        if text.hasSuffix(".") { text.removeLast() }
+        guard (1...7).contains(text.count) else { return false }
+        guard text.range(
+            of: #"^(M{0,3})(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$"#,
+            options: .regularExpression
+        ) != nil else { return false }
+        return true
+    }
+
+    private static func isShortTitleLine(_ line: String) -> Bool {
+        if PdfSidecar.headingText(line) != nil { return true }
+        let text = line.trimmingCharacters(in: .whitespaces)
+        if text.isEmpty || isChapterRoman(text) { return false }
+        if text.hasPrefix("<!--") || text.hasPrefix("![") || text.hasPrefix("|") || text.hasPrefix("•") { return false }
+        if text.hasPrefix("- ") || text.hasPrefix("* ") { return false }
+        if text.count > 60 { return false }
+        if let last = text.last, ".!?".contains(last) { return false }
+        let count = titleWords(text).count
+        return (1...10).contains(count)
+    }
+
+    private static func titleWords(_ text: String) -> [String] {
+        var folded = PdfSidecar.folded(text)
+        if let range = folded.range(of: #"^\d+(?:\.\d+)*\s+"#, options: .regularExpression) {
+            folded = String(folded[range.upperBound...])
+        }
+        folded = folded.replacingOccurrences(of: "’", with: "'")
+        return folded.split { !$0.isLetter && !$0.isNumber && $0 != "'" }.map(String.init)
+    }
+
+    private static func bag(_ words: [String]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for word in words { counts[word, default: 0] += 1 }
+        return counts
+    }
+
+    private static func canTake(_ words: [String], from need: inout [String: Int]) -> Bool {
+        var next = need
+        for word in words {
+            guard let count = next[word], count > 0 else { return false }
+            next[word] = count - 1
+            if next[word] == 0 { next.removeValue(forKey: word) }
+        }
+        need = next
+        return true
+    }
+
+    private static func nextContentIndex(_ lines: [String], after index: Int) -> Int? {
+        var i = index + 1
+        while i < lines.count {
+            if !lines[i].trimmingCharacters(in: .whitespaces).isEmpty { return i }
+            i += 1
+        }
+        return nil
+    }
+
+    private static func previousContentIndex(_ lines: [String], before index: Int) -> Int? {
+        var i = index - 1
+        while i >= 0 {
+            if !lines[i].trimmingCharacters(in: .whitespaces).isEmpty { return i }
+            i -= 1
+        }
+        return nil
+    }
+
+    private static func applyLineEdits(
+        _ lines: [String],
+        drop: Set<Int> = [],
+        replace: [Int: String] = [:]
+    ) -> PageNumberHide {
+        var out: [String] = []
+        var resolved = Array(repeating: -1, count: lines.count)
+        for i in lines.indices {
+            if drop.contains(i) { continue }
+            resolved[i] = out.count
+            out.append(replace[i] ?? lines[i])
+        }
+        // A dropped ornament belongs to the heading above it. Mapping it forward
+        // lands the bookmark on the first body line, and the heading sits just
+        // above the window.
+        var previous = 0
+        for i in lines.indices {
+            if resolved[i] >= 0 {
+                previous = resolved[i]
+            } else if drop.contains(i) {
+                resolved[i] = previous
+            }
+        }
+        fillUnresolved(&resolved, count: out.count)
+        return PageNumberHide(text: out.joined(separator: "\n"), oldToNew: resolved)
+    }
+
+    /// A heading parked on the previous chapter, with no words of its own before
+    /// the next heading, moves to the later line where its title actually starts.
+    /// Two outline entries often share one PDF page. The body that follows belongs
+    /// to whichever title shows up first.
+    static func relocateStolenHeadings(_ markdown: String) -> PageNumberHide {
+        let original = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var text = markdown
+        var combined = Array(original.indices)
+        var guardCount = 0
+        while guardCount < 8 {
+            guardCount += 1
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            guard let job = stolenHeading(in: lines) else { break }
+            let pass = moveHeading(lines, from: job.source, to: job.dest)
+            text = pass.text
+            combined = combined.map { pass.lineIndex($0) }
+        }
+        return PageNumberHide(text: text, oldToNew: combined)
+    }
+
+    /// The later of two stacked headings, when the text underneath is the earlier title.
+    private static func stolenHeading(in lines: [String]) -> (source: Int, dest: Int)? {
+        var i = 0
+        while i < lines.count {
+            guard PdfSidecar.headingText(lines[i]) != nil else {
+                i += 1
+                continue
+            }
+            var j = i + 1
+            while j < lines.count, lines[j].trimmingCharacters(in: .whitespaces).isEmpty {
+                j += 1
+            }
+            guard j < lines.count,
+                  PdfSidecar.headingText(lines[j]) != nil,
+                  markCount(lines[j]) <= markCount(lines[i])
+            else {
+                i += 1
+                continue
+            }
+            let earlier = PdfSidecar.headingText(lines[i]) ?? ""
+            let later = PdfSidecar.headingText(lines[j]) ?? ""
+            guard let firstHit = PdfSidecar.titleAnchor(earlier, in: lines, from: j + 1, until: lines.count),
+                  let dest = PdfSidecar.titleAnchor(later, in: lines, from: firstHit, until: lines.count),
+                  dest > j + 4
+            else {
+                i = j
+                continue
+            }
+            return (j, dest)
+        }
+        return nil
+    }
+
+    /// Replace the real title line with the heading, and delete the heading from its old place.
+    private static func moveHeading(_ lines: [String], from source: Int, to dest: Int) -> PageNumberHide {
+        guard source != dest, source >= 0, dest > source, dest < lines.count else {
+            return PageNumberHide(text: lines.joined(separator: "\n"), oldToNew: Array(lines.indices))
+        }
+        let heading = lines[source]
+        var out: [String] = []
+        var resolved = Array(repeating: -1, count: lines.count)
+        var placed = dest
+        let replacing = PdfSidecar.headingText(lines[dest]) != nil
+        for i in lines.indices {
+            if i == source { continue }
+            if i == dest, replacing {
+                placed = out.count
+                out.append(heading)
+                resolved[i] = placed
+                continue
+            }
+            if i == dest, !replacing {
+                placed = out.count
+                out.append(heading)
+            }
+            resolved[i] = out.count
+            out.append(lines[i])
+        }
+        resolved[source] = placed
+        fillUnresolved(&resolved, count: out.count)
+        return PageNumberHide(text: out.joined(separator: "\n"), oldToNew: resolved)
     }
 
     /// A line much longer than the file’s usual line is wrapped at a period or a comma,
@@ -1159,8 +1471,23 @@ enum PdfCleanup {
         return n
     }
 
+    /// A line that is only a citation, such as a name with a chapter and verse.
+    private static func isCitationLine(_ text: String) -> Bool {
+        var title = text.trimmingCharacters(in: .whitespaces)
+        if let heading = PdfSidecar.headingText(title) { title = heading }
+        title = title.trimmingCharacters(in: CharacterSet(charactersIn: "()[]“”\"'."))
+        guard (3...80).contains(title.count) else { return false }
+        let citation = #"(?:[1-3]\s+)?[A-Za-z][A-Za-z'’]*(?:\s+(?:of|the|and|[A-Za-z][A-Za-z'’]*)){0,3}\s+\d{1,3}\s*:\s*\d{1,3}(?:\s*[–—-]\s*\d{1,3})?"#
+        let parts = title.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard !parts.isEmpty else { return false }
+        return parts.allSatisfy { part in
+            part.range(of: "^\(citation)$", options: .regularExpression) != nil
+        }
+    }
+
     private static func isSubheading(_ line: String, prev: String, next: String) -> Bool {
         if line.isEmpty || headingLevel(line) > 0 { return false }
+        if isCitationLine(line) { return false }
         if line.hasPrefix("<!--") || line.hasPrefix("![") || line.hasPrefix("|") || line.hasPrefix(">") { return false }
         if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("•") { return false }
         if PdfSidecar.isContentsLine(line) { return false }

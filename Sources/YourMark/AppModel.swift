@@ -4161,8 +4161,15 @@ final class AppModel {
             text = PdfCleanup.promoteSubheadings(text)
             text = PdfCleanup.dropEmptyTableColumns(text).text
             let stitched = PdfSidecar.stitch(bookmarks: bookmarks, markdown: text, pdf: original)
-            var finalText = stitched.text
+            let placed = PdfCleanup.relocateStolenHeadings(stitched.text)
+            let tidy = PdfCleanup.tidyDisplayedHeadings(placed.text)
+            var finalText = tidy.text
             var located = stitched.bookmarks
+            for i in located.indices {
+                if let line = located[i].lineIndex {
+                    located[i].lineIndex = tidy.lineIndex(placed.lineIndex(line))
+                }
+            }
             if dropPages {
                 let pass = PdfCleanup.hidePageNumbers(finalText)
                 let originalCount = finalText.trimmingCharacters(in: .whitespacesAndNewlines).count
@@ -4799,6 +4806,7 @@ final class AppModel {
                 self.previewMarkdown = pack.text
                 self.previewLines = pack.lines
                 self.previewHeadings = pack.headings
+                self.snapBookmarksToHeadings(path: path)
                 self.previewBaseURL = pack.base
                 self.previewBackup = (pack.lines, pack.headings)
                 self.previewTruncated = pack.truncated
@@ -4833,17 +4841,19 @@ final class AppModel {
         let wrapped = PdfCleanup.wrapLongLines(pass.text)
         let promoted = PdfCleanup.promoteSubheadings(wrapped.text)
         let columns = PdfCleanup.dropEmptyTableColumns(promoted)
-        if columns.text == text {
+        let placed = PdfCleanup.relocateStolenHeadings(columns.text)
+        let tidy = PdfCleanup.tidyDisplayedHeadings(placed.text)
+        if tidy.text == text {
             for file in art.1 { try? FileManager.default.removeItem(at: file) }
             return nil
         }
         let before = text.trimmingCharacters(in: .whitespacesAndNewlines).count
-        let after = columns.text.trimmingCharacters(in: .whitespacesAndNewlines).count
+        let after = tidy.text.trimmingCharacters(in: .whitespacesAndNewlines).count
         if before > 200, after < before / 2 { return nil }
         let url = URL(fileURLWithPath: path)
         _ = FolderAccess.access(url.deletingLastPathComponent())
         do {
-            try columns.text.write(to: url, atomically: true, encoding: .utf8)
+            try tidy.text.write(to: url, atomically: true, encoding: .utf8)
         } catch {
             return nil
         }
@@ -4854,9 +4864,26 @@ final class AppModel {
             let fixed = repaired.lineIndex(pictured)
             let collapsed = pass.lineIndex(fixed)
             let broken = wrapped.lineIndex(collapsed)
-            return columns.lineIndex(broken)
+            let shifted = columns.lineIndex(broken)
+            return tidy.lineIndex(placed.lineIndex(shifted))
         }
-        return PageNumberHide(text: columns.text, oldToNew: composed)
+        return PageNumberHide(text: tidy.text, oldToNew: composed)
+    }
+
+    /// A bookmark remembers the heading line, so a click puts that heading at the top.
+    private func snapBookmarksToHeadings(path: String) {
+        guard let idx = library.firstIndex(where: { $0.markdownPath == path }) else { return }
+        var marks = library[idx].bookmarks
+        var changed = false
+        for i in marks.indices {
+            guard let line = headingLine(marks[i].title, in: previewLines), marks[i].lineIndex != line else { continue }
+            marks[i].lineIndex = line
+            changed = true
+        }
+        guard changed else { return }
+        library[idx].bookmarks = marks
+        saveLibrary()
+        PdfSidecar.writeSidecar(marks, nextTo: URL(fileURLWithPath: path))
     }
 
     private func applySpacingMap(_ pass: PageNumberHide, path: String) {
@@ -5007,6 +5034,9 @@ final class AppModel {
         visibleHeading[.main] = bookmark.title
         ignoreVisibleUntil = Date().addingTimeInterval(0.85)
         let line: Int? = {
+            if let heading = headingLine(bookmark.title, in: previewLines) {
+                return heading
+            }
             if let idx = bookmark.lineIndex, previewLines.contains(where: { $0.id == idx }) {
                 return idx
             }

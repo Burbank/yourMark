@@ -167,7 +167,7 @@ enum PdfSidecar {
         guard !bookmarks.isEmpty else {
             return (text, bookmarks)
         }
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var pageStarts = pageStartMap(lines)
         if pageStarts.isEmpty, let pdf {
             pageStarts = pageLineMap(pdf: pdf, lines: lines, from: 0)
@@ -184,12 +184,32 @@ enum PdfSidecar {
             let pageLo = mark.pageIndex.flatMap { pageStarts[$0] }
             let pageHi = mark.pageIndex.map { nextPageStart(after: $0, in: pageStarts, lineCount: lines.count) }
             let searchFrom = pageLo ?? cursor
-            if let existing = indexOfHeading(title, in: lines, from: searchFrom),
-               pageHi == nil || existing < pageHi! {
-                located[order].lineIndex = existing
-                cursor = existing + 1
+            // The next outline entry on a later page, not the next page break.
+            // Two chapters sometimes share one PDF page, and the real title
+            // can be split across lines many pages later.
+            let searchUntil = nextDistinctOutlineLine(
+                after: order,
+                bookmarks: bookmarks,
+                pageStarts: pageStarts,
+                lineCount: lines.count
+            )
+            let sharedPage = order > 0
+                && mark.pageIndex != nil
+                && mark.pageIndex == bookmarks[order - 1].pageIndex
+            if let hit = titleAnchor(title, in: lines, from: searchFrom, until: searchUntil) {
+                if headingText(lines[hit]) != nil {
+                    lines[hit] = String(repeating: "#", count: hashes) + " " + title
+                    located[order].lineIndex = hit
+                    cursor = hit + 1
+                    continue
+                }
+                insertAt[hit, default: []].append((order, hashes, title))
+                cursor = min(lines.count, hit + 1)
                 continue
             }
+            // A shared outline page is not a real start. Planting the heading
+            // there would swallow the previous chapter.
+            if sharedPage { continue }
             // A known PDF page wins. Do not search the front of the file:
             // the contents list repeats every title before the chapter does.
             let at: Int
@@ -324,6 +344,87 @@ enum PdfSidecar {
             }
         }
         return map
+    }
+
+    /// The line where the next outline entry with a later PDF page begins.
+    private static func nextDistinctOutlineLine(
+        after order: Int,
+        bookmarks: [ManualBookmark],
+        pageStarts: [Int: Int],
+        lineCount: Int
+    ) -> Int {
+        let page = bookmarks[order].pageIndex
+        for later in bookmarks.dropFirst(order + 1) {
+            guard let nextPage = later.pageIndex else { continue }
+            if let page, nextPage <= page { continue }
+            if let line = pageStarts[nextPage] { return line }
+        }
+        return lineCount
+    }
+
+    /// The first line of a title, including one that wraps ("What Keeps the Devil" / "in Business").
+    /// A leading outline number is ignored, so "5 What Keeps…" matches "What Keeps…".
+    static func titleAnchor(_ title: String, in lines: [String], from start: Int, until end: Int) -> Int? {
+        let needle = outlineCore(title)
+        guard needle.count >= 3 else { return nil }
+        let lo = min(max(0, start), lines.count)
+        let hi = min(max(lo, end), lines.count)
+        var i = lo
+        while i < hi {
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("<!--") || trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                i += 1
+                continue
+            }
+            if isContentsLine(lines[i]) {
+                i += 1
+                continue
+            }
+            if let heading = headingText(lines[i]),
+               outlineCore(heading) == needle || folded(heading) == folded(title) {
+                return i
+            }
+            if wrappedTitle(lines, from: i, until: hi, needle: needle) {
+                return i
+            }
+            i += 1
+        }
+        return nil
+    }
+
+    private static func outlineCore(_ title: String) -> String {
+        let folded = folded(title)
+        guard let range = folded.range(of: #"^\d+(?:\.\d+)*\s+"#, options: .regularExpression) else {
+            return folded
+        }
+        let core = String(folded[range.upperBound...])
+        return core.count >= 3 ? core : folded
+    }
+
+    /// True when this line plus the next one or two short lines are exactly the title.
+    private static func wrappedTitle(_ lines: [String], from index: Int, until hi: Int, needle: String) -> Bool {
+        var parts: [String] = []
+        var j = index
+        while j < hi, parts.count < 3 {
+            let trimmed = lines[j].trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("<!--") {
+                if parts.isEmpty { return false }
+                break
+            }
+            if trimmed.hasPrefix("![") || trimmed.hasPrefix("|") || trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                break
+            }
+            if isContentsLine(lines[j]) || trimmed.count > 80 { break }
+            let piece = headingText(lines[j]) ?? trimmed
+            parts.append(folded(piece))
+            if parts.count >= 2 {
+                let joined = parts.joined(separator: " ")
+                if joined == needle { return true }
+                if joined.count > needle.count { break }
+            }
+            j += 1
+        }
+        return false
     }
 
     private static func nextPageStart(after page: Int, in map: [Int: Int], lineCount: Int) -> Int {
