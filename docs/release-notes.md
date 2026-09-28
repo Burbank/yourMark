@@ -2,6 +2,8 @@
 
 Drag yourMark onto Applications (follow the arrow). This disk is signed and notarized by Apple. First launch installs Microsoft MarkItDown from PyPI.
 
+**0.6.2** — Opening a conversion cleans the page. A page number that appears twice is kept once, so a sentence is not cut in half. A header, footer, or site address that repeats, an empty page, and a small picture of a size that repeats are removed. A character the converter could not read is dropped. A large initial on its own line joins the word that follows. A heading that wrapped onto a second line is one heading again. A line much longer than the lines around it wraps at a period or a comma. Deleting a library card can also move that conversion’s files to the Trash. The original PDF stays.
+
 **0.6.1** — Make EPUB joins a split word such as “Wh en” when the two pieces are one real word. Two real words side by side stay apart. A contents line that ends in a page number is a link to that page, without the long row of dots. The front page of the original PDF is the cover: the thumbnail in the reader, and the first page of the EPUB. Make the EPUB again and copy that file to the device.
 
 **0.6.0** — Rendered draws a Markdown table as a grid and drops a column that is empty in every row. Make EPUB writes that table into an EPUB beside the Markdown. A plain-text copy of a table is removed, and a sentence that a table split is placed back above it. Hunter-Gatherer uses the same headings, bold, page marks, and tables. Foraging across two or more cells copies a Markdown table.

@@ -1680,18 +1680,28 @@ struct LibraryPanel: View {
             Button(model.L("Cancel"), role: .cancel) { model.cancelPendingDelete() }
             if model.pendingDeleteOffersGroup {
                 Button(model.L("This card only"), role: .destructive) {
-                    model.confirmPendingDelete(dontAskAgain: false)
+                    model.confirmPendingDelete(dontAskAgain: false, deleteFiles: false)
                 }
                 Button(model.L("This card and translations"), role: .destructive) {
-                    model.confirmDeleteWithTranslations()
+                    model.confirmDeleteWithTranslations(deleteFiles: false)
+                }
+                if model.pendingDeleteCanTrashFiles {
+                    Button(model.L("Delete card and files"), role: .destructive) {
+                        model.confirmPendingDelete(dontAskAgain: false, deleteFiles: true)
+                    }
                 }
             } else {
-                Button(model.L("Delete"), role: .destructive) {
-                    model.confirmPendingDelete(dontAskAgain: false)
+                Button(model.L("Delete card"), role: .destructive) {
+                    model.confirmPendingDelete(dontAskAgain: false, deleteFiles: false)
+                }
+                if model.pendingDeleteCanTrashFiles {
+                    Button(model.L("Delete card and files"), role: .destructive) {
+                        model.confirmPendingDelete(dontAskAgain: false, deleteFiles: true)
+                    }
                 }
                 if model.pendingDeleteItems.count == 1 {
                     Button(model.L("Delete and don't ask next time")) {
-                        model.confirmPendingDelete(dontAskAgain: true)
+                        model.confirmPendingDelete(dontAskAgain: true, deleteFiles: model.deleteFilesWithCard)
                     }
                 }
             }
@@ -3645,6 +3655,8 @@ struct EnginePanel: View {
                     }
                 ))
                 Text(model.L("Drops the repeating page title, page number, date, revision line, and header logos. Chapter headings and the real text stay. On by default — manuals look much cleaner."))
+                    .foregroundStyle(.secondary)
+                Text(model.L("A line that repeats at least ten times, an empty page, and a small picture of a size that repeats at least ten times are removed."))
                     .foregroundStyle(.secondary)
                 Toggle(model.L("Remove page numbers"), isOn: Binding(
                     get: { model.removePageNumbers },

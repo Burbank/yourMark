@@ -209,10 +209,7 @@ enum PdfSidecar {
             cursor = min(lines.count, at + 1)
         }
 
-        var out: [String] = [
-            "> \(bookmarks.count) bookmarks taken from the PDF — the same tree Preview.app shows. They are also headings in this file, so they survive if you open it elsewhere.",
-            "",
-        ]
+        var out: [String] = []
         var headingLine: [Int: Int] = [:]
         for i in 0...lines.count {
             if let batch = insertAt[i] {
@@ -236,7 +233,7 @@ enum PdfSidecar {
                 located[i].lineIndex = emitted
             } else if let old = located[i].lineIndex {
                 let ahead = insertAt.filter { $0.key <= old }.reduce(0) { $0 + $1.value.count * 3 }
-                located[i].lineIndex = old + 2 + ahead
+                located[i].lineIndex = old + ahead
             }
         }
         return (out.joined(separator: "\n"), located)
@@ -322,7 +319,7 @@ enum PdfSidecar {
                 .dropFirst("<!-- page ".count)
                 .dropLast(3)
                 .trimmingCharacters(in: .whitespaces)
-            if let n = Int(inner), n > 0 {
+            if let n = Int(inner), n > 0, map[n - 1] == nil {
                 map[n - 1] = i
             }
         }

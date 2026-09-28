@@ -901,14 +901,14 @@ final class AppModel {
             return
         }
         if unique.count == 1, skipSingleDeleteConfirm {
-            removeLibraryItems(unique)
+            removeLibraryItems(unique, deleteFiles: deleteFilesWithCard)
             return
         }
         pendingDeleteItems = unique
         showDeleteConfirm = true
     }
 
-    func confirmPendingDelete(dontAskAgain: Bool) {
+    func confirmPendingDelete(dontAskAgain: Bool, deleteFiles: Bool) {
         let items = pendingDeleteItems
         if dontAskAgain, items.count == 1, !pendingDeleteOffersGroup {
             setSkipSingleDeleteConfirm(true)
@@ -916,10 +916,10 @@ final class AppModel {
         pendingDeleteItems = []
         pendingDeleteOffersGroup = false
         showDeleteConfirm = false
-        removeLibraryItems(items)
+        removeLibraryItems(items, deleteFiles: deleteFiles)
     }
 
-    func confirmDeleteWithTranslations() {
+    func confirmDeleteWithTranslations(deleteFiles: Bool) {
         guard let master = pendingDeleteItems.first else {
             cancelPendingDelete()
             return
@@ -928,7 +928,7 @@ final class AppModel {
         pendingDeleteItems = []
         pendingDeleteOffersGroup = false
         showDeleteConfirm = false
-        removeLibraryItems(items)
+        removeLibraryItems(items, deleteFiles: deleteFiles)
     }
 
     func cancelPendingDelete() {
@@ -968,20 +968,28 @@ final class AppModel {
         return parts.joined(separator: "\n")
     }
 
+    var pendingDeleteCanTrashFiles: Bool {
+        let extra = pendingDeleteOffersGroup
+            ? (pendingDeleteItems.first.map { translationChildren(of: $0) } ?? [])
+            : []
+        return (pendingDeleteItems + extra).contains { item in
+            item.id != Self.guideID
+                && !Self.isForagePath(item.markdownPath)
+                && item.sourceName != "FORAGE"
+        }
+    }
+
     private var deleteConfirmDiskMessage: String {
         let items = pendingDeleteItems
         let forage = items.contains { Self.isForagePath($0.markdownPath) || $0.sourceName == "FORAGE" }
-        let many = items.count > 1 || pendingDeleteOffersGroup
-        if deleteFilesWithCard {
+        let many = items.count > 1
+        if pendingDeleteCanTrashFiles {
             if many {
                 return forage
-                    ? "This also deletes those converts’ Markdown, figures, and folders. Original PDFs stay. Forage notes stay on disk."
-                    : "This also deletes those converts’ Markdown, figures, and folders. Original PDFs stay."
+                    ? "Delete card and files moves those converts’ Markdown, figures, and folders to the Trash. Original PDFs stay. Forage notes stay on disk."
+                    : "Delete card and files moves those converts’ Markdown, figures, and folders to the Trash. Original PDFs stay."
             }
-            if let item = items.first, Self.isForagePath(item.markdownPath) || item.sourceName == "FORAGE" {
-                return "The forage note stays on disk. Delete it in Finder if you want it gone."
-            }
-            return "This also deletes the Markdown, figures, and that convert’s folder. The original PDF stays."
+            return "Delete card and files moves the Markdown, figures, and that folder to the Trash. The original PDF stays."
         }
         if many {
             return forage
@@ -3941,13 +3949,14 @@ final class AppModel {
                             stripChrome: stripChrome,
                             onStatus: onNative
                         )
+                        let marked = bookmarksAfterOrnaments(located, markdown: final)
                         await finishJob(
                             jobID: jobID,
                             markdown: final,
                             original: original,
                             usedOCR: scan,
                             pictures: pictures,
-                            bookmarks: located
+                            bookmarks: marked
                         )
                     } else {
                         let bookmarks = await loadBookmarks(work.url)
@@ -3989,7 +3998,8 @@ final class AppModel {
                         let bookmarks = await loadBookmarks(work.url)
                         let (url, located) = await finalizeMarkdown(output, original: original, bookmarks: bookmarks)
                         let pictures = await PdfFigures.materializeEmbedded(markdownURL: url)
-                        await finishJob(jobID: jobID, markdown: url, original: original, usedOCR: true, pictures: pictures, bookmarks: located)
+                        let marked = bookmarksAfterOrnaments(located, markdown: url)
+                        await finishJob(jobID: jobID, markdown: url, original: original, usedOCR: true, pictures: pictures, bookmarks: marked)
                         continue
                     }
                     if finishIfStopped(jobID) { return }
@@ -4093,13 +4103,14 @@ final class AppModel {
                             onStatus: onFig
                         )
                     }
+                    let marked = bookmarksAfterOrnaments(located, markdown: final)
                     await finishJob(
                         jobID: jobID,
                         markdown: final,
                         original: original,
                         usedOCR: usedOCR,
                         pictures: pictures,
-                        bookmarks: located
+                        bookmarks: marked
                     )
                     continue
                 }
@@ -4138,10 +4149,15 @@ final class AppModel {
 
     private func finalizeMarkdown(_ url: URL, original: URL, bookmarks: [ManualBookmark]) async -> (URL, [ManualBookmark]) {
         let dropPages = removePageNumbers
+        let stripLines = stripChrome
         let located = await PdfWork.runAsync { () -> [ManualBookmark] in
             guard var text = try? String(contentsOf: url, encoding: .utf8) else { return bookmarks }
             text = PdfCleanup.joinLineEndHyphens(text)
+            text = PdfCleanup.dropRepeatedPageMarks(text).text
+            text = PdfCleanup.dropRepeatingChrome(text, stripLines: stripLines).text
+            text = PdfCleanup.repairHeadingLayout(text).text
             text = PdfCleanup.collapseEmptyLines(text).text
+            text = PdfCleanup.wrapLongLines(text).text
             text = PdfCleanup.promoteSubheadings(text)
             text = PdfCleanup.dropEmptyTableColumns(text).text
             let stitched = PdfSidecar.stitch(bookmarks: bookmarks, markdown: text, pdf: original)
@@ -4250,6 +4266,20 @@ final class AppModel {
         } catch {
             statusText = "Could not save the searchable PDF"
         }
+    }
+
+    /// Drop small repeated pictures, then point each bookmark at the line that remains.
+    private func bookmarksAfterOrnaments(_ marks: [ManualBookmark], markdown: URL) -> [ManualBookmark] {
+        guard stripChrome, let pass = PdfFigures.stripRepeatedSmallArt(at: markdown) else { return marks }
+        let shifted = marks.map { mark in
+            var copy = mark
+            if let line = copy.lineIndex {
+                copy.lineIndex = pass.lineIndex(line)
+            }
+            return copy
+        }
+        PdfSidecar.writeSidecar(shifted, nextTo: markdown)
+        return shifted
     }
 
     private func finishJob(
@@ -4548,7 +4578,7 @@ final class AppModel {
         statusText = items.count == 1 ? "Moved 1 file" : "Moved \(items.count) files"
     }
 
-    func removeLibraryItems(_ items: [LibraryItem]) {
+    func removeLibraryItems(_ items: [LibraryItem], deleteFiles: Bool) {
         let ids = Set(items.map(\.id))
         guard !ids.isEmpty else { return }
         let next = library.first { !ids.contains($0.id) }
@@ -4561,7 +4591,7 @@ final class AppModel {
                 if isOpenForage(item) {
                     forgetOpenForageSession(keepLiveBoard: hunterOn)
                 }
-            } else if deleteFilesWithCard {
+            } else if deleteFiles {
                 removeConvertPackage(for: item, deleting: ids)
             }
             library.removeAll { $0.id == item.id }
@@ -4790,11 +4820,23 @@ final class AppModel {
     nonisolated static func collapseSpacing(at path: String) -> PageNumberHide? {
         guard FileManager.default.isReadableFile(atPath: path),
               let text = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+        let stripLines = UserDefaults.standard.object(forKey: "stripChrome") as? Bool ?? true
         let prepared = PdfCleanup.joinLineEndHyphens(text)
-        let pass = PdfCleanup.collapseEmptyLines(prepared)
-        let promoted = PdfCleanup.promoteSubheadings(pass.text)
+        let deduped = PdfCleanup.dropRepeatedPageMarks(prepared)
+        let chrome = PdfCleanup.dropRepeatingChrome(deduped.text, stripLines: stripLines)
+        let folder = URL(fileURLWithPath: path).deletingLastPathComponent()
+        let art = stripLines
+            ? PdfFigures.dropRepeatedSmallArt(markdown: chrome.text, directory: folder)
+            : (PageNumberHide(text: chrome.text, oldToNew: Array(0..<chrome.text.split(separator: "\n", omittingEmptySubsequences: false).count)), [URL]())
+        let repaired = PdfCleanup.repairHeadingLayout(art.0.text)
+        let pass = PdfCleanup.collapseEmptyLines(repaired.text)
+        let wrapped = PdfCleanup.wrapLongLines(pass.text)
+        let promoted = PdfCleanup.promoteSubheadings(wrapped.text)
         let columns = PdfCleanup.dropEmptyTableColumns(promoted)
-        if columns.text == text { return nil }
+        if columns.text == text {
+            for file in art.1 { try? FileManager.default.removeItem(at: file) }
+            return nil
+        }
         let before = text.trimmingCharacters(in: .whitespacesAndNewlines).count
         let after = columns.text.trimmingCharacters(in: .whitespacesAndNewlines).count
         if before > 200, after < before / 2 { return nil }
@@ -4805,9 +4847,14 @@ final class AppModel {
         } catch {
             return nil
         }
-        let composed = pass.oldToNew.map { collapsed in
-            let index = min(max(0, collapsed), max(0, columns.oldToNew.count - 1))
-            return columns.oldToNew.isEmpty ? collapsed : columns.oldToNew[index]
+        for file in art.1 { try? FileManager.default.removeItem(at: file) }
+        let composed = deduped.oldToNew.map { dropped in
+            let chromed = chrome.lineIndex(dropped)
+            let pictured = art.0.lineIndex(chromed)
+            let fixed = repaired.lineIndex(pictured)
+            let collapsed = pass.lineIndex(fixed)
+            let broken = wrapped.lineIndex(collapsed)
+            return columns.lineIndex(broken)
         }
         return PageNumberHide(text: columns.text, oldToNew: composed)
     }

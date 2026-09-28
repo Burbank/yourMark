@@ -75,7 +75,7 @@ enum EpubExport {
     }
 
     static func package(markdown: String, baseURL: URL, title: String, align: String = "left", sourcePDF: URL? = nil) throws -> Data {
-        let lines = PdfCleanup.joinLineEndHyphens(markdown)
+        let lines = PdfCleanup.dropRepeatedPageMarks(PdfCleanup.joinLineEndHyphens(markdown)).text
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
             .split(separator: "\n", omittingEmptySubsequences: false)

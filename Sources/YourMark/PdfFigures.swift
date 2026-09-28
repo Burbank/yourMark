@@ -334,6 +334,107 @@ enum PdfFigures {
         return written
     }
 
+    /// Small pictures that share a size at least ten times are ornaments.
+    /// The files and the Markdown lines that point at them are removed.
+    /// A picture that appears once, and a large figure, stay.
+    static func dropRepeatedSmallArt(markdown: String, directory: URL) -> (PageNumberHide, [URL]) {
+        let figDir = directory.appendingPathComponent(folderName, isDirectory: true)
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: figDir,
+            includingPropertiesForKeys: nil
+        )) ?? []
+        var small: [(url: URL, name: String, w: Int, h: Int)] = []
+        for url in files {
+            guard let size = pixelSize(url), size.w > 0, size.h > 0 else { continue }
+            if size.w * size.h >= 150_000 { continue }
+            small.append((url, url.lastPathComponent, size.w, size.h))
+        }
+        var remove = Set<String>()
+        var removeURLs: [URL] = []
+        var claimed = Set<String>()
+        for item in small where !claimed.contains(item.name) {
+            let group = small.filter { !claimed.contains($0.name) && similarArt(item, $0) }
+            guard group.count >= 10 else { continue }
+            for piece in group {
+                claimed.insert(piece.name)
+                remove.insert(piece.name)
+                removeURLs.append(piece.url)
+            }
+        }
+        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        if remove.isEmpty {
+            return (PageNumberHide(text: markdown, oldToNew: Array(lines.indices)), [])
+        }
+        var out: [String] = []
+        var resolved = Array(repeating: -1, count: lines.count)
+        for (i, line) in lines.enumerated() {
+            if let name = linkedFigureName(line), remove.contains(name) { continue }
+            out.append(line)
+            resolved[i] = out.count - 1
+        }
+        PdfCleanup.fillUnresolved(&resolved, count: out.count)
+        return (PageNumberHide(text: out.joined(separator: "\n"), oldToNew: resolved), removeURLs)
+    }
+
+    /// Rewrite the Markdown and delete the ornament files. Used after pictures are saved.
+    /// The map is nil when no line moved, so bookmarks stay where they are.
+    @discardableResult
+    static func stripRepeatedSmallArt(at markdownURL: URL) -> PageNumberHide? {
+        guard let text = try? String(contentsOf: markdownURL, encoding: .utf8) else { return nil }
+        let result = dropRepeatedSmallArt(
+            markdown: text,
+            directory: markdownURL.deletingLastPathComponent()
+        )
+        let changed = result.0.text != text
+        if changed {
+            do {
+                try result.0.text.write(to: markdownURL, atomically: true, encoding: .utf8)
+            } catch {
+                return nil
+            }
+        }
+        if changed || !result.1.isEmpty {
+            for url in result.1 {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+        return changed ? result.0 : nil
+    }
+
+    private static func pixelSize(_ url: URL) -> (w: Int, h: Int)? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any]
+        else { return nil }
+        let w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue ?? 0
+        let h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue ?? 0
+        guard w > 0, h > 0 else { return nil }
+        return (w, h)
+    }
+
+    private static func similarArt(
+        _ a: (url: URL, name: String, w: Int, h: Int),
+        _ b: (url: URL, name: String, w: Int, h: Int)
+    ) -> Bool {
+        let bw = max(a.w, b.w, 1)
+        let bh = max(a.h, b.h, 1)
+        return Double(abs(a.w - b.w)) / Double(bw) <= 0.15
+            && Double(abs(a.h - b.h)) / Double(bh) <= 0.15
+    }
+
+    private static func linkedFigureName(_ line: String) -> String? {
+        let t = line.trimmingCharacters(in: .whitespaces)
+        guard t.hasPrefix("!["), let mid = t.range(of: "](") else { return nil }
+        let after = t[mid.upperBound...]
+        guard let end = after.firstIndex(of: ")") else { return nil }
+        var path = String(after[..<end])
+        if let space = path.firstIndex(of: " ") {
+            path = String(path[..<space])
+        }
+        path = path.trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
+        let name = (path as NSString).lastPathComponent
+        return name.isEmpty ? nil : name
+    }
+
     private static func existingFigureCount(_ dir: URL) -> Int {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
         return names.filter {

@@ -310,10 +310,135 @@ enum PdfCleanup {
             .lowercased()
     }
 
+    /// A glyph the converter could not read is U+FFFD (the � mark). Drop it,
+    /// and the other characters that are not letters, marks, or punctuation.
+    /// A gap those marks left is closed. Fenced code is left alone.
+    static func dropUnrecognizedCharacters(_ markdown: String) -> String {
+        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var out: [String] = []
+        out.reserveCapacity(lines.count)
+        var fence = false
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if isFenceMarker(trimmed) {
+                fence.toggle()
+                out.append(line)
+                continue
+            }
+            if fence || !line.unicodeScalars.contains(where: isUnrecognized) {
+                out.append(line)
+                continue
+            }
+            var kept = ""
+            kept.unicodeScalars.reserveCapacity(line.unicodeScalars.count)
+            for scalar in line.unicodeScalars where !isUnrecognized(scalar) {
+                kept.unicodeScalars.append(scalar)
+            }
+            out.append(closeGap(kept))
+        }
+        return out.joined(separator: "\n")
+    }
+
+    private static func isUnrecognized(_ scalar: Unicode.Scalar) -> Bool {
+        let v = scalar.value
+        if v == 0xFFFD || v == 0xFFFC { return true }
+        if v == 0xFFFE || v == 0xFFFF { return true }
+        if (0xFDD0...0xFDEF).contains(v) { return true }
+        if v > 0xFFFF, (v & 0xFFFE) == 0xFFFE { return true }
+        if v < 0x20, v != 0x09, v != 0x0A, v != 0x0D { return true }
+        if (0x7F...0x9F).contains(v) { return true }
+        return false
+    }
+
+    /// The hole left by a run of missing glyphs becomes one space, or two
+    /// before a trailing page number so the contents row still reads as one.
+    private static func closeGap(_ line: String) -> String {
+        var squeezed = ""
+        squeezed.reserveCapacity(line.count)
+        var spaces = 0
+        for ch in line {
+            if ch == " " {
+                spaces += 1
+                continue
+            }
+            if spaces > 0 {
+                squeezed.append(" ")
+                spaces = 0
+            }
+            squeezed.append(ch)
+        }
+        if spaces > 0 { squeezed.append(" ") }
+        guard let regex = try? NSRegularExpression(pattern: #"\s(\d{1,4})\s*$"#) else { return squeezed }
+        let ns = squeezed as NSString
+        let full = NSRange(location: 0, length: ns.length)
+        guard let match = regex.firstMatch(in: squeezed, range: full), match.numberOfRanges == 2 else { return squeezed }
+        let number = ns.substring(with: match.range(at: 1))
+        let head = ns.substring(to: match.range.location).trimmingCharacters(in: .whitespaces)
+        guard !head.isEmpty else { return squeezed }
+        return head + "  " + number
+    }
+
+    /// A styled initial on its own line, `T` then `he final…`, becomes `The final…`.
+    /// A quote in front of the letter stays: `“A` then `ll roads` becomes `“All roads`.
+    /// The next line must begin with a lowercase letter, so a chapter number before a heading stays.
+    static func joinDropCaps(_ markdown: String) -> String {
+        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var out: [String] = []
+        var fence = false
+        var i = 0
+        while i < lines.count {
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+            if isFenceMarker(trimmed) {
+                fence.toggle()
+                out.append(lines[i])
+                i += 1
+                continue
+            }
+            if !fence, let cap = dropCapPieces(trimmed),
+               i + 1 < lines.count,
+               let joined = joinedDropCap(cap, next: lines[i + 1]) {
+                out.append(joined)
+                i += 2
+                continue
+            }
+            out.append(lines[i])
+            i += 1
+        }
+        return out.joined(separator: "\n")
+    }
+
+    private static func dropCapPieces(_ trimmed: String) -> (prefix: String, letter: Character)? {
+        var rest = trimmed
+        var prefix = ""
+        let openers: Set<Character> = ["\"", "“", "‘", "'", "«", "(", "["]
+        while let first = rest.first, openers.contains(first) {
+            prefix.append(first)
+            rest.removeFirst()
+        }
+        let closers: Set<Character> = ["\"", "”", "’", "'", "»", ")", "]"]
+        while let last = rest.last, closers.contains(last) {
+            rest.removeLast()
+        }
+        guard rest.count == 1, let letter = rest.first, letter.isLetter else { return nil }
+        return (prefix, letter)
+    }
+
+    private static func joinedDropCap(_ cap: (prefix: String, letter: Character), next: String) -> String? {
+        let nextTrim = next.trimmingCharacters(in: .whitespaces)
+        if nextTrim.isEmpty || isFenceMarker(nextTrim) { return nil }
+        if nextTrim.hasPrefix("#") || nextTrim.hasPrefix("<!--") || nextTrim.hasPrefix("![") || nextTrim.hasPrefix("|") {
+            return nil
+        }
+        guard let first = nextTrim.first, first.isLowercase else { return nil }
+        return cap.prefix + String(cap.letter) + nextTrim
+    }
+
     /// `king-` at the end of a line, then `dom`, becomes `kingdom`.
     /// A hyphen that already sits between words on one line is left alone.
     static func joinLineEndHyphens(_ markdown: String) -> String {
-        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let lines = joinDropCaps(dropUnrecognizedCharacters(markdown))
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
         var out: [String] = []
         var fence = false
         var i = 0
@@ -343,6 +468,522 @@ enum PdfCleanup {
             i = j + 1
         }
         return SplitWords.rejoinKnownWords(out.joined(separator: "\n"))
+    }
+
+    /// Keep the first `<!-- page N -->`. A later copy of the same number is
+    /// dropped, and so is a chapter title repeated as the first line of a page.
+    /// The sentence join that follows can then close the gap.
+    static func dropRepeatedPageMarks(_ markdown: String) -> PageNumberHide {
+        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var out: [String] = []
+        var resolved = Array(repeating: -1, count: lines.count)
+        var fence = false
+        var seenPages = Set<Int>()
+        var seenTitles = Set<String>()
+        var atPageStart = false
+        for (i, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if isFenceMarker(trimmed) {
+                fence.toggle()
+                out.append(line)
+                resolved[i] = out.count - 1
+                atPageStart = false
+                continue
+            }
+            if fence {
+                out.append(line)
+                resolved[i] = out.count - 1
+                continue
+            }
+            if let page = pageCommentNumber(trimmed) {
+                if seenPages.contains(page) { continue }
+                seenPages.insert(page)
+                out.append(line)
+                resolved[i] = out.count - 1
+                atPageStart = true
+                continue
+            }
+            if trimmed.isEmpty {
+                out.append(line)
+                resolved[i] = out.count - 1
+                continue
+            }
+            if atPageStart, isRepeatedRunningHeader(trimmed, seen: seenTitles) {
+                atPageStart = false
+                continue
+            }
+            atPageStart = false
+            if let title = PdfSidecar.headingText(line) {
+                rememberTitle(title, into: &seenTitles)
+            }
+            out.append(line)
+            resolved[i] = out.count - 1
+        }
+        fillUnresolved(&resolved, count: out.count)
+        return PageNumberHide(text: out.joined(separator: "\n"), oldToNew: resolved)
+    }
+
+    private static func pageCommentNumber(_ trimmed: String) -> Int? {
+        guard trimmed.hasPrefix("<!-- page "), trimmed.hasSuffix("-->") else { return nil }
+        let inner = trimmed
+            .dropFirst("<!-- page ".count)
+            .dropLast(3)
+            .trimmingCharacters(in: .whitespaces)
+        guard !inner.isEmpty, inner.allSatisfy(\.isNumber), let n = Int(inner), n > 0 else { return nil }
+        return n
+    }
+
+    private static func rememberTitle(_ title: String, into seen: inout Set<String>) {
+        let folded = PdfSidecar.folded(title)
+        guard !folded.isEmpty else { return }
+        seen.insert(folded)
+        let core = headingCore(folded)
+        guard core != folded, core.first?.isLetter == true else { return }
+        seen.insert(core)
+    }
+
+    /// "1.3 Introduction" and "7 MetaNoia" share a core with the running header.
+    private static func headingCore(_ folded: String) -> String {
+        guard let range = folded.range(of: #"^\d+(?:\.\d+)*\s+"#, options: .regularExpression) else {
+            return folded
+        }
+        return String(folded[range.upperBound...])
+    }
+
+    /// The first line of a page that repeats a heading already in the file.
+    private static func isRepeatedRunningHeader(_ trimmed: String, seen: Set<String>) -> Bool {
+        if trimmed.hasPrefix("![") || trimmed.hasPrefix("|") || trimmed.hasPrefix(">") { return false }
+        if PdfSidecar.isContentsLine(trimmed) { return false }
+        let title = PdfSidecar.headingText(trimmed) ?? trimmed
+        guard title.count <= 80 else { return false }
+        let folded = PdfSidecar.folded(title)
+        return folded.count >= 2 && seen.contains(folded)
+    }
+
+    static func fillUnresolved(_ resolved: inout [Int], count: Int) {
+        let fallback = count == 0 ? 0 : count - 1
+        var next = fallback
+        if !resolved.isEmpty {
+            for i in stride(from: resolved.count - 1, through: 0, by: -1) {
+                if resolved[i] >= 0 {
+                    next = resolved[i]
+                } else {
+                    resolved[i] = next
+                }
+            }
+        }
+    }
+
+    /// A whole line that repeats at least ten times, with more than one word,
+    /// is a header or footer. `stripLines` is the header switch. An empty page
+    /// marker is always dropped, so the sentence join can close the gap.
+    /// Page numbers are not renumbered.
+    static func dropRepeatingChrome(_ markdown: String, stripLines: Bool) -> PageNumberHide {
+        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var counts: [String: Int] = [:]
+        if stripLines {
+            var fence = false
+            for line in lines {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if isFenceMarker(trimmed) {
+                    fence.toggle()
+                    continue
+                }
+                if fence { continue }
+                if let key = chromeLineKey(trimmed) {
+                    counts[key, default: 0] += 1
+                }
+            }
+        }
+        let repeated = Set(counts.filter { $0.value >= 10 }.map(\.key))
+        let footerAddresses = repeated.filter(isFooterAddress)
+        var keptHeading = Set<String>()
+        var skipBlankAfterBanner = false
+        var mid: [String] = []
+        var toMid = Array(repeating: -1, count: lines.count)
+        var fence = false
+        for (i, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if isFenceMarker(trimmed) {
+                fence.toggle()
+                mid.append(line)
+                toMid[i] = mid.count - 1
+                continue
+            }
+            if fence {
+                mid.append(line)
+                toMid[i] = mid.count - 1
+                continue
+            }
+            if isBookmarkBanner(trimmed) {
+                skipBlankAfterBanner = true
+                continue
+            }
+            if skipBlankAfterBanner, trimmed.isEmpty {
+                skipBlankAfterBanner = false
+                continue
+            }
+            skipBlankAfterBanner = false
+            if stripLines, let key = chromeLineKey(trimmed), repeated.contains(key) {
+                if PdfSidecar.headingText(line) != nil, !keptHeading.contains(key) {
+                    keptHeading.insert(key)
+                    mid.append(line)
+                    toMid[i] = mid.count - 1
+                }
+                continue
+            }
+            let kept = stripLines ? stripGluedFooters(line, addresses: footerAddresses) : line
+            mid.append(kept)
+            toMid[i] = mid.count - 1
+        }
+
+        var drop = Set<Int>()
+        var fence2 = false
+        var i = 0
+        while i < mid.count {
+            let trimmed = mid[i].trimmingCharacters(in: .whitespaces)
+            if isFenceMarker(trimmed) {
+                fence2.toggle()
+                i += 1
+                continue
+            }
+            if fence2 || pageCommentNumber(trimmed) == nil {
+                i += 1
+                continue
+            }
+            var j = i + 1
+            var hasBody = false
+            while j < mid.count {
+                let next = mid[j].trimmingCharacters(in: .whitespaces)
+                if isFenceMarker(next) { break }
+                if pageCommentNumber(next) != nil { break }
+                if !next.isEmpty {
+                    hasBody = true
+                    break
+                }
+                j += 1
+            }
+            if !hasBody {
+                drop.insert(i)
+                for k in (i + 1)..<j { drop.insert(k) }
+                i = j
+            } else {
+                i += 1
+            }
+        }
+
+        var out: [String] = []
+        var midToOut = Array(repeating: -1, count: mid.count)
+        for (index, line) in mid.enumerated() where !drop.contains(index) {
+            out.append(line)
+            midToOut[index] = out.count - 1
+        }
+        var resolved = toMid.map { slot in
+            slot >= 0 && slot < midToOut.count ? midToOut[slot] : -1
+        }
+        fillUnresolved(&resolved, count: out.count)
+        return PageNumberHide(text: out.joined(separator: "\n"), oldToNew: resolved)
+    }
+
+    /// A header-sized line: more than one word, not a picture, table, or page marker.
+    private static func chromeLineKey(_ trimmed: String) -> String? {
+        if trimmed.isEmpty || trimmed.hasPrefix("![") || trimmed.hasPrefix("|") { return nil }
+        if pageCommentNumber(trimmed) != nil { return nil }
+        if PdfSidecar.isContentsLine(trimmed) { return nil }
+        let title = PdfSidecar.headingText(trimmed) ?? trimmed
+        guard title.count <= 80 else { return nil }
+        if isFooterAddress(title) {
+            return PdfSidecar.folded(title)
+        }
+        let words = title.split { $0.isWhitespace }.filter { $0.contains(where: \.isLetter) }
+        guard (2...14).contains(words.count) else { return nil }
+        let folded = PdfSidecar.folded(title)
+        guard folded.count >= 2 else { return nil }
+        return folded
+    }
+
+    /// A line that is only a web address, such as a site name repeated in the footer.
+    private static func isFooterAddress(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty || trimmed.contains(where: \.isWhitespace) { return false }
+        guard (8...80).contains(trimmed.count), trimmed.contains(".") else { return false }
+        var body = trimmed.lowercased()
+        if body.hasPrefix("https://") { body.removeFirst(8) }
+        else if body.hasPrefix("http://") { body.removeFirst(7) }
+        if body.hasPrefix("www.") { body.removeFirst(4) }
+        guard body.contains("."), !body.hasPrefix("."), !body.hasSuffix(".") else { return false }
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789.-")
+        return body.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
+    /// A footer address stuck to the end of a word, with no space, is peeled off.
+    /// A sentence that names the site on purpose, with a space before it, stays.
+    private static func stripGluedFooters(_ line: String, addresses: Set<String>) -> String {
+        guard !addresses.isEmpty else { return line }
+        var result = line
+        var changed = true
+        while changed {
+            changed = false
+            for address in addresses {
+                guard let range = result.range(of: address, options: .caseInsensitive) else { continue }
+                let before = result[..<range.lowerBound]
+                guard let prev = before.last, prev.isLetter else { continue }
+                result.removeSubrange(range)
+                changed = true
+                break
+            }
+        }
+        return result
+    }
+
+    private static func isBookmarkBanner(_ trimmed: String) -> Bool {
+        trimmed.hasPrefix(">") && trimmed.contains("bookmarks taken from the PDF")
+    }
+
+    /// Drop a line that only repeats the heading above it, and join a title
+    /// that wrapped so the last words became their own heading.
+    /// "Why Life Is Not Working—and Why Religion" / "Cannot Fix It"
+    /// becomes one heading.
+    static func repairHeadingLayout(_ markdown: String) -> PageNumberHide {
+        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var out: [String] = []
+        var resolved = Array(repeating: -1, count: lines.count)
+        var fence = false
+        var lastHeading = ""
+        var i = 0
+        while i < lines.count {
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+            if isFenceMarker(trimmed) {
+                fence.toggle()
+                out.append(lines[i])
+                resolved[i] = out.count - 1
+                i += 1
+                continue
+            }
+            if fence {
+                out.append(lines[i])
+                resolved[i] = out.count - 1
+                i += 1
+                continue
+            }
+            if PdfSidecar.headingText(trimmed) == nil, isHeadingEcho(trimmed, near: lastHeading) {
+                i += 1
+                continue
+            }
+            if let title = PdfSidecar.headingText(lines[i]),
+               let prev = lastContentIndex(out),
+               isWrappedTitle(out[prev], heading: title),
+               nextBodyContinues(lines, after: i) {
+                let level = hashCount(lines[i])
+                let lead = out[prev].trimmingCharacters(in: .whitespaces)
+                out[prev] = String(repeating: "#", count: level) + " " + lead + " " + title
+                lastHeading = lead + " " + title
+                i += 1
+                continue
+            }
+            if let title = PdfSidecar.headingText(lines[i]) {
+                lastHeading = title
+            }
+            out.append(lines[i])
+            resolved[i] = out.count - 1
+            i += 1
+        }
+        fillUnresolved(&resolved, count: out.count)
+        return PageNumberHide(text: out.joined(separator: "\n"), oldToNew: resolved)
+    }
+
+    private static func isHeadingEcho(_ trimmed: String, near heading: String) -> Bool {
+        if heading.isEmpty || trimmed.isEmpty { return false }
+        if trimmed.hasPrefix("![") || trimmed.hasPrefix("|") || trimmed.hasPrefix("<!--") { return false }
+        if PdfSidecar.isContentsLine(trimmed) { return false }
+        let line = PdfSidecar.folded(trimmed)
+        let core = headingCore(PdfSidecar.folded(heading))
+        return line == core || line == PdfSidecar.folded(heading)
+    }
+
+    /// A compound title wrapped before its last words. Two parallel lines that
+    /// start with the same word stay apart.
+    private static func isWrappedTitle(_ previous: String, heading: String) -> Bool {
+        let prev = previous.trimmingCharacters(in: .whitespaces)
+        if prev.isEmpty || PdfSidecar.headingText(prev) != nil { return false }
+        if prev.hasPrefix("<!--") || prev.hasPrefix("![") || prev.hasPrefix("|") { return false }
+        if endsSentence(prev) { return false }
+        guard let first = prev.first, first.isUppercase else { return false }
+        let prevWords = prev.split { $0.isWhitespace }
+        let headWords = heading.split { $0.isWhitespace }
+        guard (3...18).contains(prevWords.count), (1...6).contains(headWords.count) else { return false }
+        let folded = prev.lowercased()
+        let compound = folded.contains("—") || folded.contains("–")
+            || folded.range(of: #"\b(and|or)\b"#, options: .regularExpression) != nil
+        guard compound else { return false }
+        let prevFirst = prevWords[0].trimmingCharacters(in: .punctuationCharacters).lowercased()
+        let headFirst = headWords[0].trimmingCharacters(in: .punctuationCharacters).lowercased()
+        return prevFirst != headFirst
+    }
+
+    private static func nextBodyContinues(_ lines: [String], after index: Int) -> Bool {
+        var j = index + 1
+        while j < lines.count {
+            let trimmed = lines[j].trimmingCharacters(in: .whitespaces)
+            if isFenceMarker(trimmed) { return false }
+            if trimmed.isEmpty {
+                j += 1
+                continue
+            }
+            if PdfSidecar.headingText(trimmed) != nil { return false }
+            if trimmed.hasPrefix("<!--") || trimmed.hasPrefix("![") || trimmed.hasPrefix("|") { return false }
+            guard let first = trimmed.first, first.isLetter, first.isUppercase else { return false }
+            return trimmed.split { $0.isWhitespace }.count >= 4
+        }
+        return false
+    }
+
+    private static func hashCount(_ line: String) -> Int {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        var n = 0
+        for ch in trimmed {
+            if ch == "#" { n += 1 } else { break }
+        }
+        return min(6, max(2, n == 0 ? 2 : n))
+    }
+
+    private static func lastContentIndex(_ lines: [String]) -> Int? {
+        var i = lines.count - 1
+        while i >= 0 {
+            if !lines[i].trimmingCharacters(in: .whitespaces).isEmpty { return i }
+            i -= 1
+        }
+        return nil
+    }
+
+    /// A line much longer than the file’s usual line is wrapped at a period or a comma,
+    /// so it no longer jumps past the lines around it.
+    static func wrapLongLines(_ markdown: String) -> PageNumberHide {
+        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let usual = usualLineLength(lines)
+        let limit = max(usual + 28, Int((Double(usual) * 1.45).rounded()))
+        var out: [String] = []
+        var resolved = Array(repeating: -1, count: lines.count)
+        var fence = false
+        for (i, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if isFenceMarker(trimmed) {
+                fence.toggle()
+                out.append(line)
+                resolved[i] = out.count - 1
+                continue
+            }
+            if fence || !shouldWrap(trimmed, limit: limit) {
+                out.append(line)
+                resolved[i] = out.count - 1
+                continue
+            }
+            let pieces = wrapPieces(trimmed, usual: usual, limit: limit)
+            resolved[i] = out.count
+            let indent = String(line.prefix { $0 == " " || $0 == "\t" })
+            for (n, piece) in pieces.enumerated() {
+                out.append(n == 0 ? indent + piece : piece)
+            }
+        }
+        return PageNumberHide(text: out.joined(separator: "\n"), oldToNew: resolved)
+    }
+
+    private static func usualLineLength(_ lines: [String]) -> Int {
+        var lengths: [Int] = []
+        var fence = false
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if isFenceMarker(trimmed) {
+                fence.toggle()
+                continue
+            }
+            if fence || !isWrapProse(trimmed) { continue }
+            let n = trimmed.count
+            if (20...110).contains(n) { lengths.append(n) }
+        }
+        guard !lengths.isEmpty else { return 68 }
+        lengths.sort()
+        return lengths[lengths.count / 2]
+    }
+
+    private static func isWrapProse(_ trimmed: String) -> Bool {
+        if trimmed.isEmpty { return false }
+        if trimmed.hasPrefix("#") || trimmed.hasPrefix("<!--") || trimmed.hasPrefix("![") || trimmed.hasPrefix("|") { return false }
+        if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") { return false }
+        if PdfSidecar.isContentsLine(trimmed) { return false }
+        return true
+    }
+
+    private static func shouldWrap(_ trimmed: String, limit: Int) -> Bool {
+        isWrapProse(trimmed) && trimmed.count > limit
+    }
+
+    /// Break a long line into pieces near the usual length. A period wins, then a comma.
+    private static func wrapPieces(_ line: String, usual: Int, limit: Int) -> [String] {
+        var rest = line
+        var parts: [String] = []
+        while rest.count > limit {
+            guard let cut = wrapCut(rest, usual: usual, limit: limit) else { break }
+            let left = rest.prefix(cut).trimmingCharacters(in: .whitespaces)
+            let right = rest.dropFirst(cut).trimmingCharacters(in: .whitespaces)
+            if left.count < 12 || right.count < 12 { break }
+            parts.append(String(left))
+            rest = String(right)
+        }
+        if !rest.isEmpty { parts.append(rest) }
+        return parts.isEmpty ? [line] : parts
+    }
+
+    /// Index just after the break, so the punctuation stays on the first piece.
+    private static func wrapCut(_ line: String, usual: Int, limit: Int) -> Int? {
+        let chars = Array(line)
+        let minCut = max(16, usual / 2)
+        let ceiling = min(chars.count - 12, limit + 8)
+        var bestSentence: (at: Int, distance: Int)?
+        var bestComma: (at: Int, distance: Int)?
+        var bestSpace: (at: Int, distance: Int)?
+        var i = 0
+        while i < chars.count - 12 {
+            let ch = chars[i]
+            let boundary = ch == "." || ch == "!" || ch == "?" || ch == "," || ch == ";" || ch == ":"
+            if boundary, i + 1 < chars.count, chars[i + 1] == " ", i + 1 >= minCut, goodBreakWord(chars, before: i) {
+                let at = i + 2
+                let distance = abs(at - usual)
+                if ch == "." || ch == "!" || ch == "?" {
+                    if at <= ceiling, bestSentence == nil || distance < bestSentence!.distance {
+                        bestSentence = (at, distance)
+                    }
+                } else if at <= ceiling, bestComma == nil || distance < bestComma!.distance {
+                    bestComma = (at, distance)
+                }
+            }
+            if ch == " ", i + 1 >= minCut, i + 1 <= limit {
+                let at = i + 1
+                let distance = abs(at - usual)
+                if bestSpace == nil || distance < bestSpace!.distance {
+                    bestSpace = (at, distance)
+                }
+            }
+            i += 1
+        }
+        if let sentence = bestSentence {
+            return sentence.at
+        }
+        if let comma = bestComma {
+            return comma.at
+        }
+        return bestSpace?.at
+    }
+
+    /// Skip “Mr.” and “3.” so a short token is not treated as the end of a sentence.
+    private static func goodBreakWord(_ chars: [Character], before index: Int) -> Bool {
+        var j = index - 1
+        var count = 0
+        while j >= 0, chars[j].isLetter {
+            count += 1
+            j -= 1
+        }
+        return count >= 3
     }
 
     /// After bookmarks are placed: `## Page N` becomes `<!-- page N -->`,
