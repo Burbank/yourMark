@@ -1168,6 +1168,170 @@ enum PdfCleanup {
         return PageNumberHide(text: out.joined(separator: "\n"), oldToNew: resolved)
     }
 
+    /// A title set with a space between every letter is written the way the PDF
+    /// stores it. "Y O U R G I F T" becomes "YOUR GIFT", with the word spaces
+    /// the PDF already has. The line count does not change.
+    static func closeTrackedLetters(_ markdown: String, pdf: URL?) -> String {
+        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var fence = false
+        var needs = false
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if isFenceMarker(trimmed) {
+                fence.toggle()
+                continue
+            }
+            if fence { continue }
+            if trackedBody(of: line) != nil {
+                needs = true
+                break
+            }
+        }
+        guard needs, let pdf, let corpus = PdfWork.sync({ trackedCorpus(from: pdf) }) else { return markdown }
+        fence = false
+        var out: [String] = []
+        var changed = false
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if isFenceMarker(trimmed) {
+                fence.toggle()
+                out.append(line)
+                continue
+            }
+            if !fence, let fixed = restoredTrackedLine(line, corpus: corpus) {
+                out.append(fixed)
+                changed = true
+                continue
+            }
+            out.append(line)
+        }
+        return changed ? out.joined(separator: "\n") : markdown
+    }
+
+    private struct TrackedCorpus {
+        let chars: [Character]
+        let letterPos: [Int]
+        let key: String
+    }
+
+    private static func trackedCorpus(from pdf: URL) -> TrackedCorpus? {
+        guard pdf.pathExtension.lowercased() == "pdf",
+              let doc = PDFDocument(url: pdf),
+              doc.pageCount > 0 else { return nil }
+        var text = ""
+        for i in 0..<min(doc.pageCount, 800) {
+            if let page = doc.page(at: i)?.string {
+                text += page
+                text += "\n"
+            }
+        }
+        let chars = Array(text)
+        var pos: [Int] = []
+        var key = ""
+        key.reserveCapacity(chars.count)
+        for (i, ch) in chars.enumerated() {
+            guard ch.isLetter || ch.isNumber else { continue }
+            pos.append(i)
+            key.append(contentsOf: String(ch).uppercased())
+        }
+        guard key.count >= 8 else { return nil }
+        return TrackedCorpus(chars: chars, letterPos: pos, key: key)
+    }
+
+    /// Heading marks stay. The body is the spaced title, when this line is one.
+    private static func trackedBody(of line: String) -> (prefix: String, body: String)? {
+        let indent = String(line.prefix { $0 == " " || $0 == "\t" })
+        let trimmed = String(line.drop { $0 == " " || $0 == "\t" })
+        if trimmed.hasPrefix("<!--") || trimmed.hasPrefix("![") || trimmed.hasPrefix("|") || trimmed.hasPrefix(">") {
+            return nil
+        }
+        var marks = ""
+        var body = trimmed
+        var hashes = 0
+        for ch in trimmed {
+            if ch == "#" { hashes += 1 } else { break }
+        }
+        if (1...6).contains(hashes) {
+            let after = trimmed.dropFirst(hashes)
+            if after.first == " " {
+                marks = String(repeating: "#", count: hashes) + " "
+                body = String(after.drop { $0 == " " })
+            }
+        }
+        guard isTrackedBody(body) else { return nil }
+        return (indent + marks, body)
+    }
+
+    private static func isTrackedBody(_ body: String) -> Bool {
+        let parts = body.split(separator: " ").map(String.init)
+        guard parts.count >= 5, parts.allSatisfy(isThinToken) else { return false }
+        let letters = parts.filter { $0.first?.isLetter == true }.count
+        return letters >= 5
+    }
+
+    /// One letter, or a letter with a period stuck to it ("S.").
+    private static func isThinToken(_ part: String) -> Bool {
+        if part.count <= 1 { return true }
+        guard let first = part.first, first.isLetter || first.isNumber else { return false }
+        return part.dropFirst().allSatisfy { !$0.isLetter && !$0.isNumber }
+    }
+
+    private static func restoredTrackedLine(_ line: String, corpus: TrackedCorpus) -> String? {
+        guard let tracked = trackedBody(of: line),
+              let text = bestTrackedSlice(tracked.body, corpus: corpus),
+              !isTrackedBody(text) else { return nil }
+        return tracked.prefix + text
+    }
+
+    /// The PDF slice whose letters match, preferring the same capitals as the title.
+    private static func bestTrackedSlice(_ body: String, corpus: TrackedCorpus) -> String? {
+        let want = letterKey(body)
+        guard want.count >= 5, corpus.key.contains(want) else { return nil }
+        let sourceLetters = body.filter { $0.isLetter || $0.isNumber }
+        var search = corpus.key.startIndex
+        var best: (score: Int, span: Int, text: String)?
+        while search < corpus.key.endIndex,
+              let range = corpus.key.range(of: want, range: search..<corpus.key.endIndex) {
+            let start = corpus.key.distance(from: corpus.key.startIndex, to: range.lowerBound)
+            let end = corpus.key.distance(from: corpus.key.startIndex, to: range.upperBound) - 1
+            if start >= 0, end < corpus.letterPos.count {
+                var lo = corpus.letterPos[start]
+                var hi = corpus.letterPos[end]
+                while lo > 0, isTrackedGlue(corpus.chars[lo - 1]) { lo -= 1 }
+                while hi + 1 < corpus.chars.count, isTrackedGlue(corpus.chars[hi + 1]) { hi += 1 }
+                let collapsed = String(corpus.chars[lo...hi])
+                    .split { $0.isWhitespace }
+                    .joined(separator: " ")
+                if letterKey(collapsed) == want {
+                    let score = caseScore(sourceLetters, collapsed)
+                    let span = hi - lo
+                    if best == nil || score > best!.score || (score == best!.score && span < best!.span) {
+                        best = (score, span, collapsed)
+                    }
+                }
+            }
+            search = range.upperBound
+        }
+        return best?.text
+    }
+
+    private static func isTrackedGlue(_ ch: Character) -> Bool {
+        !ch.isWhitespace && !ch.isLetter && !ch.isNumber
+    }
+
+    private static func letterKey(_ text: String) -> String {
+        text.uppercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    private static func caseScore(_ source: String, _ slice: String) -> Int {
+        let found = slice.filter { $0.isLetter || $0.isNumber }
+        var score = 0
+        for (a, b) in zip(source, found) where a.isUppercase == b.isUppercase {
+            score += 1
+        }
+        return score
+    }
+
     /// A line much longer than the file’s usual line is wrapped at a period or a comma,
     /// so it no longer jumps past the lines around it.
     static func wrapLongLines(_ markdown: String) -> PageNumberHide {
@@ -2127,6 +2291,193 @@ enum SplitWords {
         "geen", "kan", "zal", "zou", "heb", "ben", "bent", "uw", "je", "ze", "er", "nu", "zo",
         "toch", "ik", "en",
     ]
+}
+
+/// Repeating margin lines, and a temporary PDF whose crop box hides them.
+struct MarginRead: Sendable {
+    var title = ""
+    var author = ""
+    var cropped: URL?
+
+    var record: BookRecord {
+        var next = BookRecord()
+        next.title = title
+        if !author.isEmpty { next.authors = [author] }
+        return next
+    }
+}
+
+extension PdfCleanup {
+    /// Lines in the top or bottom band that repeat across the book. When `writeCrop`
+    /// is set, a temporary PDF hides those lines. The original file is not changed.
+    static func readMargin(_ pdf: URL, writeCrop: Bool) -> MarginRead {
+        PdfWork.sync { readMarginLocked(pdf, writeCrop: writeCrop) }
+    }
+
+    private struct MarginHit {
+        var key: String
+        var text: String
+        var top: Bool
+        var minY: CGFloat
+        var maxY: CGFloat
+        var pageNumber: Bool
+    }
+
+    private static func readMarginLocked(_ pdf: URL, writeCrop: Bool) -> MarginRead {
+        guard pdf.pathExtension.lowercased() == "pdf",
+              let doc = PDFDocument(url: pdf),
+              doc.pageCount >= 3 else { return MarginRead() }
+        let pageCount = min(doc.pageCount, 800)
+        let need = max(3, Int((Double(pageCount) * 0.34).rounded(.up)))
+        var perPage: [[MarginHit]] = Array(repeating: [], count: pageCount)
+        var tallies: [String: (text: String, pages: Int)] = [:]
+        var numberedPages = 0
+
+        for index in 0..<pageCount {
+            guard let page = doc.page(at: index) else { continue }
+            let box = page.bounds(for: .cropBox)
+            guard box.height > 40, box.width > 40 else { continue }
+            let hits = marginHits(on: page, box: box)
+            if hits.contains(where: \.pageNumber) { numberedPages += 1 }
+            var seen = Set<String>()
+            for hit in hits where !hit.pageNumber && seen.insert(hit.key).inserted {
+                var tally = tallies[hit.key] ?? (hit.text, 0)
+                tally.pages += 1
+                if tally.text.isEmpty { tally.text = hit.text }
+                tallies[hit.key] = tally
+            }
+            perPage[index] = hits
+        }
+
+        let pageNumbersQualify = numberedPages >= need
+        var furniture = Set<String>()
+        for (key, tally) in tallies where tally.pages >= need {
+            furniture.insert(key)
+        }
+        var read = catalogFromMargin(tallies: tallies, need: need)
+        guard writeCrop, !furniture.isEmpty || pageNumbersQualify else { return read }
+        var changed = false
+        for index in 0..<pageCount {
+            guard let page = doc.page(at: index) else { continue }
+            let box = page.bounds(for: .cropBox)
+            let hits = perPage[index].filter { hit in
+                (pageNumbersQualify && hit.pageNumber) || furniture.contains(hit.key)
+            }
+            guard let crop = croppedBox(box, hits: hits), crop != box else { continue }
+            page.setBounds(crop, for: .cropBox)
+            changed = true
+        }
+        guard changed else { return read }
+        let dest = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yourmark-margin-\(UUID().uuidString).pdf")
+        if doc.write(to: dest) {
+            read.cropped = dest
+        }
+        return read
+    }
+
+    private static func marginHits(on page: PDFPage, box: CGRect) -> [MarginHit] {
+        guard let selection = page.selection(for: box) else { return [] }
+        let topCut = box.maxY - box.height * 0.18
+        let bottomCut = box.minY + box.height * 0.18
+        let maxHeight = box.height * 0.12
+        var hits: [MarginHit] = []
+        for line in selection.selectionsByLine() {
+            let bounds = line.bounds(for: page)
+            guard bounds.height > 0, bounds.height <= maxHeight, bounds.width > 0 else { continue }
+            let text = (line.string ?? "")
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { continue }
+            let mid = bounds.midY
+            let top = mid >= topCut
+            let bottom = mid <= bottomCut
+            guard top || bottom else { continue }
+            hits.append(MarginHit(
+                key: marginKey(text),
+                text: text,
+                top: top,
+                minY: bounds.minY,
+                maxY: bounds.maxY,
+                pageNumber: isMarginPageNumber(text)
+            ))
+        }
+        return hits
+    }
+
+    /// The line on the most pages is the title. A second, shorter line can be the author.
+    private static func catalogFromMargin(
+        tallies: [String: (text: String, pages: Int)],
+        need: Int
+    ) -> MarginRead {
+        let ranked = tallies.values
+            .filter { item in
+                item.pages >= need
+                    && !isMarginPageNumber(item.text)
+                    && !isMarginDate(item.text)
+                    && !isFooterAddress(item.text)
+                    && item.text.contains(where: \.isLetter)
+            }
+            .sorted { lhs, rhs in
+                if lhs.pages != rhs.pages { return lhs.pages > rhs.pages }
+                return lhs.text.count > rhs.text.count
+            }
+        guard let title = ranked.first else { return MarginRead() }
+        var read = MarginRead()
+        read.title = title.text
+        let titleKey = marginKey(title.text)
+        if let author = ranked.dropFirst().first(where: { item in
+            let words = item.text.split(whereSeparator: \.isWhitespace)
+            guard (2...4).contains(words.count) else { return false }
+            guard !item.text.contains(where: \.isNumber) else { return false }
+            guard item.text.count < title.text.count else { return false }
+            return marginKey(item.text) != titleKey
+        }) {
+            read.author = author.text
+        }
+        return read
+    }
+
+    private static func croppedBox(_ box: CGRect, hits: [MarginHit]) -> CGRect? {
+        let limitTop = box.maxY - box.height * 0.15
+        let limitBottom = box.minY + box.height * 0.15
+        var maxY = box.maxY
+        var minY = box.minY
+        if let lowest = hits.filter(\.top).map(\.minY).min() {
+            maxY = min(box.maxY, max(lowest - 6, limitTop))
+        }
+        if let highest = hits.filter({ !$0.top }).map(\.maxY).max() {
+            minY = max(box.minY, min(highest + 6, limitBottom))
+        }
+        guard maxY - minY >= box.height * 0.5 else { return nil }
+        guard maxY < box.maxY - 1 || minY > box.minY + 1 else { return nil }
+        return CGRect(x: box.minX, y: minY, width: box.width, height: maxY - minY)
+    }
+
+    private static func marginKey(_ text: String) -> String {
+        text.split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased()
+    }
+
+    private static func isMarginPageNumber(_ text: String) -> Bool {
+        let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !words.isEmpty, words.count <= 4, text.count <= 24 else { return false }
+        let digits = text.contains(where: \.isNumber)
+        guard digits else { return false }
+        let letters = text.filter(\.isLetter)
+        if letters.isEmpty { return true }
+        if text.lowercased().hasPrefix("page"), letters.count <= 4 { return true }
+        if words.count == 3, words[1].lowercased() == "of",
+           words[0].allSatisfy(\.isNumber), words[2].allSatisfy(\.isNumber) {
+            return true
+        }
+        return false
+    }
+
+    private static func isMarginDate(_ text: String) -> Bool {
+        let words = text.split(whereSeparator: \.isWhitespace)
+        guard words.count < 3 else { return false }
+        return text.range(of: #"\b(19|20)\d{2}\b"#, options: .regularExpression) != nil
+    }
 }
 
 /// PDFKit is not safe from Task.detached or from AppModel.init on the main thread

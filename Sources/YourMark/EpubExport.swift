@@ -75,12 +75,16 @@ enum EpubExport {
     }
 
     static func package(markdown: String, baseURL: URL, title: String, align: String = "left", sourcePDF: URL? = nil) throws -> Data {
-        let lines = PdfCleanup.dropRepeatedPageMarks(PdfCleanup.joinLineEndHyphens(markdown)).text
+        let peeled = BookMeta.peel(markdown)
+        var meta = BookMeta.mergeForEPUB(markdown: markdown, pdf: sourcePDF)
+        let lines = PdfCleanup.dropRepeatedPageMarks(PdfCleanup.joinLineEndHyphens(peeled.body)).text
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init)
-        let bookTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Untitled" : title
+        let cardTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bookTitle = meta.title.isEmpty ? (cardTitle.isEmpty ? "Untitled" : cardTitle) : meta.title
+        if meta.title.isEmpty { meta.title = bookTitle }
         var headings = scanHeadings(lines)
         let chapters = makeChapters(lines: lines, headings: &headings, bookTitle: bookTitle)
         var images = ImageStore()
@@ -122,7 +126,7 @@ enum EpubExport {
             entries.append(ZipEntry(name: "OEBPS/cover.xhtml", data: Data(coverDocument(title: bookTitle).utf8)))
         }
         let opf = packageDocument(
-            title: bookTitle,
+            meta: meta,
             chapters: chapters,
             images: images.ordered,
             hasCover: cover != nil
@@ -203,7 +207,9 @@ enum EpubExport {
         var used: Set<String> = []
         var inFence = false
         var fence: Character = "`"
+        let hidden = BookMeta.span(lines)
         for (index, line) in lines.enumerated() {
+            if let hidden, hidden.contains(index) { continue }
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
                 let mark: Character = trimmed.hasPrefix("~") ? "~" : "`"
@@ -864,9 +870,10 @@ enum EpubExport {
         """
     }
 
-    private static func packageDocument(title: String, chapters: [Chapter], images: [StoredImage], hasCover: Bool) -> String {
+    private static func packageDocument(meta: BookRecord, chapters: [Chapter], images: [StoredImage], hasCover: Bool) -> String {
         let stamp = isoStamp(Date())
         let uid = "urn:uuid:\(UUID().uuidString.lowercased())"
+        let metadata = BookMeta.opfMetadata(meta, uid: uid, modified: stamp, hasCover: hasCover)
         var manifest = """
         <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
         <item id="css" href="style.css" media-type="text/css"/>
@@ -888,11 +895,7 @@ enum EpubExport {
         <?xml version="1.0" encoding="UTF-8"?>
         <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
         <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-        <dc:identifier id="uid">\(xmlEscape(uid))</dc:identifier>
-        <dc:title>\(xmlEscape(title))</dc:title>
-        <dc:language>und</dc:language>
-        <meta property="dcterms:modified">\(stamp)</meta>
-        \(hasCover ? "<meta name=\"cover\" content=\"cover-img\"/>" : "")
+        \(metadata)
         </metadata>
         <manifest>
         \(manifest)

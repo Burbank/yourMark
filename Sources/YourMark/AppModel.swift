@@ -1431,7 +1431,7 @@ final class AppModel {
 
     If the PDF is a **scan** (no text layer), yourMark uses IBM **Docling** for layout — tables, columns, figures. That takes a little longer than a normal convert. Microsoft MarkItDown still handles ordinary PDFs. Pictures in a digital PDF are pulled into a `figures` folder inside a little folder named after the file. If Docling is missing, we fall back to OCRmyPDF / Apple Live Text.
 
-    Settings → **Remove headers and footers** (on by default) drops the repeating page title, page number, date, and header logos.
+    Settings → **Remove headers and footers** (on by default) leaves the repeating header and page number out of the chapter text. The book title and author from that header are kept in the record at the top when they were not already known.
 
     ## Picture links
 
@@ -3916,6 +3916,12 @@ final class AppModel {
                 var usedOCR = false
                 var ocrTempPDF: URL?
                 let isPDF = original.pathExtension.lowercased() == "pdf"
+                var headerFacts = BookRecord()
+                var headerMeasured = !(stripChrome && isPDF)
+                var cropTemp: URL?
+                defer {
+                    if let cropTemp { try? FileManager.default.removeItem(at: cropTemp) }
+                }
                 let pythonReady: Bool
                 if enginePath != nil {
                     pythonReady = true
@@ -4011,8 +4017,13 @@ final class AppModel {
                     statusText = "OCR done — converting \(original.lastPathComponent)…"
                 }
                 setJobPhase(jobID, "Markdown", detail: "Markdown — converting…")
+                let prepared = await prepareMarkItDownInput(input)
+                if let old = cropTemp { try? FileManager.default.removeItem(at: old) }
+                cropTemp = prepared.temporary
+                headerFacts.fillEmpty(from: prepared.facts)
+                headerMeasured = true
                 let url = try await service.convert(
-                    input: input,
+                    input: prepared.input,
                     output: output,
                     script: Bundle.main.url(forResource: "markitdown_convert", withExtension: "py"),
                     llmKey: (askReadPictures && askHasKey) ? AskSecrets.load() : "",
@@ -4056,8 +4067,13 @@ final class AppModel {
                             usedOCR = true
                             if prepared.url != work.url { ocrTempPDF = prepared.url }
                             if prepared.didOCR || prepared.url != work.url {
+                                let again = await prepareMarkItDownInput(prepared.url)
+                                if let old = cropTemp { try? FileManager.default.removeItem(at: old) }
+                                cropTemp = again.temporary
+                                headerFacts.fillEmpty(from: again.facts)
+                                headerMeasured = true
                                 _ = try await service.convert(
-                                    input: prepared.url,
+                                    input: again.input,
                                     output: output,
                                     script: Bundle.main.url(forResource: "markitdown_convert", withExtension: "py"),
                                     llmKey: "",
@@ -4091,7 +4107,12 @@ final class AppModel {
                         await service.enrichPDF(markdown: url, pdf: work.url, script: script)
                     }
                     let bookmarks = await loadBookmarks(work.url)
-                    let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
+                    let (final, located) = await finalizeMarkdown(
+                        url,
+                        original: original,
+                        bookmarks: bookmarks,
+                        header: headerMeasured ? headerFacts : nil
+                    )
                     keepSearchableIfWanted(temp: ocrTempPDF, original: work.url, markdown: final)
                     _ = await PdfFigures.materializeEmbedded(markdownURL: final)
                     pictures = 0
@@ -4147,9 +4168,33 @@ final class AppModel {
         }
     }
 
-    private func finalizeMarkdown(_ url: URL, original: URL, bookmarks: [ManualBookmark]) async -> (URL, [ManualBookmark]) {
+    /// A cropped copy for MarkItDown. Facts from the margin are filled only when a field is still empty.
+    private func prepareMarkItDownInput(_ url: URL) async -> (input: URL, facts: BookRecord, temporary: URL?) {
+        guard stripChrome, url.pathExtension.lowercased() == "pdf" else {
+            return (url, BookRecord(), nil)
+        }
+        let read = await PdfWork.runAsync { PdfCleanup.readMargin(url, writeCrop: true) }
+        return (read.cropped ?? url, read.record, read.cropped)
+    }
+
+    private func finalizeMarkdown(
+        _ url: URL,
+        original: URL,
+        bookmarks: [ManualBookmark],
+        header: BookRecord? = nil
+    ) async -> (URL, [ManualBookmark]) {
         let dropPages = removePageNumbers
         let stripLines = stripChrome
+        let headerFacts: BookRecord
+        if let header {
+            headerFacts = header
+        } else if stripLines, original.pathExtension.lowercased() == "pdf" {
+            headerFacts = await PdfWork.runAsync {
+                PdfCleanup.readMargin(original, writeCrop: false).record
+            }
+        } else {
+            headerFacts = BookRecord()
+        }
         let located = await PdfWork.runAsync { () -> [ManualBookmark] in
             guard var text = try? String(contentsOf: url, encoding: .utf8) else { return bookmarks }
             text = PdfCleanup.joinLineEndHyphens(text)
@@ -4163,7 +4208,7 @@ final class AppModel {
             let stitched = PdfSidecar.stitch(bookmarks: bookmarks, markdown: text, pdf: original)
             let placed = PdfCleanup.relocateStolenHeadings(stitched.text)
             let tidy = PdfCleanup.tidyDisplayedHeadings(placed.text)
-            var finalText = tidy.text
+            var finalText = PdfCleanup.closeTrackedLetters(tidy.text, pdf: original)
             var located = stitched.bookmarks
             for i in located.indices {
                 if let line = located[i].lineIndex {
@@ -4188,7 +4233,44 @@ final class AppModel {
             return located
         }
         let after = await maybeAddAIChapters(markdownURL: url, hasOutline: !located.isEmpty)
-        return (after, located)
+        let stamped = await stampBookRecord(markdownURL: after, pdf: original, bookmarks: located, header: headerFacts)
+        return (after, stamped)
+    }
+
+    /// Write the catalog record at the top of a new conversion and move bookmarks down with it.
+    private func stampBookRecord(
+        markdownURL: URL,
+        pdf: URL,
+        bookmarks: [ManualBookmark],
+        header: BookRecord
+    ) async -> [ManualBookmark] {
+        await Task.detached {
+            guard let text = try? String(contentsOf: markdownURL, encoding: .utf8) else { return bookmarks }
+            let peeled = BookMeta.peel(text)
+            var record = BookMeta.gather(pdf: pdf, markdown: peeled.body, header: header)
+            if record.title.isEmpty {
+                let name = record.sourceName.isEmpty ? pdf.lastPathComponent : record.sourceName
+                record.title = await Self.resolvedTitle(markdown: peeled.body, fallbackName: name)
+            }
+            guard let prefix = BookMeta.yamlPrefix(record) else { return bookmarks }
+            let combined = prefix + peeled.body
+            guard combined != text else { return bookmarks }
+            do {
+                try combined.write(to: markdownURL, atomically: true, encoding: .utf8)
+            } catch {
+                return bookmarks
+            }
+            let shift = BookMeta.newlineCount(prefix) - (peeled.raw.map { BookMeta.newlineCount($0) } ?? 0)
+            guard shift != 0 else { return bookmarks }
+            var marks = bookmarks
+            for i in marks.indices {
+                if let line = marks[i].lineIndex {
+                    marks[i].lineIndex = max(0, line + shift)
+                }
+            }
+            PdfSidecar.writeSidecar(marks, nextTo: markdownURL)
+            return marks
+        }.value
     }
 
     private func tidyPDFMarkdown(_ url: URL, pdf: URL) async {
@@ -4786,14 +4868,18 @@ final class AppModel {
         previewBackup = nil
         previewBaseURL = URL(fileURLWithPath: item.markdownPath).deletingLastPathComponent()
         let path = item.markdownPath
+        let pdfPath = item.sourcePath
         let scanHeadings = item.bookmarks.isEmpty
         let tidy = item.id != Self.guideID
         quietWatch(8)
         if tidy {
             _ = FolderAccess.access(URL(fileURLWithPath: path).deletingLastPathComponent())
+            if !pdfPath.isEmpty {
+                _ = FolderAccess.access(URL(fileURLWithPath: pdfPath).deletingLastPathComponent())
+            }
         }
         Task.detached {
-            let spacing = tidy ? AppModel.collapseSpacing(at: path) : nil
+            let spacing = tidy ? await AppModel.collapseSpacing(at: path, pdfPath: pdfPath) : nil
             let pack = AppModel.buildPreview(path: path, scanHeadings: scanHeadings)
             await MainActor.run {
                 guard gen == self.previewGen else { return }
@@ -4824,12 +4910,37 @@ final class AppModel {
         }
     }
 
+    /// A title for a record that still lacks one: the opening of the book, then the file name.
+    nonisolated static func resolvedTitle(markdown: String, fallbackName: String) async -> String {
+        let opening = BookMeta.titleSample(markdown)
+        let settings = askSettingsFromDefaults()
+        if let reply = await AskService().bookTitle(opening: opening, settings: settings),
+           let accepted = BookMeta.acceptedDocumentTitle(reply, in: opening) {
+            return accepted
+        }
+        return BookMeta.titleFromFileName(fallbackName)
+    }
+
+    nonisolated private static func askSettingsFromDefaults() -> AskService.Settings {
+        let provider = UserDefaults.standard.string(forKey: "askProvider") ?? "xai"
+        let model = UserDefaults.standard.string(forKey: "askModel")
+            ?? AskModels.defaultID(for: provider)
+        let base = UserDefaults.standard.string(forKey: "askBaseURL") ?? "https://api.x.ai/v1"
+        return AskService.Settings(
+            provider: provider,
+            model: model,
+            baseURL: base,
+            apiKey: AskSecrets.load()
+        )
+    }
+
     /// Remove blank lines that split a sentence. Returns nil when the file is already clean.
-    nonisolated static func collapseSpacing(at path: String) -> PageNumberHide? {
+    nonisolated static func collapseSpacing(at path: String, pdfPath: String? = nil) async -> PageNumberHide? {
         guard FileManager.default.isReadableFile(atPath: path),
               let text = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+        let peeled = BookMeta.peel(text)
         let stripLines = UserDefaults.standard.object(forKey: "stripChrome") as? Bool ?? true
-        let prepared = PdfCleanup.joinLineEndHyphens(text)
+        let prepared = PdfCleanup.joinLineEndHyphens(peeled.body)
         let deduped = PdfCleanup.dropRepeatedPageMarks(prepared)
         let chrome = PdfCleanup.dropRepeatingChrome(deduped.text, stripLines: stripLines)
         let folder = URL(fileURLWithPath: path).deletingLastPathComponent()
@@ -4843,22 +4954,60 @@ final class AppModel {
         let columns = PdfCleanup.dropEmptyTableColumns(promoted)
         let placed = PdfCleanup.relocateStolenHeadings(columns.text)
         let tidy = PdfCleanup.tidyDisplayedHeadings(placed.text)
-        if tidy.text == text {
+        let pdf = pdfPath.flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) }
+        let closed = PdfCleanup.closeTrackedLetters(tidy.text, pdf: pdf)
+        let existing = peeled.record ?? BookRecord()
+        let titleMissing = existing.title.isEmpty
+        let authorMissing = existing.authors.isEmpty
+        let prefix: String
+        if let raw = peeled.raw, !titleMissing, !authorMissing {
+            prefix = raw
+        } else if let raw = peeled.raw {
+            var title = existing.title
+            var author = ""
+            if titleMissing, let pdf { title = BookMeta.fromPDF(pdf).title }
+            if stripLines, (title.isEmpty || authorMissing), let pdf {
+                let margin = PdfCleanup.readMargin(pdf, writeCrop: false)
+                if title.isEmpty { title = margin.title }
+                if authorMissing { author = margin.author }
+            }
+            if title.isEmpty {
+                let named = existing.sourceName
+                let fallback = named.isEmpty ? URL(fileURLWithPath: path).lastPathComponent : named
+                title = await resolvedTitle(markdown: closed, fallbackName: fallback)
+            }
+            var next = raw
+            if titleMissing { next = BookMeta.prefixByAddingTitle(title, to: next) }
+            if authorMissing { next = BookMeta.prefixByAddingAuthor(author, to: next) }
+            prefix = next
+        } else {
+            let margin = (stripLines && pdf != nil) ? PdfCleanup.readMargin(pdf!, writeCrop: false).record : BookRecord()
+            var record = BookMeta.gather(pdf: pdf, markdown: closed, header: margin)
+            if record.title.isEmpty {
+                let name = record.sourceName.isEmpty
+                    ? URL(fileURLWithPath: path).lastPathComponent
+                    : record.sourceName
+                record.title = await resolvedTitle(markdown: closed, fallbackName: name)
+            }
+            prefix = BookMeta.yamlPrefix(record) ?? ""
+        }
+        let stamped = prefix + closed
+        if stamped == text {
             for file in art.1 { try? FileManager.default.removeItem(at: file) }
             return nil
         }
         let before = text.trimmingCharacters(in: .whitespacesAndNewlines).count
-        let after = tidy.text.trimmingCharacters(in: .whitespacesAndNewlines).count
+        let after = stamped.trimmingCharacters(in: .whitespacesAndNewlines).count
         if before > 200, after < before / 2 { return nil }
         let url = URL(fileURLWithPath: path)
         _ = FolderAccess.access(url.deletingLastPathComponent())
         do {
-            try tidy.text.write(to: url, atomically: true, encoding: .utf8)
+            try stamped.write(to: url, atomically: true, encoding: .utf8)
         } catch {
             return nil
         }
         for file in art.1 { try? FileManager.default.removeItem(at: file) }
-        let composed = deduped.oldToNew.map { dropped in
+        let bodyMap = deduped.oldToNew.map { dropped in
             let chromed = chrome.lineIndex(dropped)
             let pictured = art.0.lineIndex(chromed)
             let fixed = repaired.lineIndex(pictured)
@@ -4867,7 +5016,20 @@ final class AppModel {
             let shifted = columns.lineIndex(broken)
             return tidy.lineIndex(placed.lineIndex(shifted))
         }
-        return PageNumberHide(text: tidy.text, oldToNew: composed)
+        let blockLines = peeled.raw.map { BookMeta.newlineCount($0) } ?? 0
+        let prefixLines = BookMeta.newlineCount(prefix)
+        let originalCount = text.split(separator: "\n", omittingEmptySubsequences: false).count
+        var composed = Array(repeating: 0, count: max(originalCount, 1))
+        for i in composed.indices {
+            if blockLines > 0, i < blockLines {
+                composed[i] = min(i, max(prefixLines - 1, 0))
+            } else {
+                let bodyIndex = i - blockLines
+                let dest = bodyMap.indices.contains(bodyIndex) ? bodyMap[bodyIndex] : (bodyMap.last ?? 0)
+                composed[i] = dest + prefixLines
+            }
+        }
+        return PageNumberHide(text: stamped, oldToNew: composed)
     }
 
     /// A bookmark remembers the heading line, so a click puts that heading at the top.
@@ -4973,8 +5135,10 @@ final class AppModel {
     nonisolated static func headings(from lines: [PreviewLine]) -> [ManualBookmark] {
         var headings: [ManualBookmark] = []
         var used = Set<String>()
+        let hidden = BookMeta.span(lines.map(\.text))
         for (i, row) in lines.enumerated() {
             if headings.count >= 180 { break }
+            if let hidden, hidden.contains(i) { continue }
             let probe = row.text.hasPrefix(TranslateService.marker)
                 ? String(row.text.dropFirst(TranslateService.marker.count))
                 : row.text

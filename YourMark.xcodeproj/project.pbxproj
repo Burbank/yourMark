@@ -10,6 +10,7 @@
 		5A2E620FFA2CA72E9EF14293 /* AskModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA86A23C9ED020380108DCBD /* AskModels.swift */; };
 		172626DCE6F4A8AA8CE6B276 /* AskSecrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A914DAC33A3AFF01D6A3C8EE /* AskSecrets.swift */; };
 		ECCCAD9D9E34AA8AA344EAFB /* AskService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C5F4E0E9C026C9C7EE94249 /* AskService.swift */; };
+		7DF4DFB653B1A81F46CBB82E /* BookMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0296DEB78B74D86A60B2757 /* BookMeta.swift */; };
 		82FDB5029E6F8623BBAF7240 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB3E48D4B9BABC5FB05CF463 /* ContentView.swift */; };
 		8BAB1E90D8AF949EDCB1C572 /* ConvertNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 557DC280ECDA15D4C9661AC6 /* ConvertNotice.swift */; };
 		735CEED51B4B1C951D53C5D6 /* CrashReports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 667C493D64A302D1687CEEDC /* CrashReports.swift */; };
@@ -69,6 +70,7 @@
 		FA86A23C9ED020380108DCBD /* AskModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskModels.swift; sourceTree = "<group>"; };
 		A914DAC33A3AFF01D6A3C8EE /* AskSecrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskSecrets.swift; sourceTree = "<group>"; };
 		5C5F4E0E9C026C9C7EE94249 /* AskService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskService.swift; sourceTree = "<group>"; };
+		E0296DEB78B74D86A60B2757 /* BookMeta.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookMeta.swift; sourceTree = "<group>"; };
 		CB3E48D4B9BABC5FB05CF463 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		557DC280ECDA15D4C9661AC6 /* ConvertNotice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConvertNotice.swift; sourceTree = "<group>"; };
 		667C493D64A302D1687CEEDC /* CrashReports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReports.swift; sourceTree = "<group>"; };
@@ -129,6 +131,7 @@
 				FA86A23C9ED020380108DCBD /* AskModels.swift */,
 				A914DAC33A3AFF01D6A3C8EE /* AskSecrets.swift */,
 				5C5F4E0E9C026C9C7EE94249 /* AskService.swift */,
+				E0296DEB78B74D86A60B2757 /* BookMeta.swift */,
 				CB3E48D4B9BABC5FB05CF463 /* ContentView.swift */,
 				557DC280ECDA15D4C9661AC6 /* ConvertNotice.swift */,
 				667C493D64A302D1687CEEDC /* CrashReports.swift */,
@@ -263,6 +266,7 @@
 				5A2E620FFA2CA72E9EF14293 /* AskModels.swift in Sources */,
 				172626DCE6F4A8AA8CE6B276 /* AskSecrets.swift in Sources */,
 				ECCCAD9D9E34AA8AA344EAFB /* AskService.swift in Sources */,
+				7DF4DFB653B1A81F46CBB82E /* BookMeta.swift in Sources */,
 				82FDB5029E6F8623BBAF7240 /* ContentView.swift in Sources */,
 				8BAB1E90D8AF949EDCB1C572 /* ConvertNotice.swift in Sources */,
 				735CEED51B4B1C951D53C5D6 /* CrashReports.swift in Sources */,
@@ -338,7 +342,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/YourMark.direct.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 74;
 				DEVELOPMENT_TEAM = R4SB7G9A32;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -348,7 +352,7 @@
 				INFOPLIST_KEY_NSHighResolutionCapable = YES;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.6.3;
+				MARKETING_VERSION = 0.6.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.burbank.yourmark;
 				PRODUCT_NAME = yourMark;
 				SDKROOT = macosx;
@@ -364,7 +368,7 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/YourMark.direct.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 74;
 				DEVELOPMENT_TEAM = R4SB7G9A32;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -374,7 +378,7 @@
 				INFOPLIST_KEY_NSHighResolutionCapable = YES;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.6.3;
+				MARKETING_VERSION = 0.6.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.burbank.yourmark;
 				PRODUCT_NAME = yourMark;
 				SDKROOT = macosx;
@@ -390,14 +394,14 @@
 				CODE_SIGN_ENTITLEMENTS = Resources/YourMark.mas.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 74;
 				DEVELOPMENT_TEAM = R4SB7G9A32;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Resources/Info-mas.plist";
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.6.3;
+				MARKETING_VERSION = 0.6.4;
 				PRODUCT_BUNDLE_IDENTIFIER = com.burbank.yourmark;
 				PRODUCT_NAME = yourMark;
 				PROVISIONING_PROFILE_SPECIFIER = "";

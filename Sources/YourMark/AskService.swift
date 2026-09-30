@@ -495,6 +495,46 @@ struct AskService {
         return scored.prefix(3).map { $0.0 }.joined(separator: "\n\n")
     }
 
+    /// The book's title from its opening pages. Nil when there is no key, or the reply is unusable.
+    func bookTitle(opening: String, settings: Settings) async -> String? {
+        let key = Self.normalizeKey(settings.apiKey)
+        let sample = String(opening.prefix(6_000))
+        guard !key.isEmpty, sample.count >= 40 else { return nil }
+        let base = settings.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(base)/chat/completions") else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: 12)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let body: [String: Any] = [
+            "model": settings.model,
+            "max_tokens": 60,
+            "temperature": 0,
+            "messages": [
+                [
+                    "role": "system",
+                    "content": "You read the opening of a book and reply with its title only. One line. No quotes, no author, no explanation. Use the title as it is written in the text. If the title is not there, reply UNKNOWN.",
+                ],
+                [
+                    "role": "user",
+                    "content": sample,
+                ],
+            ],
+        ]
+        guard let payload = try? JSONSerialization.data(withJSONObject: body) else { return nil }
+        request.httpBody = payload
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else { return nil }
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200...299).contains(code),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any],
+              let text = message["content"] as? String
+        else { return nil }
+        return text
+    }
+
     /// Insert ## / ### headings where chapters clearly start. Does not rewrite body text.
     func inferChapters(markdown: String, settings: Settings) async throws -> String {
         let sample = String(markdown.prefix(18_000))

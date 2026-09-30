@@ -6,7 +6,7 @@
 
 A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, ask about, translate, and share with an AI. The file never leaves this computer unless you press Ask or Translate. You can export that Markdown as an EPUB.
 
-**[Download yourMark-0.6.3.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.6.3.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
+**[Download yourMark-0.6.4.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.6.4.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
 
 [Test a simpler version in your browser](https://burbank.github.io/yourMark/) (preview only — no OCR)
 
