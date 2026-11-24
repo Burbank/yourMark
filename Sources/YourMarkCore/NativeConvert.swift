@@ -8,6 +8,7 @@ public enum NativeConvert {
         input: URL,
         output: URL,
         ocr: Bool,
+        ocrLanguage: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
     ) async throws -> URL {
         let ext = input.pathExtension.lowercased()
@@ -17,7 +18,13 @@ public enum NativeConvert {
         )
         switch ext {
         case "pdf":
-            try await OcrService.writeAppleMarkdown(from: input, to: output, ocr: ocr, onStatus: onStatus)
+            try await OcrService.writeAppleMarkdown(
+                from: input,
+                to: output,
+                ocr: ocr,
+                ocrLanguage: ocrLanguage,
+                onStatus: onStatus
+            )
         case "md", "txt":
             onStatus("Copying text…")
             let text = try String(contentsOf: input, encoding: .utf8)
@@ -43,7 +50,7 @@ public enum NativeConvert {
             try officeXML(input, member: "xl/sharedStrings.xml").write(to: output, atomically: true, encoding: .utf8)
         case "jpg", "jpeg", "png", "gif", "tif", "tiff", "webp":
             onStatus("Reading the picture with Live Text…")
-            try await imageMarkdown(input).write(to: output, atomically: true, encoding: .utf8)
+            try await imageMarkdown(input, ocrLanguage: ocrLanguage).write(to: output, atomically: true, encoding: .utf8)
         default:
             throw YourMarkError.invalidInput(
                 "This App Store build converts PDF, Word, slides, Excel, pictures, and text. The GitHub Mac app still uses Microsoft MarkItDown for the rest."
@@ -133,8 +140,8 @@ public enum NativeConvert {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func imageMarkdown(_ url: URL) async throws -> String {
-        let text = await liveText(imageURL: url)
+    private static func imageMarkdown(_ url: URL, ocrLanguage: String) async throws -> String {
+        let text = await liveText(imageURL: url, ocrLanguage: ocrLanguage)
         let name = url.deletingPathExtension().lastPathComponent
         var parts = ["# \(name)", ""]
         if text.isEmpty {
@@ -146,16 +153,17 @@ public enum NativeConvert {
         return parts.joined(separator: "\n")
     }
 
-    private static func liveText(imageURL: URL) async -> String {
+    private static func liveText(imageURL: URL, ocrLanguage: String) async -> String {
         guard let img = NSImage(contentsOf: imageURL),
               let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil)
         else { return "" }
+        let languages = visionRecognitionLanguages(for: ocrLanguage)
         return await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
                 let request = VNRecognizeTextRequest()
                 request.recognitionLevel = .accurate
                 request.usesLanguageCorrection = true
-                request.recognitionLanguages = ["en-US"]
+                request.recognitionLanguages = languages
                 let handler = VNImageRequestHandler(cgImage: cg, options: [:])
                 let text: String
                 do {

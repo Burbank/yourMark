@@ -18,7 +18,8 @@ let package = Package(
         // Core library (non-UI conversion logic)
         .target(
             name: "YourMarkCore",
-            path: "Sources/YourMarkCore"
+            path: "Sources/YourMarkCore",
+            swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         
         // GUI app
@@ -27,8 +28,8 @@ let package = Package(
             dependencies: ["YourMarkCore"],
             path: "Sources/YourMark",
             swiftSettings: [
-                .enableUpcomingFeature("BareSlashRegexLiterals"),
-                .unsafeFlags(["-strict-concurrency=minimal"])
+                .swiftLanguageMode(.v5),
+                .enableUpcomingFeature("BareSlashRegexLiterals")
             ]
         ),
         
@@ -39,20 +40,23 @@ let package = Package(
                 "YourMarkCore",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
-            path: "Sources/YourMarkCLI"
+            path: "Sources/YourMarkCLI",
+            swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         
         // Tests
         .testTarget(
             name: "YourMarkCoreTests",
             dependencies: ["YourMarkCore"],
-            path: "Sources/YourMarkCoreTests"
+            path: "Sources/YourMarkCoreTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         
         .testTarget(
             name: "YourMarkCLITests",
             dependencies: ["yourmark", "YourMarkCore"],
-            path: "Sources/YourMarkCLITests"
+            path: "Sources/YourMarkCLITests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
         )
     ]
 )

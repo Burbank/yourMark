@@ -156,8 +156,10 @@ public enum OcrService {
         from pdf: URL,
         to markdown: URL,
         ocr: Bool = true,
+        ocrLanguage: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
     ) async -> Bool {
+        _ = ocrLanguage
         onStatus("Layout OCR with Docling — tables and columns. This takes a little longer.")
         let script = writeScanScript()
         guard let pythonCmd = layoutPython() else {
@@ -263,6 +265,7 @@ except Exception:
     public static func searchablePDF(
         from url: URL,
         force: Bool = false,
+        ocrLanguage: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
     ) async throws -> (url: URL, didOCR: Bool) {
         guard force || needsOCR(url) else { return (url, false) }
@@ -270,11 +273,12 @@ except Exception:
             onStatus("OCR with OCRmyPDF (Tesseract)…")
             let out = FileManager.default.temporaryDirectory
                 .appendingPathComponent("yourMark-ocr-\(UUID().uuidString).pdf")
+            let tessLang = tesseractLanguageCode(for: ocrLanguage)
             let args = [
                 force ? "--force-ocr" : "--skip-text",
                 "--optimize", "0",
                 "--output-type", "pdf",
-                "-l", "eng",
+                "-l", tessLang,
                 url.path,
                 out.path,
             ]
@@ -300,6 +304,7 @@ except Exception:
     public static func enrichMarkdown(
         markdownURL: URL,
         sourcePDF: URL,
+        ocrLanguage: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
     ) async {
         let empty = await PdfWork.runAsync { markdownLooksEmpty(markdownURL) }
@@ -318,7 +323,7 @@ except Exception:
             onStatus("OCR page \(i + 1) of \(count)…")
             let snap = await PdfWork.runAsync { pageSnapshot(sourcePDF, index: i, wantImage: true) }
             guard let snap else { continue }
-            let text = await recognizeText(snap.image, fallback: snap.kit)
+            let text = await recognizeText(snap.image, fallback: snap.kit, ocrLanguage: ocrLanguage)
             parts.append("## \(snap.heading)")
             parts.append("")
             if !text.isEmpty {
@@ -338,8 +343,10 @@ except Exception:
         from url: URL,
         to dest: URL,
         ocr: Bool,
+        ocrLanguage: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
     ) async throws {
+        OCRVisionMetrics.reset()
         let opened = await PdfWork.runAsync { () -> (count: Int, useOCR: Bool)? in
             guard let doc = PDFDocument(url: url), doc.pageCount > 0 else { return nil }
             return (doc.pageCount, ocr || needsOCR(url))
@@ -369,7 +376,7 @@ except Exception:
             guard let snap else { continue }
             let text: String
             if useOCR && (snap.kit.count < 48 || snap.operators < 2) {
-                text = await recognizeText(snap.image, fallback: snap.kit)
+                text = await recognizeText(snap.image, fallback: snap.kit, ocrLanguage: ocrLanguage)
             } else {
                 text = snap.kit
             }
@@ -435,19 +442,26 @@ except Exception:
         return PageSnap(heading: heading, kit: kit, operators: operators, image: image)
     }
 
-    private static func recognizeText(_ image: CGImage?, fallback: String) async -> String {
+    private static func recognizeText(_ image: CGImage?, fallback: String, ocrLanguage: String) async -> String {
         guard let image else { return fallback }
+        let languages = visionRecognitionLanguages(for: ocrLanguage)
         return await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
                 let request = VNRecognizeTextRequest()
                 request.recognitionLevel = .accurate
                 request.usesLanguageCorrection = true
-                request.recognitionLanguages = ["en-US"]
+                request.recognitionLanguages = languages
                 let handler = VNImageRequestHandler(cgImage: image, options: [:])
                 let text: String
                 do {
                     try handler.perform([request])
-                    text = (request.results as? [VNRecognizedTextObservation] ?? [])
+                    let observations = request.results ?? []
+                    for obs in observations {
+                        if let conf = obs.topCandidates(1).first?.confidence {
+                            OCRVisionMetrics.record(confidence: Double(conf))
+                        }
+                    }
+                    text = observations
                         .compactMap { $0.topCandidates(1).first?.string }
                         .joined(separator: "\n")
                 } catch {

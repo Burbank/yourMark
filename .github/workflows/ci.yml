@@ -38,7 +38,10 @@ jobs:
         run: swift build -c release -Xswiftc -DAPPSTORE --product YourMark
       
       - name: Build yourmark CLI with APPSTORE flag (should stub)
-        run: swift build -c release -Xswiftc -DAPPSTORE --product yourmark
+        run: |
+          swift build -c release -Xswiftc -DAPPSTORE --product yourmark
+          .build/release/yourmark >/dev/null 2>&1 || test $? -eq 4
+          swift build -c release --product yourmark
       
       - name: Run tests
         run: swift test

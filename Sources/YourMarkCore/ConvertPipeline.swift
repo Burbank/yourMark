@@ -17,20 +17,37 @@ public actor ConvertPipeline {
     }
     
     /// Convert one document from input to the output folder.
-    /// Returns the markdown URL and metadata about the conversion.
     public func convert(input: URL, outputFolder: URL) async throws -> ConvertResult {
+        if let seconds = options.timeoutSeconds {
+            return try await withThrowingTaskGroup(of: ConvertResult.self) { group in
+                group.addTask { try await self.convertWork(input: input, outputFolder: outputFolder) }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+                    throw YourMarkError.timedOut
+                }
+                guard let first = try await group.next() else {
+                    throw YourMarkError.processFailed("Conversion ended without a result")
+                }
+                group.cancelAll()
+                return first
+            }
+        }
+        return try await convertWork(input: input, outputFolder: outputFolder)
+    }
+    
+    private func convertWork(input: URL, outputFolder: URL) async throws -> ConvertResult {
         let startTime = Date()
         var warnings: [String] = []
         var usedOCR = false
         var ocrEngine: String? = nil
         var pictures = 0
         var originalKept = false
+        let lang = options.ocrLanguage
+        let script = ConversionSupport.markitdownConvertScriptURL()
         
-        // Determine if OCR is needed
         let isPDF = input.pathExtension.lowercased() == "pdf"
         let needsOCR = options.ocrEnabled && isPDF && OcrService.needsOCR(input)
         
-        // Prepare output folder
         let outputName = outputFolderName(for: input)
         let output = outputFolder.appendingPathComponent(outputName, isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
@@ -38,20 +55,17 @@ public actor ConvertPipeline {
         let markdownName = outputName + ".md"
         let markdownURL = output.appendingPathComponent(markdownName)
         
-        // Check if we can use Python engines
         let enginePath = try? await service.resolveEngine()
         let pythonReady = enginePath != nil
         
         if !pythonReady {
-            // Fall back to native conversion (Apple PDFKit + Live Text)
             reportStatus("Converting with Apple PDFKit and Live Text")
-            let result = try await NativeConvert.convert(
+            _ = try await NativeConvert.convert(
                 input: input,
                 output: markdownURL,
                 ocr: options.ocrEnabled && needsOCR,
-                onStatus: { [weak self] msg in
-                    self?.onStatus?(msg)
-                }
+                ocrLanguage: lang,
+                onStatus: { [weak self] msg in self?.onStatus?(msg) }
             )
             
             if isPDF {
@@ -62,40 +76,36 @@ public actor ConvertPipeline {
                     markdownURL: final,
                     sourcePDF: input,
                     stripChrome: options.stripChrome,
-                    onStatus: { [weak self] msg in
-                        self?.onStatus?(msg)
-                    }
+                    onStatus: { [weak self] msg in self?.onStatus?(msg) }
                 )
             }
             
-            usedOCR = needsOCR
-            if usedOCR {
-                ocrEngine = "Apple Vision"
-            }
+            usedOCR = needsOCR && options.ocrEnabled
+            if usedOCR { ocrEngine = "Apple Vision" }
+            let pages = isPDF ? await PdfWork.runAsync { OcrService.pageCount(of: input) } : 1
+            let weakFlag = await checkWeakOCR(markdownURL: markdownURL, pages: pages, usedOCR: usedOCR)
+            let weakOCR = usedOCR && weakFlag
+            originalKept = shouldKeepOriginal(usedOCR: usedOCR, weakOCR: weakOCR, input: input, outputFolder: output)
             
             let elapsed = Date().timeIntervalSince(startTime)
             return ConvertResult(
                 markdownURL: markdownURL,
-                originalKept: false,
+                originalKept: originalKept,
                 usedOCR: usedOCR,
                 ocrEngine: ocrEngine,
                 pictures: pictures,
                 warnings: warnings,
                 elapsedSeconds: elapsed,
-                weakOCR: false
+                weakOCR: weakOCR
             )
         }
         
-        // Python engines available - proceed with MarkItDown path
         var inputForConvert = input
         var ocrTempPDF: URL?
         defer {
-            if let temp = ocrTempPDF {
-                try? FileManager.default.removeItem(at: temp)
-            }
+            if let temp = ocrTempPDF { try? FileManager.default.removeItem(at: temp) }
         }
         
-        // Try layout-first OCR if preferred
         let layoutFirst = options.prefersDocling && isPDF && needsOCR
         if layoutFirst {
             reportStatus("Layout OCR first — this takes a little longer")
@@ -103,9 +113,8 @@ public actor ConvertPipeline {
                 from: input,
                 to: markdownURL,
                 ocr: needsOCR,
-                onStatus: { [weak self] msg in
-                    self?.onStatus?(msg)
-                }
+                ocrLanguage: lang,
+                onStatus: { [weak self] msg in self?.onStatus?(msg) }
             )
             
             if layoutResult {
@@ -114,9 +123,10 @@ public actor ConvertPipeline {
                 let bookmarks = await loadBookmarks(input)
                 let (final, _) = await finalizeMarkdown(markdownURL, original: input, bookmarks: bookmarks)
                 pictures = await PdfFigures.materializeEmbedded(markdownURL: final)
-                
-                originalKept = shouldKeepOriginal(usedOCR: usedOCR, weakOCR: false, input: input, output: output)
-                
+                let pages = await PdfWork.runAsync { OcrService.pageCount(of: input) }
+                let weakFlag = await checkWeakOCR(markdownURL: markdownURL, pages: pages, usedOCR: usedOCR)
+                let weakOCR = usedOCR && weakFlag
+                originalKept = shouldKeepOriginal(usedOCR: usedOCR, weakOCR: weakOCR, input: input, outputFolder: output)
                 let elapsed = Date().timeIntervalSince(startTime)
                 return ConvertResult(
                     markdownURL: markdownURL,
@@ -126,34 +136,27 @@ public actor ConvertPipeline {
                     pictures: pictures,
                     warnings: warnings,
                     elapsedSeconds: elapsed,
-                    weakOCR: false
+                    weakOCR: weakOCR
                 )
             }
             
-            // Docling failed, fall back to OCRmyPDF
             reportStatus("OCR with OCRmyPDF")
             let prepared = try await OcrService.searchablePDF(
                 from: input,
-                onStatus: { [weak self] msg in
-                    self?.onStatus?(msg)
-                }
+                ocrLanguage: lang,
+                onStatus: { [weak self] msg in self?.onStatus?(msg) }
             )
             inputForConvert = prepared.url
             usedOCR = prepared.didOCR
-            if prepared.url != input {
-                ocrTempPDF = prepared.url
-            }
-            if usedOCR {
-                ocrEngine = "OCRmyPDF + Tesseract"
-            }
+            if prepared.url != input { ocrTempPDF = prepared.url }
+            if usedOCR { ocrEngine = "OCRmyPDF + Tesseract" }
         }
         
-        // Convert with MarkItDown
         reportStatus("Converting with MarkItDown")
         _ = try await service.convert(
             input: inputForConvert,
             output: markdownURL,
-            script: Bundle.main.url(forResource: "markitdown_convert", withExtension: "py"),
+            script: script,
             llmKey: "",
             llmBase: options.askBaseURL,
             llmModel: options.askModel
@@ -165,16 +168,14 @@ public actor ConvertPipeline {
                 OcrService.markdownLooksThin(markdownURL, pageCount: max(pages, 1))
             }
             
-            // If the markdown looks thin and we haven't OCR'd yet, do it now
             if options.ocrEnabled, thin, !usedOCR {
                 reportStatus("Scan detected — running OCR")
                 let layoutResult = await OcrService.layoutMarkdown(
                     from: input,
                     to: markdownURL,
                     ocr: true,
-                    onStatus: { [weak self] msg in
-                        self?.onStatus?(msg)
-                    }
+                    ocrLanguage: lang,
+                    onStatus: { [weak self] msg in self?.onStatus?(msg) }
                 )
                 
                 if layoutResult {
@@ -184,22 +185,17 @@ public actor ConvertPipeline {
                     let prepared = try await OcrService.searchablePDF(
                         from: input,
                         force: true,
-                        onStatus: { [weak self] msg in
-                            self?.onStatus?(msg)
-                        }
+                        ocrLanguage: lang,
+                        onStatus: { [weak self] msg in self?.onStatus?(msg) }
                     )
                     usedOCR = true
                     ocrEngine = "OCRmyPDF + Tesseract"
-                    
-                    if prepared.url != input {
-                        ocrTempPDF = prepared.url
-                    }
-                    
+                    if prepared.url != input { ocrTempPDF = prepared.url }
                     if prepared.didOCR || prepared.url != input {
                         _ = try await service.convert(
                             input: prepared.url,
                             output: markdownURL,
-                            script: Bundle.main.url(forResource: "markitdown_convert", withExtension: "py"),
+                            script: script,
                             llmKey: "",
                             llmBase: options.askBaseURL,
                             llmModel: options.askModel
@@ -219,9 +215,8 @@ public actor ConvertPipeline {
                 await OcrService.enrichMarkdown(
                     markdownURL: markdownURL,
                     sourcePDF: input,
-                    onStatus: { [weak self] msg in
-                        self?.onStatus?(msg)
-                    }
+                    ocrLanguage: lang,
+                    onStatus: { [weak self] msg in self?.onStatus?(msg) }
                 )
             }
             
@@ -230,7 +225,6 @@ public actor ConvertPipeline {
             
             let bookmarks = await loadBookmarks(input)
             let (final, _) = await finalizeMarkdown(markdownURL, original: input, bookmarks: bookmarks)
-            
             _ = await PdfFigures.materializeEmbedded(markdownURL: final)
             
             if options.extractImages && !usedOCR {
@@ -238,18 +232,13 @@ public actor ConvertPipeline {
                     markdownURL: final,
                     sourcePDF: input,
                     stripChrome: options.stripChrome,
-                    onStatus: { [weak self] msg in
-                        self?.onStatus?(msg)
-                    }
+                    onStatus: { [weak self] msg in self?.onStatus?(msg) }
                 )
             }
             
-            // Calculate weak OCR flag
-            let weakOCRCheck = await checkWeakOCR(markdownURL: markdownURL, pages: pages)
-            let weakOCR = usedOCR && weakOCRCheck
-            
-            // Decide whether to keep original PDF
-            originalKept = shouldKeepOriginal(usedOCR: usedOCR, weakOCR: weakOCR, input: input, output: output)
+            let weakFlag = await checkWeakOCR(markdownURL: markdownURL, pages: pages, usedOCR: usedOCR)
+            let weakOCR = usedOCR && weakFlag
+            originalKept = shouldKeepOriginal(usedOCR: usedOCR, weakOCR: weakOCR, input: input, outputFolder: output)
             
             let elapsed = Date().timeIntervalSince(startTime)
             return ConvertResult(
@@ -262,10 +251,10 @@ public actor ConvertPipeline {
                 elapsedSeconds: elapsed,
                 weakOCR: weakOCR
             )
-        } else {
-            let bookmarks = await loadBookmarks(input)
-            let (final, _) = await finalizeMarkdown(markdownURL, original: input, bookmarks: bookmarks)
         }
+        
+        let bookmarks = await loadBookmarks(input)
+        _ = await finalizeMarkdown(markdownURL, original: input, bookmarks: bookmarks)
         
         let elapsed = Date().timeIntervalSince(startTime)
         return ConvertResult(
@@ -300,9 +289,7 @@ public actor ConvertPipeline {
     }
     
     private func loadBookmarks(_ url: URL) async -> [ManualBookmark] {
-        await PdfWork.runAsync {
-            PdfSidecar.bookmarks(from: url)
-        }
+        await PdfWork.runAsync { PdfSidecar.bookmarks(from: url) }
     }
     
     private func finalizeMarkdown(
@@ -311,29 +298,32 @@ public actor ConvertPipeline {
         bookmarks: [ManualBookmark],
         header: BookRecord? = nil
     ) async -> (URL, [ManualBookmark]) {
-        // Simplified finalization - in the real app this does more
+        _ = header
         return (url, bookmarks)
     }
     
-    private func checkWeakOCR(markdownURL: URL, pages: Int) async -> Bool {
-        // Check if OCR quality is weak (< 200 chars per OCR'd page)
-        // Note: Vision confidence checking would require storing confidence during OCR
+    private func checkWeakOCR(markdownURL: URL, pages: Int, usedOCR: Bool) async -> Bool {
+        guard usedOCR else { return false }
         guard let content = try? String(contentsOf: markdownURL) else { return false }
         let chars = content.trimmingCharacters(in: .whitespacesAndNewlines).count
         let charsPerPage = chars / max(pages, 1)
-        return charsPerPage < OCRQuality.minCharsPerOCRPage
+        if charsPerPage < OCRQuality.minCharsPerOCRPage { return true }
+        if let mean = OCRVisionMetrics.meanConfidence, mean < OCRQuality.weakConfidenceThreshold {
+            return true
+        }
+        return false
     }
     
-    private func shouldKeepOriginal(usedOCR: Bool, weakOCR: Bool, input: URL, output: URL) -> Bool {
+    private func shouldKeepOriginal(usedOCR: Bool, weakOCR: Bool, input: URL, outputFolder: URL) -> Bool {
         switch options.keepOriginalPDF {
         case .always:
-            copyOriginal(from: input, to: output)
+            copyOriginal(from: input, to: outputFolder)
             return true
         case .never:
             return false
         case .auto:
             if usedOCR && weakOCR {
-                copyOriginal(from: input, to: output)
+                copyOriginal(from: input, to: outputFolder)
                 return true
             }
             return false

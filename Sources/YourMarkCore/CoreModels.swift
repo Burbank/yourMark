@@ -56,9 +56,12 @@ public enum YourMarkError: Error, LocalizedError {
     case invalidInput(String)
     case processFailed(String)
     case outputMissing(String)
+    case timedOut
 
     public var errorDescription: String? {
         switch self {
+        case .timedOut:
+            return "Conversion timed out"
         case .engineNotFound:
             return Distribution.isAppStore
                 ? "This App Store build converts with Apple PDFKit and Live Text."
@@ -70,6 +73,20 @@ public enum YourMarkError: Error, LocalizedError {
         case .outputMissing(let path):
             return "No output at \(path)"
         }
+    }
+}
+
+/// CLI exit-code labels (also used in JSON status fields).
+public func statusString(_ code: Int) -> String {
+    switch code {
+    case 0: return "ok"
+    case 1: return "partial"
+    case 2: return "rejected"
+    case 3: return "failed"
+    case 4: return "engine_missing"
+    case 5: return "io_error"
+    case 124: return "timeout"
+    default: return "failed"
     }
 }
 

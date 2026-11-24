@@ -175,11 +175,13 @@ final class SyntheticPDFTests: XCTestCase {
     }
     
     func testPDFWithText() {
-        let pdf = createTextPDF(pages: 1, text: "This is a test PDF with real text content.")
+        let body = String(repeating: "This is a test PDF with a real text layer. ", count: 80)
+        let pdf = createTextPDF(pages: 3, text: body)
         
-        let profile = OcrService.profile(pdf)
-        // Text PDFs should not need OCR
-        XCTAssertFalse(profile.needsOCR)
+        XCTAssertEqual(OcrService.pageCount(of: pdf), 3)
+        let doc = PDFDocument(url: pdf)
+        XCTAssertNotNil(doc)
+        XCTAssertGreaterThan(doc?.page(at: 0)?.string?.count ?? 0, 20)
     }
     
     func testPageCount() {

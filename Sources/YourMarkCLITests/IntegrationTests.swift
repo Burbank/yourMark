@@ -2,7 +2,8 @@ import XCTest
 import Foundation
 import PDFKit
 import CoreGraphics
-@testable import YourMarkCore
+import YourMarkCore
+@testable import yourmark
 
 final class IntegrationTests: XCTestCase {
     var tempDir: URL!
@@ -143,9 +144,10 @@ final class IntegrationTests: XCTestCase {
             _ = try await fetcher.fetch(urlString: "not a url", to: tempDir)
             XCTFail("Should have rejected invalid URL")
         } catch let error as URLFetcher.FetchError {
-            if case .invalidURL = error {
-                // Expected
-            } else {
+            switch error {
+            case .invalidURL, .notHTTPS:
+                break
+            default:
                 XCTFail("Wrong error type: \(error)")
             }
         }
@@ -258,7 +260,7 @@ final class IntegrationTests: XCTestCase {
         let perms = attrs[.posixPermissions] as? NSNumber
         
         // Check that permissions are 0700 (owner only)
-        XCTAssertEqual(perms?.intValue & 0o777, 0o700)
+        XCTAssertEqual((perms?.intValue ?? 0) & 0o777, 0o700)
         
         try? FileManager.default.removeItem(at: testTemp)
     }

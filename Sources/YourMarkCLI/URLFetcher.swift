@@ -255,12 +255,7 @@ private class RedirectDelegate: NSObject, URLSessionTaskDelegate {
             return
         }
         
-        // Only allow HTTPS redirects (reject http hops)
-        guard let url = request.url, url.scheme == "https" else {
-            completionHandler(nil)  // Reject redirect
-            return
-        }
-        
-        completionHandler(request)  // Allow redirect
+        // Reject all automatic follows — URLFetcher follows manually and validates each hop.
+        completionHandler(nil)
     }
 }

@@ -105,7 +105,7 @@ struct Convert: AsyncParsableCommand {
         
         if input.hasPrefix("https://") {
             // Fetch the URL first
-            let fetcher = try URLFetcher(maxMB: maxMb)
+            let fetcher = URLFetcher(maxMB: maxMb)
             if !json {
                 fputs("Downloading \(stripQuery(input))...\n", stderr)
             }
@@ -239,6 +239,10 @@ struct Convert: AsyncParsableCommand {
                 }
                 print("  Time: \(String(format: "%.1f", elapsed))s")
             }
+        } catch YourMarkError.timedOut {
+            let elapsed = Date().timeIntervalSince(startTime)
+            reportError(json: json, code: 124, message: "Conversion timed out", elapsed: elapsed)
+            throw ExitCode(124)
         } catch {
             let elapsed = Date().timeIntervalSince(startTime)
             reportError(json: json, code: 3, message: error.localizedDescription, elapsed: elapsed)
@@ -306,7 +310,7 @@ struct Fetch: AsyncParsableCommand {
             throw ExitCode(2)
         }
         
-        let fetcher = try URLFetcher(maxMB: maxMb)
+        let fetcher = URLFetcher(maxMB: maxMb)
         let outputDir = URL(fileURLWithPath: out)
         try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
         
@@ -549,32 +553,6 @@ struct Doctor: AsyncParsableCommand {
 
 // MARK: - Helper Functions
 
-public func stripQuery(_ urlString: String) -> String {
-    guard let url = URL(string: urlString) else { return urlString }
-    var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    components?.query = nil
-    components?.fragment = nil
-    return components?.url?.absoluteString ?? urlString
-}
-
-public func formatBytes(_ bytes: Int64) -> String {
-    let kb = Double(bytes) / 1024.0
-    let mb = kb / 1024.0
-    
-    if mb >= 1.0 {
-        return String(format: "%.1f MB", mb)
-    } else if kb >= 1.0 {
-        return String(format: "%.1f KB", kb)
-    } else {
-        return "\(bytes) bytes"
-    }
-}
-
-public func calculateTimeout(pages: Int, ocrPages: Int) -> Int {
-    let base = 120 + (3 * pages) + (20 * ocrPages)
-    return min(max(base, 120), 3600)
-}
-
 public func jsonString(_ dict: [String: Any]) -> String {
     guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
           let string = String(data: data, encoding: .utf8) else {
@@ -600,84 +578,5 @@ public func reportError(json: Bool, code: Int, message: String, elapsed: Double?
         fputs("Error: \(message)\n", stderr)
     }
 }
-
-public func statusString(_ code: Int) -> String {
-    switch code {
-    case 0: return "ok"
-    case 1: return "partial"
-    case 2: return "rejected"
-    case 3: return "failed"
-    case 4: return "engine_missing"
-    case 5: return "io_error"
-    case 124: return "timeout"
-    default: return "failed"
-    }
-}
-
-public struct ProbeInfo {
-    public var pages: Int
-    public var hasTextLayer: Bool
-    public var scannedPages: Int
-    public var encrypted: Bool
-    public var sha256: String
-    public var bytes: Int64
-    
-    public init(pages: Int, hasTextLayer: Bool, scannedPages: Int, encrypted: Bool, sha256: String, bytes: Int64) {
-        self.pages = pages
-        self.hasTextLayer = hasTextLayer
-        self.scannedPages = scannedPages
-        self.encrypted = encrypted
-        self.sha256 = sha256
-        self.bytes = bytes
-    }
-}
-
-public func probeFile(_ url: URL) async throws -> ProbeInfo {
-    let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
-    let bytes = (attrs[.size] as? NSNumber)?.int64Value ?? 0
-    
-    // Calculate SHA-256
-    let data = try Data(contentsOf: url)
-    let sha256 = SHA256.hash(data: data)
-    let sha256String = sha256.compactMap { String(format: "%02x", $0) }.joined()
-    
-    // For PDF files, probe pages and structure
-    if url.pathExtension.lowercased() == "pdf" {
-        return await PdfWork.runAsync {
-            let profile = OcrService.profile(url)
-            let pageCount = OcrService.pageCount(of: url)
-            
-            // Check if PDF is encrypted (try to open with PDFKit)
-            var encrypted = false
-            if let doc = PDFDocument(url: url) {
-                encrypted = doc.isEncrypted
-            } else {
-                // If PDFKit can't open it at all, it might be encrypted or corrupt
-                encrypted = true
-            }
-            
-            return ProbeInfo(
-                pages: pageCount,
-                hasTextLayer: !profile.needsOCR,
-                scannedPages: profile.needsOCR ? pageCount : 0,
-                encrypted: encrypted,
-                sha256: sha256String,
-                bytes: bytes
-            )
-        }
-    }
-    
-    return ProbeInfo(
-        pages: 1,
-        hasTextLayer: true,
-        scannedPages: 0,
-        encrypted: false,
-        sha256: sha256String,
-        bytes: bytes
-    )
-}
-
-import CryptoKit
-import PDFKit
 
 #endif
