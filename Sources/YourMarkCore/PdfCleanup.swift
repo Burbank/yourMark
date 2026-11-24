@@ -2299,12 +2299,18 @@ enum SplitWords {
 }
 
 /// Repeating margin lines, and a temporary PDF whose crop box hides them.
-struct MarginRead: Sendable {
-    var title = ""
-    var author = ""
-    var cropped: URL?
+public struct MarginRead: Sendable {
+    public var title = ""
+    public var author = ""
+    public var cropped: URL?
+    
+    public init(title: String = "", author: String = "", cropped: URL? = nil) {
+        self.title = title
+        self.author = author
+        self.cropped = cropped
+    }
 
-    var record: BookRecord {
+    public var record: BookRecord {
         var next = BookRecord()
         next.title = title
         if !author.isEmpty { next.authors = [author] }
