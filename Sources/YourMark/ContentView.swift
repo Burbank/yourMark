@@ -2881,7 +2881,7 @@ private struct HoverThumb: View {
                 image = cached
                 return
             }
-            let loaded = await Task.detached(priority: .utility) {
+            nonisolated(unsafe) let loaded = await Task.detached(priority: .utility) {
                 PreviewImageCache.thumbnailImage(url, maxPixel: CGFloat(pixel))
             }.value
             guard !Task.isCancelled else { return }
