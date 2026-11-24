@@ -12,9 +12,14 @@ import Vision
 ///   4. Last resort: Apple Live Text + page pictures (empty markdown only).
 /// Digital PDFs with figures go through MarkItDown once, then PdfFigures.
 public enum OcrService {
-    struct PdfProfile: Equatable, Sendable {
-        var needsOCR: Bool
-        var looksGraphic: Bool
+    public struct PdfProfile: Equatable, Sendable {
+        public var needsOCR: Bool
+        public var looksGraphic: Bool
+        
+        public init(needsOCR: Bool, looksGraphic: Bool) {
+            self.needsOCR = needsOCR
+            self.looksGraphic = looksGraphic
+        }
     }
 
     private static let cacheLock = NSLock()
