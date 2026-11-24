@@ -108,7 +108,7 @@ direct_target = """
 				PRODUCT_NAME = yourMark;
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 """
 
 store_target = """
@@ -129,7 +129,7 @@ store_target = """
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "APPSTORE $(inherited)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 """
 
 engine_script = r"""set -euo pipefail
