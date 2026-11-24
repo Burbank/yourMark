@@ -2125,11 +2125,16 @@ public enum PdfCleanup {
     }
 }
 
-struct PageNumberHide: Sendable {
-    var text: String
-    var oldToNew: [Int]
+public struct PageNumberHide: Sendable {
+    public var text: String
+    public var oldToNew: [Int]
+    
+    public init(text: String, oldToNew: [Int]) {
+        self.text = text
+        self.oldToNew = oldToNew
+    }
 
-    func lineIndex(_ old: Int) -> Int {
+    public func lineIndex(_ old: Int) -> Int {
         guard !oldToNew.isEmpty else { return 0 }
         if old < 0 { return oldToNew[0] }
         if old >= oldToNew.count { return oldToNew[oldToNew.count - 1] }
