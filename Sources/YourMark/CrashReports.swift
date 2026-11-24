@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import YourMarkCore
 
 struct CrashReport: Identifiable {
     var id: String

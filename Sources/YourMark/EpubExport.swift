@@ -1,4 +1,5 @@
 import Foundation
+import YourMarkCore
 
 /// EPUB 3 written in Swift. No Pandoc and no extra package — the App Store
 /// copy cannot download a converter after install.
