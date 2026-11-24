@@ -137,7 +137,7 @@ public actor MarkItDownService {
     }
 
     /// pdfplumber lives in the same uv tool env as markitdown. Best-effort.
-    func enrichPDF(markdown: URL, pdf: URL, script: URL?) async {
+    public func enrichPDF(markdown: URL, pdf: URL, script: URL?) async {
         guard pdf.pathExtension.lowercased() == "pdf" else { return }
         guard let script, FileManager.default.isReadableFile(atPath: script.path) else { return }
         guard let py = await pythonForEngine() else { return }
@@ -186,7 +186,7 @@ public actor MarkItDownService {
     }
 
     /// GitHub disk only. App Store copy already contains the converter.
-    func installEngine() async throws -> String {
+    public func installEngine() async throws -> String {
         if Distribution.isAppStore {
             throw YourMarkError.engineNotFound
         }
@@ -257,7 +257,7 @@ public actor MarkItDownService {
     }
 
     /// Upgrade the PyPI package — this is how Microsoft updates reach the GUI.
-    func upgradeEngine() async throws -> String {
+    public func upgradeEngine() async throws -> String {
         let spec = Self.packageSpec
         let commands = [
             "uv tool install --upgrade --force '\(spec)'",

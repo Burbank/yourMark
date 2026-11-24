@@ -1,6 +1,7 @@
 import AppKit
 import ImageIO
 import SwiftUI
+import YourMarkCore
 
 /// Library button height — every toolbar control matches this.
 private enum BarFit {
