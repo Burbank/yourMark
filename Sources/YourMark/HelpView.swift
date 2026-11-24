@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import YourMarkCore
 
 struct HelpView: View {
     @Environment(AppModel.self) private var model
