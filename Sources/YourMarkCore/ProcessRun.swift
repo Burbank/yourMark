@@ -53,7 +53,7 @@ public enum ProcessRun {
         process.standardOutput = captureStdout ? outPipe : FileHandle.nullDevice
         process.standardError = errPipe
 
-        public var env = ProcessInfo.processInfo.environment
+        var env = ProcessInfo.processInfo.environment
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let extra = extraPATH + [
             "\(home)/.local/bin",

@@ -23,6 +23,8 @@ public struct BookRecord: Equatable, Sendable {
     public var created = ""
     public var pdfCreator = ""
     public var pdfProducer = ""
+    
+    public init() {}
 
     public var isEmpty: Bool {
         title.isEmpty && authors.isEmpty && publisher.isEmpty && date.isEmpty
