@@ -31,17 +31,17 @@ jobs:
       - name: Build YourMark app (release)
         run: swift build -c release --product YourMark
       
-      - name: Build yourmark CLI (release)
-        run: swift build -c release --product yourmark
+      - name: Build yourmark-cli CLI (release)
+        run: swift build -c release --product yourmark-cli
       
       - name: Build YourMark app with APPSTORE flag
         run: swift build -c release -Xswiftc -DAPPSTORE --product YourMark
       
-      - name: Build yourmark CLI with APPSTORE flag (should stub)
+      - name: Build yourmark-cli CLI with APPSTORE flag (should stub)
         run: |
-          swift build -c release -Xswiftc -DAPPSTORE --product yourmark
-          .build/release/yourmark >/dev/null 2>&1 || test $? -eq 4
-          swift build -c release --product yourmark
+          swift build -c release -Xswiftc -DAPPSTORE --product yourmark-cli
+          .build/release/yourmark-cli >/dev/null 2>&1 || test $? -eq 4
+          swift build -c release --product yourmark-cli
       
       - name: Run tests
         run: swift test
@@ -60,6 +60,6 @@ jobs:
       
       - name: Check CLI help
         run: |
-          .build/release/yourmark --help
-          .build/release/yourmark convert --help
-          .build/release/yourmark doctor --json
+          .build/release/yourmark-cli --help
+          .build/release/yourmark-cli convert --help
+          .build/release/yourmark-cli doctor --json

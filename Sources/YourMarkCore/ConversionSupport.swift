@@ -154,7 +154,22 @@ public enum OCRVisionMetrics {
     public static func reset() {
         lock.lock()
         samples = []
+        languages = []
         lock.unlock()
+    }
+
+    private static var languages: [String] = []
+
+    public static func recordLanguages(_ value: [String]) {
+        lock.lock()
+        languages = value
+        lock.unlock()
+    }
+
+    public static var lastLanguages: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return languages
     }
 
     public static func record(confidence: Double) {

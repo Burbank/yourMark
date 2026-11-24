@@ -159,17 +159,17 @@ public enum OcrService {
         ocrLanguage: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
     ) async -> Bool {
-        _ = ocrLanguage
         onStatus("Layout OCR with Docling — tables and columns. This takes a little longer.")
         let script = writeScanScript()
         guard let pythonCmd = layoutPython() else {
             onStatus("Docling is not installed yet")
             return false
         }
+        let doclingLang = visionRecognitionLanguages(for: ocrLanguage).first ?? "en-US"
         do {
             _ = try await run(
                 pythonCmd.exe,
-                pythonCmd.args + [script.path, pdf.path, markdown.path, ocr ? "ocr" : "text"],
+                pythonCmd.args + [script.path, pdf.path, markdown.path, ocr ? "ocr" : "text", doclingLang],
                 cancellable: true
             )
             return FileManager.default.fileExists(atPath: markdown.path)
@@ -214,6 +214,7 @@ from pathlib import Path
 
 src, dst = Path(sys.argv[1]), Path(sys.argv[2])
 want_ocr = len(sys.argv) < 4 or sys.argv[3] != "text"
+lang = sys.argv[4] if len(sys.argv) > 4 else "en-US"
 
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
@@ -235,7 +236,10 @@ except Exception:
 if want_ocr:
     try:
         from docling.datamodel.pipeline_options import OcrMacOptions
-        opts.ocr_options = OcrMacOptions()
+        try:
+            opts.ocr_options = OcrMacOptions(lang=[lang])
+        except TypeError:
+            opts.ocr_options = OcrMacOptions()
     except Exception:
         pass
 
@@ -450,6 +454,7 @@ except Exception:
                 let request = VNRecognizeTextRequest()
                 request.recognitionLevel = .accurate
                 request.usesLanguageCorrection = true
+                OCRVisionMetrics.recordLanguages(languages)
                 request.recognitionLanguages = languages
                 let handler = VNImageRequestHandler(cgImage: image, options: [:])
                 let text: String

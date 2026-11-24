@@ -47,8 +47,16 @@ public actor URLFetcher: URLFetcherProtocol {
         }
     }
     
-    public init(maxMB: Int) {
-        self.maxBytes = Int64(maxMB) * 1_000_000
+    private let injectedConfiguration: URLSessionConfiguration?
+
+    public init(maxMB: Int, sessionConfiguration: URLSessionConfiguration? = nil) {
+        self.init(maxBytes: Int64(maxMB) * 1_000_000, sessionConfiguration: sessionConfiguration)
+    }
+
+    /// `maxBytes` is the streaming cap. Tests use a small cap; the CLI uses megabytes.
+    public init(maxBytes: Int64, sessionConfiguration: URLSessionConfiguration? = nil) {
+        self.maxBytes = maxBytes
+        self.injectedConfiguration = sessionConfiguration
     }
     
     public func fetch(urlString: String, to directory: URL) async throws -> URL {
@@ -62,7 +70,7 @@ public actor URLFetcher: URLFetcherProtocol {
         }
         
         // Create session with security settings and redirect handler
-        let config = URLSessionConfiguration.ephemeral
+        let config = injectedConfiguration ?? URLSessionConfiguration.ephemeral
         config.httpShouldSetCookies = false
         config.httpCookieAcceptPolicy = .never
         config.timeoutIntervalForRequest = connectTimeout

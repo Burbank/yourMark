@@ -3,7 +3,7 @@ import Foundation
 import PDFKit
 import CoreGraphics
 import YourMarkCore
-@testable import yourmark
+@testable import YourMarkCLI
 
 final class IntegrationTests: XCTestCase {
     var tempDir: URL!

@@ -4,14 +4,14 @@ import YourMarkCore
 
 #if APPSTORE
 @main
-struct YourMark: ParsableCommand {
+struct YourMarkCLICommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "yourmark",
         abstract: "yourMark document converter",
         version: "0.6.4"
     )
     
-    func run() throws {
+    func run() async throws {
         print("yourmark CLI is not available in the App Store build.")
         throw ExitCode(4)
     }
@@ -19,7 +19,7 @@ struct YourMark: ParsableCommand {
 #else
 
 @main
-struct YourMark: ParsableCommand {
+struct YourMarkCLICommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "yourmark",
         abstract: "yourMark document converter",
@@ -180,9 +180,12 @@ struct Convert: AsyncParsableCommand {
             throw ExitCode(2)
         }
         
-        // Set up output directory
         let outputDir = URL(fileURLWithPath: out)
-        try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+        } catch {
+            try throwMapped(error, json: json, elapsed: Date().timeIntervalSince(startTime))
+        }
         
         // Create conversion options
         var options = ConvertOptions(
@@ -208,9 +211,10 @@ struct Convert: AsyncParsableCommand {
             
             let elapsed = Date().timeIntervalSince(startTime)
             
+            let partial = !result.warnings.isEmpty
             if json {
                 let jsonResult: [String: Any] = [
-                    "status": "ok",
+                    "status": partial ? "partial" : "ok",
                     "version": "0.6.4",
                     "source_url": input.hasPrefix("https://") ? stripQuery(input) : "",
                     "sha256": probeInfo.sha256,
@@ -239,14 +243,13 @@ struct Convert: AsyncParsableCommand {
                 }
                 print("  Time: \(String(format: "%.1f", elapsed))s")
             }
-        } catch YourMarkError.timedOut {
-            let elapsed = Date().timeIntervalSince(startTime)
-            reportError(json: json, code: 124, message: "Conversion timed out", elapsed: elapsed)
-            throw ExitCode(124)
+            if partial {
+                throw ExitCode(1)
+            }
+        } catch let exit as ExitCode {
+            throw exit
         } catch {
-            let elapsed = Date().timeIntervalSince(startTime)
-            reportError(json: json, code: 3, message: error.localizedDescription, elapsed: elapsed)
-            throw ExitCode(3)
+            try throwMapped(error, json: json, elapsed: Date().timeIntervalSince(startTime))
         }
     }
     
@@ -551,6 +554,8 @@ struct Doctor: AsyncParsableCommand {
     }
 }
 
+#endif
+
 // MARK: - Helper Functions
 
 public func jsonString(_ dict: [String: Any]) -> String {
@@ -559,6 +564,29 @@ public func jsonString(_ dict: [String: Any]) -> String {
         return "{}"
     }
     return string
+}
+
+func cliExitCode(for error: Error) -> Int {
+    if let markError = error as? YourMarkError {
+        switch markError {
+        case .timedOut: return 124
+        case .engineNotFound: return 4
+        case .outputMissing: return 5
+        case .invalidInput: return 2
+        case .processFailed: return 3
+        }
+    }
+    let ns = error as NSError
+    if ns.domain == NSCocoaErrorDomain || ns.domain == NSPOSIXErrorDomain {
+        return 5
+    }
+    return 3
+}
+
+func throwMapped(_ error: Error, json: Bool, elapsed: Double?) throws -> Never {
+    let code = cliExitCode(for: error)
+    reportError(json: json, code: code, message: error.localizedDescription, elapsed: elapsed)
+    throw ExitCode(Int32(code))
 }
 
 public func reportError(json: Bool, code: Int, message: String, elapsed: Double? = nil) {
@@ -578,5 +606,3 @@ public func reportError(json: Bool, code: Int, message: String, elapsed: Double?
         fputs("Error: \(message)\n", stderr)
     }
 }
-
-#endif

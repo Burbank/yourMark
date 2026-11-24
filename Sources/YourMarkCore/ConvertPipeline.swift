@@ -19,20 +19,31 @@ public actor ConvertPipeline {
     /// Convert one document from input to the output folder.
     public func convert(input: URL, outputFolder: URL) async throws -> ConvertResult {
         if let seconds = options.timeoutSeconds {
-            return try await withThrowingTaskGroup(of: ConvertResult.self) { group in
-                group.addTask { try await self.convertWork(input: input, outputFolder: outputFolder) }
-                group.addTask {
-                    try await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
-                    throw YourMarkError.timedOut
-                }
-                guard let first = try await group.next() else {
-                    throw YourMarkError.processFailed("Conversion ended without a result")
-                }
-                group.cancelAll()
-                return first
+            return try await Self.withTimeout(seconds: seconds) {
+                try await self.convertWork(input: input, outputFolder: outputFolder)
             }
         }
         return try await convertWork(input: input, outputFolder: outputFolder)
+    }
+
+    /// First of `operation` or a timeout. Used by `convert` and by tests.
+    public static func withTimeout<T: Sendable>(
+        seconds: Int,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        if seconds <= 0 { throw YourMarkError.timedOut }
+        return try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+                throw YourMarkError.timedOut
+            }
+            guard let first = try await group.next() else {
+                throw YourMarkError.processFailed("Conversion ended without a result")
+            }
+            group.cancelAll()
+            return first
+        }
     }
     
     private func convertWork(input: URL, outputFolder: URL) async throws -> ConvertResult {
@@ -85,6 +96,7 @@ public actor ConvertPipeline {
             let pages = isPDF ? await PdfWork.runAsync { OcrService.pageCount(of: input) } : 1
             let weakFlag = await checkWeakOCR(markdownURL: markdownURL, pages: pages, usedOCR: usedOCR)
             let weakOCR = usedOCR && weakFlag
+            noteWeakOCR(&warnings, weakOCR: weakOCR)
             originalKept = shouldKeepOriginal(usedOCR: usedOCR, weakOCR: weakOCR, input: input, outputFolder: output)
             
             let elapsed = Date().timeIntervalSince(startTime)
@@ -126,6 +138,7 @@ public actor ConvertPipeline {
                 let pages = await PdfWork.runAsync { OcrService.pageCount(of: input) }
                 let weakFlag = await checkWeakOCR(markdownURL: markdownURL, pages: pages, usedOCR: usedOCR)
                 let weakOCR = usedOCR && weakFlag
+                noteWeakOCR(&warnings, weakOCR: weakOCR)
                 originalKept = shouldKeepOriginal(usedOCR: usedOCR, weakOCR: weakOCR, input: input, outputFolder: output)
                 let elapsed = Date().timeIntervalSince(startTime)
                 return ConvertResult(
@@ -238,6 +251,7 @@ public actor ConvertPipeline {
             
             let weakFlag = await checkWeakOCR(markdownURL: markdownURL, pages: pages, usedOCR: usedOCR)
             let weakOCR = usedOCR && weakFlag
+            noteWeakOCR(&warnings, weakOCR: weakOCR)
             originalKept = shouldKeepOriginal(usedOCR: usedOCR, weakOCR: weakOCR, input: input, outputFolder: output)
             
             let elapsed = Date().timeIntervalSince(startTime)
@@ -255,6 +269,9 @@ public actor ConvertPipeline {
         
         let bookmarks = await loadBookmarks(input)
         _ = await finalizeMarkdown(markdownURL, original: input, bookmarks: bookmarks)
+        let weakFlag = await checkWeakOCR(markdownURL: markdownURL, pages: 1, usedOCR: usedOCR)
+        let weakOCR = usedOCR && weakFlag
+        noteWeakOCR(&warnings, weakOCR: weakOCR)
         
         let elapsed = Date().timeIntervalSince(startTime)
         return ConvertResult(
@@ -265,8 +282,14 @@ public actor ConvertPipeline {
             pictures: pictures,
             warnings: warnings,
             elapsedSeconds: elapsed,
-            weakOCR: false
+            weakOCR: weakOCR
         )
+    }
+
+    private func noteWeakOCR(_ warnings: inout [String], weakOCR: Bool) {
+        if weakOCR {
+            warnings.append("OCR quality is below the threshold")
+        }
     }
     
     private func reportStatus(_ message: String) {

@@ -163,6 +163,7 @@ public enum NativeConvert {
                 let request = VNRecognizeTextRequest()
                 request.recognitionLevel = .accurate
                 request.usesLanguageCorrection = true
+                OCRVisionMetrics.recordLanguages(languages)
                 request.recognitionLanguages = languages
                 let handler = VNImageRequestHandler(cgImage: cg, options: [:])
                 let text: String

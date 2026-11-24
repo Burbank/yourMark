@@ -8,7 +8,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "YourMark", targets: ["YourMark"]),
-        .executable(name: "yourmark", targets: ["yourmark"]),
+        .executable(name: "yourmark-cli", targets: ["YourMarkCLI"]),
         .library(name: "YourMarkCore", targets: ["YourMarkCore"])
     ],
     dependencies: [
@@ -35,7 +35,7 @@ let package = Package(
         
         // CLI executable
         .executableTarget(
-            name: "yourmark",
+            name: "YourMarkCLI",
             dependencies: [
                 "YourMarkCore",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
@@ -54,7 +54,7 @@ let package = Package(
         
         .testTarget(
             name: "YourMarkCLITests",
-            dependencies: ["yourmark", "YourMarkCore"],
+            dependencies: ["YourMarkCLI", "YourMarkCore"],
             path: "Sources/YourMarkCLITests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         )

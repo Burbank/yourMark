@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import YourMarkCore
 
@@ -57,6 +58,46 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(record1.authors, ["Author"])  // Filled
     }
     
+    func testPipelineTimeoutFires() async {
+        do {
+            _ = try await ConvertPipeline.withTimeout(seconds: 0) {
+                try await Task.sleep(nanoseconds: 5_000_000_000)
+                return 1
+            }
+            XCTFail("Expected timeout")
+        } catch YourMarkError.timedOut {
+        } catch {
+            XCTFail("Unexpected \(error)")
+        }
+    }
+
+    func testOCRLanguageReachesVision() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let png = dir.appendingPathComponent("note.png")
+        let image = NSImage(size: NSSize(width: 40, height: 20))
+        image.lockFocus()
+        NSColor.white.set()
+        NSBezierPath.fill(NSRect(x: 0, y: 0, width: 40, height: 20))
+        image.unlockFocus()
+        guard let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let data = rep.representation(using: .png, properties: [:]) else {
+            XCTFail("Could not make a PNG")
+            return
+        }
+        try data.write(to: png)
+        OCRVisionMetrics.reset()
+        _ = try await NativeConvert.convert(
+            input: png,
+            output: dir.appendingPathComponent("out.md"),
+            ocr: true,
+            ocrLanguage: "nld"
+        ) { _ in }
+        XCTAssertEqual(OCRVisionMetrics.lastLanguages, ["nl-NL", "nl-BE"])
+    }
+
     func testDistributionChannel() {
         #if APPSTORE
         XCTAssertTrue(Distribution.isAppStore)
