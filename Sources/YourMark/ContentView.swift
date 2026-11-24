@@ -1,4 +1,4 @@
-import AppKit
+@preconcurrency import AppKit
 import ImageIO
 import SwiftUI
 import YourMarkCore
