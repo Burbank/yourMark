@@ -3,9 +3,14 @@ import Foundation
 /// Microsoft MarkItDown. App Store builds use the copy inside the .app.
 /// GitHub builds still find a user install, or install from PyPI.
 actor MarkItDownService {
+    /// The `all` extra on 0.1.6 and later requires a pre-release Azure package.
+    /// uv then refuses those releases and installs 0.1.5 instead. These extras are
+    /// the same set, without that one pre-release, so the latest release resolves.
+    static let packageSpec = "markitdown[pdf,docx,pptx,xlsx,xls,outlook,audio-transcription,youtube-transcription,az-doc-intel]"
+
     private(set) var enginePath: String?
     private(set) var versionString: String = "unknown"
-    private(set) var installHint: String = "uv tool install 'markitdown[all]'"
+    private(set) var installHint: String = "uv tool install --upgrade '\(packageSpec)'"
 
     func refreshStatus() async -> (path: String?, version: String) {
         do {
@@ -210,9 +215,9 @@ actor MarkItDownService {
         guard let uv, FileManager.default.isExecutableFile(atPath: uv) else {
             throw YourMarkError.processFailed("Could not install uv. Connect to the internet and try Install converter again.")
         }
-        log.append("Installing Microsoft MarkItDown from PyPI…")
+        log.append("Installing the latest Microsoft MarkItDown from PyPI…")
         let attempts: [[String]] = [
-            ["tool", "install", "--force", "markitdown[all]"],
+            ["tool", "install", "--upgrade", "--force", Self.packageSpec],
             ["tool", "upgrade", "markitdown"],
         ]
         var last = ""
@@ -251,10 +256,10 @@ actor MarkItDownService {
 
     /// Upgrade the PyPI package — this is how Microsoft updates reach the GUI.
     func upgradeEngine() async throws -> String {
+        let spec = Self.packageSpec
         let commands = [
+            "uv tool install --upgrade --force '\(spec)'",
             "uv tool upgrade markitdown",
-            "uv pip install -U 'markitdown[all]'",
-            "pip3 install -U 'markitdown[all]'",
         ]
         var lastError = "No uv/pip found"
         for command in commands {
