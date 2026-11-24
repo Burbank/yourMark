@@ -25,7 +25,11 @@ let package = Package(
         .executableTarget(
             name: "YourMark",
             dependencies: ["YourMarkCore"],
-            path: "Sources/YourMark"
+            path: "Sources/YourMark",
+            swiftSettings: [
+                .enableUpcomingFeature("BareSlashRegexLiterals"),
+                .unsafeFlags(["-strict-concurrency=minimal"], .when(configuration: .release))
+            ]
         ),
         
         // CLI executable
