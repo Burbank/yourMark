@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import SwiftUI
+import YourMarkCore
 
 extension AppModel {
     func L(_ english: String) -> String {
