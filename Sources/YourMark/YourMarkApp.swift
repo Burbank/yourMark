@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import UserNotifications
+import YourMarkCore
 
 @main
 struct YourMarkApp: App {
