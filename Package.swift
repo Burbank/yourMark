@@ -28,7 +28,7 @@ let package = Package(
             path: "Sources/YourMark",
             swiftSettings: [
                 .enableUpcomingFeature("BareSlashRegexLiterals"),
-                .unsafeFlags(["-strict-concurrency=minimal"], .when(configuration: .release))
+                .unsafeFlags(["-strict-concurrency=minimal"])
             ]
         ),
         
