@@ -32,7 +32,7 @@ final class CLIProcessTests: XCTestCase {
             "--keep-original", "never",
             "--json"
         ])
-        XCTAssertEqual(run.status, 0, run.stderr)
+        XCTAssertEqual(run.status, 0, run.stdout + "\n" + run.stderr)
         let json = try jsonObject(run.stdout)
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertEqual(json["pages"] as? Int, 1)
@@ -54,7 +54,7 @@ final class CLIProcessTests: XCTestCase {
             "--keep-original", "always",
             "--json"
         ])
-        XCTAssertEqual(run.status, 0, run.stderr)
+        XCTAssertEqual(run.status, 0, run.stdout + "\n" + run.stderr)
         let json = try jsonObject(run.stdout)
         XCTAssertEqual(json["original_kept"] as? Bool, true)
         let folder = try XCTUnwrap(json["folder"] as? String)
@@ -101,7 +101,7 @@ final class CLIProcessTests: XCTestCase {
             PDFDocumentWriteOption.ownerPasswordOption: "secret"
         ])
         let run = try launch(["probe", pdf.path, "--json"])
-        XCTAssertEqual(run.status, 0, run.stderr)
+        XCTAssertEqual(run.status, 0, run.stdout + "\n" + run.stderr)
         let json = try jsonObject(run.stdout)
         XCTAssertEqual(json["encrypted"] as? Bool, true)
         let convert = try launch(["convert", pdf.path, "--out", temp.path, "--ocr", "off"])
@@ -109,14 +109,33 @@ final class CLIProcessTests: XCTestCase {
     }
 
     private func writeTextPDF(named name: String, text: String) throws -> URL {
-        let url = temp.appendingPathComponent(name)
-        let doc = PDFDocument()
-        let page = PDFPage()
-        doc.insert(page, at: 0)
-        guard doc.write(to: url) else {
-            throw NSError(domain: "CLIProcessTests", code: 1)
+        let sentence = String(repeating: text + " ", count: 12)
+        let escaped = sentence
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "(", with: "\\(")
+            .replacingOccurrences(of: ")", with: "\\)")
+        let stream = "BT /F1 12 Tf 48 720 Td (\(escaped)) Tj ET\n"
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+            "<< /Length \(stream.utf8.count) >>\nstream\n\(stream)endstream",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+        ]
+        var body = "%PDF-1.4\n"
+        var offsets: [Int] = []
+        for (index, object) in objects.enumerated() {
+            offsets.append(body.utf8.count)
+            body += "\(index + 1) 0 obj\n\(object)\nendobj\n"
         }
-        _ = text
+        let xrefAt = body.utf8.count
+        body += "xref\n0 \(objects.count + 1)\n0000000000 65535 f \n"
+        for offset in offsets {
+            body += String(format: "%010d 00000 n \n", offset)
+        }
+        body += "trailer\n<< /Size \(objects.count + 1) /Root 1 0 R >>\nstartxref\n\(xrefAt)\n%%EOF\n"
+        let url = temp.appendingPathComponent(name)
+        try Data(body.utf8).write(to: url)
         return url
     }
 
