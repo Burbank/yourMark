@@ -2,6 +2,15 @@ import Foundation
 
 /// Models shared between CLI and GUI
 
+/// Translation marker used in Markdown (from TranslateService)
+public let translationMarker = "<!--ym-tr-->"
+
+/// OCR quality thresholds
+public enum OCRQuality {
+    public static let weakConfidenceThreshold = 0.6
+    public static let minCharsPerOCRPage = 200
+}
+
 public struct ConvertJob: Identifiable, Hashable, Sendable {
     public let id: UUID
     public var sourceURL: URL

@@ -21,6 +21,8 @@ RESOURCE_NAMES = [
     "AppIcon.icns",
 ]
 
+# Note: YourMarkCore is linked as a local Swift package via Package.swift
+
 
 def uid(name: str) -> str:
     return hashlib.md5(name.encode()).hexdigest()[:24].upper()
@@ -49,6 +51,8 @@ IDS = {
     "debug_p": uid("cfg:debug-p"),
     "release_p": uid("cfg:release-p"),
     "store_p": uid("cfg:store-p"),
+    "pkg_product": uid("ref:pkg:YourMarkCore"),
+    "pkg_ref": uid("ref:pkg:local"),
 }
 
 file_ids = {p.name: uid(f"ref:{p.name}") for p in SOURCES}
@@ -164,6 +168,20 @@ pbx = f"""// !$*UTF8*$!
 {build_files}
 {res_builds}
 
+/* Begin XCSwiftPackageProductDependency section */
+		{I["pkg_product"]} /* YourMarkCore */ = {{
+			isa = XCSwiftPackageProductDependency;
+			productName = YourMarkCore;
+		}};
+/* End XCSwiftPackageProductDependency section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		{I["pkg_ref"]} /* XCLocalSwiftPackageReference "." */ = {{
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		}};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		{I["copy_res"]} /* Copy Resources */ = {{
 			isa = PBXCopyFilesBuildPhase;
@@ -252,6 +270,9 @@ pbx = f"""// !$*UTF8*$!
 			dependencies = (
 			);
 			name = yourMark;
+			packageProductDependencies = (
+				{I["pkg_product"]} /* YourMarkCore */,
+			);
 			productName = yourMark;
 			productReference = {I["product"]} /* yourMark.app */;
 			productType = "com.apple.product-type.application";
@@ -275,6 +296,9 @@ pbx = f"""// !$*UTF8*$!
 				Base,
 			);
 			mainGroup = {I["group_root"]};
+			packageReferences = (
+				{I["pkg_ref"]} /* XCLocalSwiftPackageReference "." */,
+			);
 			productRefGroup = {I["group_prod"]} /* Products */;
 			projectDirPath = "";
 			projectRoot = "";

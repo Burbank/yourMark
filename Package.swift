@@ -18,10 +18,7 @@ let package = Package(
         // Core library (non-UI conversion logic)
         .target(
             name: "YourMarkCore",
-            path: "Sources/YourMarkCore",
-            swiftSettings: [
-                .define("APPSTORE", .when(configuration: .release))
-            ]
+            path: "Sources/YourMarkCore"
         ),
         
         // GUI app
@@ -38,10 +35,7 @@ let package = Package(
                 "YourMarkCore",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
-            path: "Sources/yourmark",
-            swiftSettings: [
-                .define("APPSTORE", .when(configuration: .release))
-            ]
+            path: "Sources/yourmark"
         ),
         
         // Tests

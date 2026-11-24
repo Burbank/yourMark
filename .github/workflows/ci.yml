@@ -37,6 +37,9 @@ jobs:
       - name: Build YourMark app with APPSTORE flag
         run: swift build -c release -Xswiftc -DAPPSTORE --product YourMark
       
+      - name: Build yourmark CLI with APPSTORE flag (should stub)
+        run: swift build -c release -Xswiftc -DAPPSTORE --product yourmark
+      
       - name: Run tests
         run: swift test
       

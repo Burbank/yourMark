@@ -490,8 +490,8 @@ enum PdfSidecar {
 
     static func headingText(_ line: String) -> String? {
         var t = line.trimmingCharacters(in: .whitespaces)
-        if t.hasPrefix(TranslateService.marker) {
-            t = String(t.dropFirst(TranslateService.marker.count)).trimmingCharacters(in: .whitespaces)
+        if t.hasPrefix(translationMarker) {
+            t = String(t.dropFirst(translationMarker.count)).trimmingCharacters(in: .whitespaces)
         }
         guard t.hasPrefix("#") else { return nil }
         var n = 0
@@ -551,8 +551,8 @@ enum PdfSidecar {
             ui += 1
             let hashes = min(6, max(1, located[i].level))
             let raw = lines[idx]
-            let prefix = raw.trimmingCharacters(in: .whitespaces).hasPrefix(TranslateService.marker)
-                ? TranslateService.marker
+            let prefix = raw.trimmingCharacters(in: .whitespaces).hasPrefix(translationMarker)
+                ? translationMarker
                 : ""
             lines[idx] = prefix + String(repeating: "#", count: hashes) + " " + located[i].title
             located[i].lineIndex = idx

@@ -3,18 +3,24 @@ import XCTest
 
 final class CLITests: XCTestCase {
     func testCalculateTimeout() {
-        // Test timeout calculation formula
+        // Test timeout calculation formula: clamp(120 + 3*pages + 20*ocrPages, 120, 3600)
         let timeout1 = calculateTimeout(pages: 10, ocrPages: 0)
-        XCTAssertEqual(timeout1, 150)  // 120 + 3*10
+        XCTAssertEqual(timeout1, 150)  // 120 + 3*10 = 150
         
         let timeout2 = calculateTimeout(pages: 10, ocrPages: 10)
-        XCTAssertEqual(timeout2, 350)  // 120 + 3*10 + 20*10
+        XCTAssertEqual(timeout2, 350)  // 120 + 3*10 + 20*10 = 350
         
         let timeout3 = calculateTimeout(pages: 1000, ocrPages: 0)
-        XCTAssertEqual(timeout3, 3600)  // Capped at max
+        XCTAssertEqual(timeout3, 3120)  // 120 + 3*1000 = 3120
         
-        let timeout4 = calculateTimeout(pages: 1, ocrPages: 0)
-        XCTAssertEqual(timeout4, 123)  // 120 + 3*1
+        let timeout4 = calculateTimeout(pages: 1500, ocrPages: 0)
+        XCTAssertEqual(timeout4, 3600)  // 120 + 3*1500 = 4620, capped at 3600
+        
+        let timeout5 = calculateTimeout(pages: 1, ocrPages: 0)
+        XCTAssertEqual(timeout5, 123)  // 120 + 3*1 = 123
+        
+        let timeout6 = calculateTimeout(pages: 0, ocrPages: 0)
+        XCTAssertEqual(timeout6, 120)  // Minimum
     }
     
     func testStripQuery() {

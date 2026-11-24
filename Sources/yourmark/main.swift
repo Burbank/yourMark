@@ -33,7 +33,17 @@ struct YourMark: ParsableCommand {
 
 struct Convert: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "Convert a document to Markdown"
+        abstract: "Convert a document to Markdown",
+        discussion: """
+        Exit codes:
+          0   - Success
+          1   - Partial (warnings)
+          2   - Rejected (limits/policy/encryption)
+          3   - Conversion failed
+          4   - Engine missing
+          5   - I/O error
+          124 - Timeout
+        """
     )
     
     @Argument(help: "Input file path or HTTPS URL")
@@ -81,9 +91,16 @@ struct Convert: AsyncParsableCommand {
         let inputURL: URL
         var fetchedTemp: URL?
         defer {
+            // Only delete temp dirs we created ourselves
             if let temp = fetchedTemp {
                 try? FileManager.default.removeItem(at: temp)
             }
+        }
+        
+        // Reject http:// URLs (insecure)
+        if input.hasPrefix("http://") {
+            reportError(json: json, code: 2, message: "Only HTTPS URLs are supported (not http://)")
+            throw ExitCode(2)
         }
         
         if input.hasPrefix("https://") {
@@ -94,7 +111,7 @@ struct Convert: AsyncParsableCommand {
             }
             let tempDir = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString, isDirectory: true)
-            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             fetchedTemp = tempDir
             
             inputURL = try await fetcher.fetch(urlString: input, to: tempDir)
@@ -283,6 +300,12 @@ struct Fetch: AsyncParsableCommand {
     var json: Bool = false
     
     func run() async throws {
+        // Reject http:// URLs (insecure)
+        if url.hasPrefix("http://") {
+            reportError(json: json, code: 2, message: "Only HTTPS URLs are supported (not http://)")
+            throw ExitCode(2)
+        }
+        
         let fetcher = try URLFetcher(maxMB: maxMb)
         let outputDir = URL(fileURLWithPath: out)
         try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
@@ -526,7 +549,7 @@ struct Doctor: AsyncParsableCommand {
 
 // MARK: - Helper Functions
 
-func stripQuery(_ urlString: String) -> String {
+public func stripQuery(_ urlString: String) -> String {
     guard let url = URL(string: urlString) else { return urlString }
     var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
     components?.query = nil
@@ -534,7 +557,7 @@ func stripQuery(_ urlString: String) -> String {
     return components?.url?.absoluteString ?? urlString
 }
 
-func formatBytes(_ bytes: Int64) -> String {
+public func formatBytes(_ bytes: Int64) -> String {
     let kb = Double(bytes) / 1024.0
     let mb = kb / 1024.0
     
@@ -547,12 +570,12 @@ func formatBytes(_ bytes: Int64) -> String {
     }
 }
 
-func calculateTimeout(pages: Int, ocrPages: Int) -> Int {
+public func calculateTimeout(pages: Int, ocrPages: Int) -> Int {
     let base = 120 + (3 * pages) + (20 * ocrPages)
     return min(max(base, 120), 3600)
 }
 
-func jsonString(_ dict: [String: Any]) -> String {
+public func jsonString(_ dict: [String: Any]) -> String {
     guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
           let string = String(data: data, encoding: .utf8) else {
         return "{}"
@@ -560,7 +583,7 @@ func jsonString(_ dict: [String: Any]) -> String {
     return string
 }
 
-func reportError(json: Bool, code: Int, message: String, elapsed: Double? = nil) {
+public func reportError(json: Bool, code: Int, message: String, elapsed: Double? = nil) {
     if json {
         var result: [String: Any] = [
             "status": statusString(code),
@@ -578,7 +601,7 @@ func reportError(json: Bool, code: Int, message: String, elapsed: Double? = nil)
     }
 }
 
-func statusString(_ code: Int) -> String {
+public func statusString(_ code: Int) -> String {
     switch code {
     case 0: return "ok"
     case 1: return "partial"
@@ -591,16 +614,25 @@ func statusString(_ code: Int) -> String {
     }
 }
 
-struct ProbeInfo {
-    var pages: Int
-    var hasTextLayer: Bool
-    var scannedPages: Int
-    var encrypted: Bool
-    var sha256: String
-    var bytes: Int64
+public struct ProbeInfo {
+    public var pages: Int
+    public var hasTextLayer: Bool
+    public var scannedPages: Int
+    public var encrypted: Bool
+    public var sha256: String
+    public var bytes: Int64
+    
+    public init(pages: Int, hasTextLayer: Bool, scannedPages: Int, encrypted: Bool, sha256: String, bytes: Int64) {
+        self.pages = pages
+        self.hasTextLayer = hasTextLayer
+        self.scannedPages = scannedPages
+        self.encrypted = encrypted
+        self.sha256 = sha256
+        self.bytes = bytes
+    }
 }
 
-func probeFile(_ url: URL) async throws -> ProbeInfo {
+public func probeFile(_ url: URL) async throws -> ProbeInfo {
     let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
     let bytes = (attrs[.size] as? NSNumber)?.int64Value ?? 0
     
@@ -611,17 +643,28 @@ func probeFile(_ url: URL) async throws -> ProbeInfo {
     
     // For PDF files, probe pages and structure
     if url.pathExtension.lowercased() == "pdf" {
-        let profile = OcrService.profile(url)
-        let pageCount = OcrService.pageCount(of: url)
-        
-        return ProbeInfo(
-            pages: pageCount,
-            hasTextLayer: !profile.needsOCR,
-            scannedPages: profile.needsOCR ? pageCount : 0,
-            encrypted: false,  // TODO: Check if PDF is encrypted
-            sha256: sha256String,
-            bytes: bytes
-        )
+        return await PdfWork.runAsync {
+            let profile = OcrService.profile(url)
+            let pageCount = OcrService.pageCount(of: url)
+            
+            // Check if PDF is encrypted (try to open with PDFKit)
+            var encrypted = false
+            if let doc = PDFDocument(url: url) {
+                encrypted = doc.isEncrypted
+            } else {
+                // If PDFKit can't open it at all, it might be encrypted or corrupt
+                encrypted = true
+            }
+            
+            return ProbeInfo(
+                pages: pageCount,
+                hasTextLayer: !profile.needsOCR,
+                scannedPages: profile.needsOCR ? pageCount : 0,
+                encrypted: encrypted,
+                sha256: sha256String,
+                bytes: bytes
+            )
+        }
     }
     
     return ProbeInfo(
@@ -635,5 +678,6 @@ func probeFile(_ url: URL) async throws -> ProbeInfo {
 }
 
 import CryptoKit
+import PDFKit
 
 #endif

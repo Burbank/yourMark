@@ -127,6 +127,7 @@ enum OcrService {
     static func doclingPath() -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let candidates = [
+            "\(home)/.local/share/uv/tools/docling/bin/docling",
             "\(home)/.local/bin/docling",
             "/opt/homebrew/bin/docling",
             "/usr/local/bin/docling",

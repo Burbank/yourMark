@@ -1,13 +1,18 @@
 import Foundation
 
+/// Protocol for testable URL fetching
+public protocol URLFetcherProtocol {
+    func fetch(urlString: String, to directory: URL) async throws -> URL
+}
+
 /// Safe HTTPS-only downloader with size limits, redirect checks, and content validation
-actor URLFetcher {
+public actor URLFetcher: URLFetcherProtocol {
     private let maxBytes: Int64
     private let connectTimeout: TimeInterval = 15
     private let totalTimeout: TimeInterval = 300
     private let maxRedirects = 5
     
-    enum FetchError: Error, LocalizedError {
+    public enum FetchError: Error, LocalizedError {
         case invalidURL(String)
         case notHTTPS(String)
         case httpRedirect(String)
@@ -18,7 +23,7 @@ actor URLFetcher {
         case downloadFailed(String)
         case timeout
         
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .invalidURL(let url):
                 return "Invalid URL: \(url)"
@@ -42,11 +47,11 @@ actor URLFetcher {
         }
     }
     
-    init(maxMB: Int) {
+    public init(maxMB: Int) {
         self.maxBytes = Int64(maxMB) * 1_000_000
     }
     
-    func fetch(urlString: String, to directory: URL) async throws -> URL {
+    public func fetch(urlString: String, to directory: URL) async throws -> URL {
         // Validate URL
         guard let url = URL(string: urlString) else {
             throw FetchError.invalidURL(urlString)
@@ -56,7 +61,7 @@ actor URLFetcher {
             throw FetchError.notHTTPS(urlString)
         }
         
-        // Create session with security settings
+        // Create session with security settings and redirect handler
         let config = URLSessionConfiguration.ephemeral
         config.httpShouldSetCookies = false
         config.httpCookieAcceptPolicy = .never
@@ -64,7 +69,8 @@ actor URLFetcher {
         config.timeoutIntervalForResource = totalTimeout
         config.httpMaximumConnectionsPerHost = 1
         
-        let session = URLSession(configuration: config)
+        let delegate = RedirectDelegate()
+        let session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
         defer { session.invalidateAndCancel() }
         
         // Follow redirects manually to validate each hop
@@ -188,9 +194,27 @@ actor URLFetcher {
                        let range = Range(match.range(at: i), in: disposition) {
                         let filename = String(disposition[range])
                         if !filename.isEmpty {
-                            return sanitizeFilename(filename)
-                        }
-                    }
+        return sanitizeFilename(filename)
+    }
+}
+
+/// Session delegate to intercept and validate redirects
+private class RedirectDelegate: NSObject, URLSessionTaskDelegate {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        // Only allow HTTPS redirects
+        guard let url = request.url, url.scheme == "https" else {
+            completionHandler(nil)  // Reject redirect
+            return
+        }
+        completionHandler(request)  // Allow redirect
+    }
+}
                 }
             }
         }

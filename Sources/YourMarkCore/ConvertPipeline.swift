@@ -245,10 +245,23 @@ public actor ConvertPipeline {
             }
             
             // Calculate weak OCR flag
-            let weakOCR = usedOCR && await checkWeakOCR(markdownURL: markdownURL, pages: pages)
+            let weakOCRCheck = await checkWeakOCR(markdownURL: markdownURL, pages: pages)
+            let weakOCR = usedOCR && weakOCRCheck
             
             // Decide whether to keep original PDF
             originalKept = shouldKeepOriginal(usedOCR: usedOCR, weakOCR: weakOCR, input: input, output: output)
+            
+            let elapsed = Date().timeIntervalSince(startTime)
+            return ConvertResult(
+                markdownURL: markdownURL,
+                originalKept: originalKept,
+                usedOCR: usedOCR,
+                ocrEngine: ocrEngine,
+                pictures: pictures,
+                warnings: warnings,
+                elapsedSeconds: elapsed,
+                weakOCR: weakOCR
+            )
         } else {
             let bookmarks = await loadBookmarks(input)
             let (final, _) = await finalizeMarkdown(markdownURL, original: input, bookmarks: bookmarks)
@@ -303,11 +316,12 @@ public actor ConvertPipeline {
     }
     
     private func checkWeakOCR(markdownURL: URL, pages: Int) async -> Bool {
-        // Check if OCR quality is weak (mean confidence < 0.6 or < 200 chars per page)
+        // Check if OCR quality is weak (< 200 chars per OCR'd page)
+        // Note: Vision confidence checking would require storing confidence during OCR
         guard let content = try? String(contentsOf: markdownURL) else { return false }
         let chars = content.trimmingCharacters(in: .whitespacesAndNewlines).count
         let charsPerPage = chars / max(pages, 1)
-        return charsPerPage < 200
+        return charsPerPage < OCRQuality.minCharsPerOCRPage
     }
     
     private func shouldKeepOriginal(usedOCR: Bool, weakOCR: Bool, input: URL, output: URL) -> Bool {
