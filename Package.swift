@@ -35,7 +35,7 @@ let package = Package(
                 "YourMarkCore",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
-            path: "Sources/yourmark"
+            path: "Sources/YourMarkCLI"
         ),
         
         // Tests
@@ -46,9 +46,9 @@ let package = Package(
         ),
         
         .testTarget(
-            name: "yourmarkTests",
+            name: "YourMarkCLITests",
             dependencies: ["yourmark", "YourMarkCore"],
-            path: "Sources/yourmarkTests"
+            path: "Sources/YourMarkCLITests"
         )
     ]
 )

@@ -22,6 +22,7 @@ RESOURCE_NAMES = [
 ]
 
 # Note: YourMarkCore is linked as a local Swift package via Package.swift
+# CLI is in Sources/YourMarkCLI (case-distinct from Sources/YourMark on macOS)
 
 
 def uid(name: str) -> str:

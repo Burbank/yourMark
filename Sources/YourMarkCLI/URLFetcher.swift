@@ -194,27 +194,9 @@ public actor URLFetcher: URLFetcherProtocol {
                        let range = Range(match.range(at: i), in: disposition) {
                         let filename = String(disposition[range])
                         if !filename.isEmpty {
-        return sanitizeFilename(filename)
-    }
-}
-
-/// Session delegate to intercept and validate redirects
-private class RedirectDelegate: NSObject, URLSessionTaskDelegate {
-    func urlSession(
-        _ session: URLSession,
-        task: URLSessionTask,
-        willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest,
-        completionHandler: @escaping (URLRequest?) -> Void
-    ) {
-        // Only allow HTTPS redirects
-        guard let url = request.url, url.scheme == "https" else {
-            completionHandler(nil)  // Reject redirect
-            return
-        }
-        completionHandler(request)  // Allow redirect
-    }
-}
+                            return sanitizeFilename(filename)
+                        }
+                    }
                 }
             }
         }
@@ -250,5 +232,35 @@ private class RedirectDelegate: NSObject, URLSessionTaskDelegate {
         }
         
         return clean.isEmpty ? "download.pdf" : clean
+    }
+}
+
+/// Session delegate to intercept and validate redirects
+private class RedirectDelegate: NSObject, URLSessionTaskDelegate {
+    private var redirectCount = 0
+    private let maxRedirects = 5
+    
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        redirectCount += 1
+        
+        // Reject if too many redirects
+        guard redirectCount <= maxRedirects else {
+            completionHandler(nil)
+            return
+        }
+        
+        // Only allow HTTPS redirects (reject http hops)
+        guard let url = request.url, url.scheme == "https" else {
+            completionHandler(nil)  // Reject redirect
+            return
+        }
+        
+        completionHandler(request)  // Allow redirect
     }
 }
