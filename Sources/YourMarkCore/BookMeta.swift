@@ -34,7 +34,7 @@ public struct BookRecord: Equatable, Sendable {
     }
 
     /// Copy each field that this record does not already have.
-    mutating func fillEmpty(from other: BookRecord) {
+    public mutating func fillEmpty(from other: BookRecord) {
         if title.isEmpty { title = other.title }
         if authors.isEmpty { authors = other.authors }
         if publisher.isEmpty { publisher = other.publisher }

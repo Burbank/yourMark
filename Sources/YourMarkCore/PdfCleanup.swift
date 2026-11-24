@@ -2143,7 +2143,7 @@ public struct PageNumberHide: Sendable {
 }
 
 /// A short fragment, a space, another short fragment: `Ma ny`, `Wh en`.
-enum SplitWords {
+public enum SplitWords {
     public static func suspectIndexes(in lines: [String], range: Range<Int>) -> [Int] {
         var fence = false
         var hits: [Int] = []

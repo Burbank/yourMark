@@ -11,6 +11,8 @@ public actor MarkItDownService {
     public private(set) var enginePath: String?
     public private(set) var versionString: String = "unknown"
     public private(set) var installHint: String = "uv tool install --upgrade '\(packageSpec)'"
+    
+    public init() {}
 
     public func refreshStatus() async -> (path: String?, version: String) {
         do {
