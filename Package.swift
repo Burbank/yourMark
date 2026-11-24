@@ -7,12 +7,54 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "YourMark", targets: ["YourMark"])
+        .executable(name: "YourMark", targets: ["YourMark"]),
+        .executable(name: "yourmark", targets: ["yourmark"]),
+        .library(name: "YourMarkCore", targets: ["YourMarkCore"])
+    ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0")
     ],
     targets: [
+        // Core library (non-UI conversion logic)
+        .target(
+            name: "YourMarkCore",
+            path: "Sources/YourMarkCore",
+            swiftSettings: [
+                .define("APPSTORE", .when(configuration: .release))
+            ]
+        ),
+        
+        // GUI app
         .executableTarget(
             name: "YourMark",
+            dependencies: ["YourMarkCore"],
             path: "Sources/YourMark"
+        ),
+        
+        // CLI executable
+        .executableTarget(
+            name: "yourmark",
+            dependencies: [
+                "YourMarkCore",
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
+            path: "Sources/yourmark",
+            swiftSettings: [
+                .define("APPSTORE", .when(configuration: .release))
+            ]
+        ),
+        
+        // Tests
+        .testTarget(
+            name: "YourMarkCoreTests",
+            dependencies: ["YourMarkCore"],
+            path: "Sources/YourMarkCoreTests"
+        ),
+        
+        .testTarget(
+            name: "yourmarkTests",
+            dependencies: ["yourmark", "YourMarkCore"],
+            path: "Sources/yourmarkTests"
         )
     ]
 )

@@ -11,6 +11,7 @@ import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# Only app sources for the Xcode project - Core is built via SPM
 SOURCES = sorted((ROOT / "Sources" / "YourMark").glob("*.swift"))
 RESOURCE_NAMES = [
     "pdf_enrich.py",
