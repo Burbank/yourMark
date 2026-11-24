@@ -111,7 +111,8 @@ public actor MarkItDownService {
             }
         }
 
-        let asModule = (py != nil) || exe.hasSuffix("/python3") || exe.hasSuffix("/python3.12") || exe.hasSuffix("/python")
+        let runner = py ?? exe
+        let asModule = py != nil || exe.hasSuffix("/python3") || exe.hasSuffix("/python3.12") || exe.hasSuffix("/python")
         func args(_ extra: [String]) -> [String] {
             asModule ? (["-m", "markitdown"] + extra) : extra
         }
@@ -124,7 +125,7 @@ public actor MarkItDownService {
         var lastError: Error = YourMarkError.outputMissing(output.path)
         for argv in attempts {
             do {
-                _ = try await run(executable: exe, arguments: argv, captureStdout: false)
+                _ = try await run(executable: runner, arguments: argv, captureStdout: false)
                 if FileManager.default.fileExists(atPath: output.path) {
                     return output
                 }

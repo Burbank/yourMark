@@ -166,14 +166,7 @@ public actor ConvertPipeline {
         }
         
         reportStatus("Converting with MarkItDown")
-        _ = try await service.convert(
-            input: inputForConvert,
-            output: markdownURL,
-            script: script,
-            llmKey: "",
-            llmBase: options.askBaseURL,
-            llmModel: options.askModel
-        )
+        try await convertWithMarkItDownOrNative(input: inputForConvert, markdownURL: markdownURL, script: script)
         
         if isPDF {
             let pages = await PdfWork.runAsync { OcrService.pageCount(of: input) }
@@ -205,14 +198,7 @@ public actor ConvertPipeline {
                     ocrEngine = "OCRmyPDF + Tesseract"
                     if prepared.url != input { ocrTempPDF = prepared.url }
                     if prepared.didOCR || prepared.url != input {
-                        _ = try await service.convert(
-                            input: prepared.url,
-                            output: markdownURL,
-                            script: script,
-                            llmKey: "",
-                            llmBase: options.askBaseURL,
-                            llmModel: options.askModel
-                        )
+                        try await convertWithMarkItDownOrNative(input: prepared.url, markdownURL: markdownURL, script: script)
                     }
                 }
             }
@@ -284,6 +270,30 @@ public actor ConvertPipeline {
             elapsedSeconds: elapsed,
             weakOCR: weakOCR
         )
+    }
+
+    private func convertWithMarkItDownOrNative(input: URL, markdownURL: URL, script: URL?) async throws {
+        do {
+            _ = try await service.convert(
+                input: input,
+                output: markdownURL,
+                script: script,
+                llmKey: "",
+                llmBase: options.askBaseURL,
+                llmModel: options.askModel
+            )
+        } catch is ProcessRun.ConvertCancel {
+            throw ProcessRun.ConvertCancel.stopped
+        } catch {
+            reportStatus("MarkItDown failed — using Apple PDFKit and Live Text")
+            _ = try await NativeConvert.convert(
+                input: input,
+                output: markdownURL,
+                ocr: options.ocrEnabled,
+                ocrLanguage: options.ocrLanguage,
+                onStatus: { [weak self] msg in self?.onStatus?(msg) }
+            )
+        }
     }
 
     private func noteWeakOCR(_ warnings: inout [String], weakOCR: Bool) {
