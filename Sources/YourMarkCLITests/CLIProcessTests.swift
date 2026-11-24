@@ -144,6 +144,11 @@ final class CLIProcessTests: XCTestCase {
         let process = Process()
         process.executableURL = binary
         process.arguments = args
+        // GitHub's `uv tool install markitdown[...]` can resolve an unrelated
+        // package whose CLI rejects the script's flags. Exercise the native path.
+        var env = ProcessInfo.processInfo.environment
+        env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+        process.environment = env
         let out = Pipe()
         let err = Pipe()
         process.standardOutput = out
