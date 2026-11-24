@@ -2,17 +2,17 @@ import Foundation
 
 /// Microsoft MarkItDown. App Store builds use the copy inside the .app.
 /// GitHub builds still find a user install, or install from PyPI.
-actor MarkItDownService {
+public actor MarkItDownService {
     /// The `all` extra on 0.1.6 and later requires a pre-release Azure package.
     /// uv then refuses those releases and installs 0.1.5 instead. These extras are
     /// the same set, without that one pre-release, so the latest release resolves.
-    static let packageSpec = "markitdown[pdf,docx,pptx,xlsx,xls,outlook,audio-transcription,youtube-transcription,az-doc-intel]"
+    public static let packageSpec = "markitdown[pdf,docx,pptx,xlsx,xls,outlook,audio-transcription,youtube-transcription,az-doc-intel]"
 
-    private(set) var enginePath: String?
-    private(set) var versionString: String = "unknown"
-    private(set) var installHint: String = "uv tool install --upgrade '\(packageSpec)'"
+    public private(set) var enginePath: String?
+    public private(set) var versionString: String = "unknown"
+    public private(set) var installHint: String = "uv tool install --upgrade '\(packageSpec)'"
 
-    func refreshStatus() async -> (path: String?, version: String) {
+    public func refreshStatus() async -> (path: String?, version: String) {
         do {
             let path = try await resolveEngine()
             return (path, versionString)
@@ -23,7 +23,7 @@ actor MarkItDownService {
         }
     }
 
-    func resolveEngine() async throws -> String {
+    public func resolveEngine() async throws -> String {
         if let enginePath, FileManager.default.isExecutableFile(atPath: enginePath) {
             return enginePath
         }
@@ -65,7 +65,7 @@ actor MarkItDownService {
         throw YourMarkError.engineNotFound
     }
 
-    func convert(
+    public func convert(
         input: URL,
         output: URL,
         script: URL? = nil,

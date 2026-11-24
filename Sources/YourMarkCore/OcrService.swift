@@ -11,7 +11,7 @@ import Vision
 ///   3. Fall back to OCRmyPDF (words only) then MarkItDown.
 ///   4. Last resort: Apple Live Text + page pictures (empty markdown only).
 /// Digital PDFs with figures go through MarkItDown once, then PdfFigures.
-enum OcrService {
+public enum OcrService {
     struct PdfProfile: Equatable, Sendable {
         var needsOCR: Bool
         var looksGraphic: Bool
@@ -20,7 +20,7 @@ enum OcrService {
     private static let cacheLock = NSLock()
     nonisolated(unsafe) private static var profileCache: [String: (mtime: TimeInterval, value: PdfProfile)] = [:]
 
-    static func profile(_ url: URL) -> PdfProfile {
+    public static func profile(_ url: URL) -> PdfProfile {
         guard url.pathExtension.lowercased() == "pdf" else {
             return PdfProfile(needsOCR: false, looksGraphic: false)
         }
@@ -39,7 +39,7 @@ enum OcrService {
         return value
     }
 
-    static func needsOCR(_ url: URL) -> Bool { profile(url).needsOCR }
+    public static func needsOCR(_ url: URL) -> Bool { profile(url).needsOCR }
 
     private static func profileUncached(_ url: URL) -> PdfProfile {
         guard let doc = PDFDocument(url: url), doc.pageCount > 0 else {
@@ -100,7 +100,7 @@ enum OcrService {
     }
 
     /// After MarkItDown: almost no real words for the number of pages.
-    static func markdownLooksThin(_ url: URL, pageCount: Int) -> Bool {
+    public static func markdownLooksThin(_ url: URL, pageCount: Int) -> Bool {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return true }
         var body = text
         body = body.replacingOccurrences(of: #"!\[[^\]]*\]\([^)]*\)"#, with: " ", options: .regularExpression)
@@ -110,11 +110,11 @@ enum OcrService {
         return letters < max(60, pageCount * 25)
     }
 
-    static func pageCount(of url: URL) -> Int {
+    public static func pageCount(of url: URL) -> Int {
         PDFDocument(url: url)?.pageCount ?? 0
     }
 
-    static func ocrmypdfPath() -> String? {
+    public static func ocrmypdfPath() -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let candidates = [
             "/opt/homebrew/bin/ocrmypdf",
@@ -124,7 +124,7 @@ enum OcrService {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    static func doclingPath() -> String? {
+    public static func doclingPath() -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let candidates = [
             "\(home)/.local/share/uv/tools/docling/bin/docling",
@@ -135,7 +135,7 @@ enum OcrService {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    static func uvPath() -> String? {
+    public static func uvPath() -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return [
             "\(home)/.local/bin/uv",
@@ -147,7 +147,7 @@ enum OcrService {
     /// Layout-aware convert for scans. Docling (IBM, MIT) does tables, columns,
     /// reading order, and figures. MarkItDown cannot — it only reads a text layer.
     /// `ocr: false` when the PDF already has a text layer (faster, no double OCR).
-    static func layoutMarkdown(
+    public static func layoutMarkdown(
         from pdf: URL,
         to markdown: URL,
         ocr: Bool = true,
@@ -175,7 +175,7 @@ enum OcrService {
         }
     }
 
-    static func installDocling() async throws -> String {
+    public static func installDocling() async throws -> String {
         guard let uv = uvPath() else {
             throw NSError(
                 domain: "OcrService",
@@ -255,7 +255,7 @@ except Exception:
 """#
 
     /// Returns a PDF MarkItDown can read. Original file is never overwritten.
-    static func searchablePDF(
+    public static func searchablePDF(
         from url: URL,
         force: Bool = false,
         onStatus: @escaping @Sendable (String) -> Void
@@ -292,7 +292,7 @@ except Exception:
     /// Last resort when the Markdown is still empty after convert.
     /// Does not append full-page pictures onto a file that already has text
     /// (that doubled huge manuals and froze the preview).
-    static func enrichMarkdown(
+    public static func enrichMarkdown(
         markdownURL: URL,
         sourcePDF: URL,
         onStatus: @escaping @Sendable (String) -> Void
@@ -329,7 +329,7 @@ except Exception:
     }
 
     /// Full convert with PDFKit text, or Live Text on scans. No Python.
-    static func writeAppleMarkdown(
+    public static func writeAppleMarkdown(
         from url: URL,
         to dest: URL,
         ocr: Bool,
@@ -378,7 +378,7 @@ except Exception:
         try parts.joined(separator: "\n").write(to: dest, atomically: true, encoding: .utf8)
     }
 
-    static func markdownLooksEmpty(_ url: URL) -> Bool {
+    public static func markdownLooksEmpty(_ url: URL) -> Bool {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return true }
         let body = text
             .replacingOccurrences(of: #"[>#*\-\[\]\(\)`]"#, with: " ", options: .regularExpression)
@@ -453,7 +453,7 @@ except Exception:
         }
     }
 
-    static func installViaHomebrew() async throws -> String {
+    public static func installViaHomebrew() async throws -> String {
         let brew = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
             .first { FileManager.default.isExecutableFile(atPath: $0) }
         guard let brew else {

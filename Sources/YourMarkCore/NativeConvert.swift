@@ -3,8 +3,8 @@ import Foundation
 import Vision
 
 /// App Store (and fallback) converter. No Python, no downloads.
-enum NativeConvert {
-    static func convert(
+public enum NativeConvert {
+    public static func convert(
         input: URL,
         output: URL,
         ocr: Bool,

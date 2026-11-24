@@ -2,12 +2,12 @@ import AppKit
 import Foundation
 import PDFKit
 
-struct ManualBookmark: Identifiable, Hashable, Codable, Sendable {
-    var id: UUID
-    var title: String
-    var level: Int
-    var pageIndex: Int?
-    var lineIndex: Int?
+public struct ManualBookmark: Identifiable, Hashable, Codable, Sendable {
+    public var id: UUID
+    public var title: String
+    public var level: Int
+    public var pageIndex: Int?
+    public var lineIndex: Int?
 
     init(id: UUID = UUID(), title: String, level: Int, pageIndex: Int?, lineIndex: Int? = nil) {
         self.id = id
@@ -20,8 +20,8 @@ struct ManualBookmark: Identifiable, Hashable, Codable, Sendable {
 
 /// PDF outline (the tree Preview.app shows) plus page markers.
 /// MarkItDown/pdfminer does not emit bookmarks or headings — we restore them.
-enum PdfSidecar {
-    static func bookmarks(from url: URL) -> [ManualBookmark] {
+public enum PdfSidecar {
+    public static func bookmarks(from url: URL) -> [ManualBookmark] {
         guard url.pathExtension.lowercased() == "pdf" else { return [] }
         guard FileManager.default.isReadableFile(atPath: url.path) else { return [] }
         let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue ?? 0
@@ -52,7 +52,7 @@ enum PdfSidecar {
         return items
     }
 
-    static func pageIndex(from outline: PDFOutline, in doc: PDFDocument) -> Int? {
+    public static func pageIndex(from outline: PDFOutline, in doc: PDFDocument) -> Int? {
         if let page = outline.destination?.page {
             let idx = doc.index(for: page)
             if idx >= 0 { return idx }
@@ -65,7 +65,7 @@ enum PdfSidecar {
     }
 
     /// Large-font lines, used only when the PDF has no outline of its own.
-    static func fontHeadings(from url: URL) -> [ManualBookmark] {
+    public static func fontHeadings(from url: URL) -> [ManualBookmark] {
         guard url.pathExtension.lowercased() == "pdf" else { return [] }
         guard let doc = PDFDocument(url: url), doc.pageCount > 0 else { return [] }
         let deadline = Date().addingTimeInterval(8)
@@ -110,7 +110,7 @@ enum PdfSidecar {
         return items
     }
 
-    static func insertPageComments(_ markdown: String, pdf: URL?) -> String {
+    public static func insertPageComments(_ markdown: String, pdf: URL?) -> String {
         let text = promotePageBreaks(markdown)
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         // MarkItDown already wrote "## Page N", or we already have page comments.
@@ -158,7 +158,7 @@ enum PdfSidecar {
     }
 
     /// Insert the PDF outline as ATX headings at the matching page / title.
-    static func stitch(
+    public static func stitch(
         bookmarks: [ManualBookmark],
         markdown: String,
         pdf: URL?
@@ -259,24 +259,24 @@ enum PdfSidecar {
         return (out.joined(separator: "\n"), located)
     }
 
-    static func sidecarURL(for markdown: URL) -> URL {
+    public static func sidecarURL(for markdown: URL) -> URL {
         markdown.deletingPathExtension().appendingPathExtension("outline.json")
     }
 
-    static func writeSidecar(_ bookmarks: [ManualBookmark], nextTo markdown: URL) {
+    public static func writeSidecar(_ bookmarks: [ManualBookmark], nextTo markdown: URL) {
         guard !bookmarks.isEmpty,
               let data = try? JSONEncoder().encode(bookmarks) else { return }
         try? data.write(to: sidecarURL(for: markdown), options: .atomic)
     }
 
-    static func readSidecar(nextTo markdown: URL) -> [ManualBookmark] {
+    public static func readSidecar(nextTo markdown: URL) -> [ManualBookmark] {
         guard let data = try? Data(contentsOf: sidecarURL(for: markdown)),
               let items = try? JSONDecoder().decode([ManualBookmark].self, from: data)
         else { return [] }
         return items
     }
 
-    static func promotePageBreaks(_ markdown: String) -> String {
+    public static func promotePageBreaks(_ markdown: String) -> String {
         guard markdown.contains("\u{0c}") else { return markdown }
         let parts = markdown.components(separatedBy: "\u{0c}")
         var leading = 0
@@ -298,7 +298,7 @@ enum PdfSidecar {
 
     /// 0-based PDF page → line. `## Page N` wins over a comment, because the
     /// heading is where MarkItDown actually broke the page.
-    static func pageStartMap(_ lines: [String]) -> [Int: Int] {
+    public static func pageStartMap(_ lines: [String]) -> [Int: Int] {
         var map = pageCommentMap(lines)
         for (i, line) in lines.enumerated() {
             guard let title = headingText(line), let n = printedPageNumber(title) else { continue }
@@ -323,14 +323,14 @@ enum PdfSidecar {
     }
 
     /// Contents rows repeat the chapter title, then dot leaders or a page number.
-    static func isContentsLine(_ line: String) -> Bool {
+    public static func isContentsLine(_ line: String) -> Bool {
         if line.range(of: #"\.{3,}"#, options: .regularExpression) != nil { return true }
         let t = line.trimmingCharacters(in: .whitespaces)
         if headingText(line) != nil { return false }
         return t.range(of: #"\s{2,}\d{1,4}\s*$"#, options: .regularExpression) != nil
     }
 
-    static func pageCommentMap(_ lines: [String]) -> [Int: Int] {
+    public static func pageCommentMap(_ lines: [String]) -> [Int: Int] {
         var map: [Int: Int] = [:]
         for (i, line) in lines.enumerated() {
             let t = line.trimmingCharacters(in: .whitespaces)
@@ -364,7 +364,7 @@ enum PdfSidecar {
 
     /// The first line of a title, including one that wraps ("What Keeps the Devil" / "in Business").
     /// A leading outline number is ignored, so "5 What Keeps…" matches "What Keeps…".
-    static func titleAnchor(_ title: String, in lines: [String], from start: Int, until end: Int) -> Int? {
+    public static func titleAnchor(_ title: String, in lines: [String], from start: Int, until end: Int) -> Int? {
         let needle = outlineCore(title)
         guard needle.count >= 3 else { return nil }
         let lo = min(max(0, start), lines.count)
@@ -458,7 +458,7 @@ enum PdfSidecar {
         return nil
     }
 
-    static func folded(_ s: String) -> String {
+    public static func folded(_ s: String) -> String {
         var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
         t = t.replacingOccurrences(of: "\u{00a0}", with: " ")
         while t.hasPrefix("#") { t.removeFirst() }
@@ -488,7 +488,7 @@ enum PdfSidecar {
         return a.contains(needle) && needle.count >= 8
     }
 
-    static func headingText(_ line: String) -> String? {
+    public static func headingText(_ line: String) -> String? {
         var t = line.trimmingCharacters(in: .whitespaces)
         if t.hasPrefix(translationMarker) {
             t = String(t.dropFirst(translationMarker.count)).trimmingCharacters(in: .whitespaces)
@@ -504,7 +504,7 @@ enum PdfSidecar {
     }
 
     /// Page-number headings the model sometimes invents. Not a real outline.
-    static func isPageLikeHeading(_ title: String) -> Bool {
+    public static func isPageLikeHeading(_ title: String) -> Bool {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return false }
         let patterns = [
@@ -518,7 +518,7 @@ enum PdfSidecar {
     }
 
     /// Keep `outline` as the bookmark tree. Retitle matching headings; ignore invented ones.
-    static func applyTranslatedOutline(
+    public static func applyTranslatedOutline(
         _ outline: [ManualBookmark],
         to markdown: String
     ) -> (text: String, bookmarks: [ManualBookmark]) {
@@ -568,14 +568,14 @@ enum PdfSidecar {
         return (lines.joined(separator: "\n"), located)
     }
 
-    static func bodyStart(in lines: [String]) -> Int {
+    public static func bodyStart(in lines: [String]) -> Int {
         if let idx = lines.firstIndex(where: { $0.contains("<!-- page 1 -->") }) {
             return idx
         }
         return 0
     }
 
-    static func line(for bookmark: ManualBookmark, in lines: [String], pdf: URL?) -> Int? {
+    public static func line(for bookmark: ManualBookmark, in lines: [String], pdf: URL?) -> Int? {
         if let idx = bookmark.lineIndex, lines.indices.contains(idx) { return idx }
         let start = bodyStart(in: lines)
         let needle = bookmark.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -596,7 +596,7 @@ enum PdfSidecar {
         return nil
     }
 
-    static func pageLineMap(pdf: URL?, lines: [String], from start: Int) -> [Int: Int] {
+    public static func pageLineMap(pdf: URL?, lines: [String], from start: Int) -> [Int: Int] {
         guard let pdf, pdf.pathExtension.lowercased() == "pdf",
               let doc = PDFDocument(url: pdf), doc.pageCount > 0 else { return [:] }
         var map: [Int: Int] = [:]

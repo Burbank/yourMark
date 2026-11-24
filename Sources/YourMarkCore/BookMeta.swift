@@ -9,22 +9,22 @@ import PDFKit
 /// sources leave it empty, the opening of the book is read for it, and the
 /// file name is used if that reading does not yield one. The PDF's Creator and
 /// Producer are the tool that wrote the file, never the author or the publisher.
-struct BookRecord: Equatable, Sendable {
-    var title = ""
-    var authors: [String] = []
-    var publisher = ""
-    var date = ""
-    var rights = ""
-    var summary = ""
-    var subjects: [String] = []
-    var lang = ""
-    var isbn = ""
-    var sourceName = ""
-    var created = ""
-    var pdfCreator = ""
-    var pdfProducer = ""
+public struct BookRecord: Equatable, Sendable {
+    public var title = ""
+    public var authors: [String] = []
+    public var publisher = ""
+    public var date = ""
+    public var rights = ""
+    public var summary = ""
+    public var subjects: [String] = []
+    public var lang = ""
+    public var isbn = ""
+    public var sourceName = ""
+    public var created = ""
+    public var pdfCreator = ""
+    public var pdfProducer = ""
 
-    var isEmpty: Bool {
+    public var isEmpty: Bool {
         title.isEmpty && authors.isEmpty && publisher.isEmpty && date.isEmpty
             && rights.isEmpty && summary.isEmpty && subjects.isEmpty && lang.isEmpty
             && isbn.isEmpty && sourceName.isEmpty && created.isEmpty
@@ -49,11 +49,11 @@ struct BookRecord: Equatable, Sendable {
     }
 }
 
-enum BookMeta {
+public enum BookMeta {
     private static let fenceLimit = 40
 
     /// The YAML block, including the blank line under it, or nil when nothing is known.
-    static func yamlPrefix(_ record: BookRecord) -> String? {
+    public static func yamlPrefix(_ record: BookRecord) -> String? {
         guard !record.isEmpty else { return nil }
         var lines = ["---"]
         func add(_ key: String, _ value: String) {
@@ -95,7 +95,7 @@ enum BookMeta {
     }
 
     /// A block that starts the file and closes within 40 lines. Anything else stays in the text.
-    static func peel(_ markdown: String) -> (raw: String?, body: String, record: BookRecord?) {
+    public static func peel(_ markdown: String) -> (raw: String?, body: String, record: BookRecord?) {
         let lines = splitLines(markdown)
         guard let end = closingFence(lines) else { return (nil, markdown, nil) }
         var prefixCount = end + 1
@@ -109,17 +109,17 @@ enum BookMeta {
     }
 
     /// Line indexes of a well-formed block, including its closing fence.
-    static func span(_ lines: [String]) -> ClosedRange<Int>? {
+    public static func span(_ lines: [String]) -> ClosedRange<Int>? {
         guard let end = closingFence(lines) else { return nil }
         return 0...end
     }
 
-    static func newlineCount(_ text: String) -> Int {
+    public static func newlineCount(_ text: String) -> Int {
         text.reduce(0) { $0 + ($1 == "\n" ? 1 : 0) }
     }
 
     /// Put a title on a block that does not have one, leaving every other line as it was.
-    static func prefixByAddingTitle(_ title: String, to raw: String) -> String {
+    public static func prefixByAddingTitle(_ title: String, to raw: String) -> String {
         let text = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return raw }
         var lines = splitLines(raw)
@@ -137,7 +137,7 @@ enum BookMeta {
     }
 
     /// Put an author on a block that does not have one, leaving every other line as it was.
-    static func prefixByAddingAuthor(_ name: String, to raw: String) -> String {
+    public static func prefixByAddingAuthor(_ name: String, to raw: String) -> String {
         let text = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return raw }
         var lines = splitLines(raw)
@@ -158,7 +158,7 @@ enum BookMeta {
     }
 
     /// Opening pages, for a title reading. Capped so the rest of the book is not sent.
-    static func titleSample(_ markdown: String) -> String {
+    public static func titleSample(_ markdown: String) -> String {
         var text = openingLines(markdown).joined(separator: "\n")
         if text.count < 400 {
             let extra = String(markdown.prefix(4_000))
@@ -169,7 +169,7 @@ enum BookMeta {
     }
 
     /// A one-line title whose distinctive words actually appear in the opening.
-    static func acceptedDocumentTitle(_ raw: String, in opening: String) -> String? {
+    public static func acceptedDocumentTitle(_ raw: String, in opening: String) -> String? {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if let cut = text.firstIndex(where: { $0 == "\n" || $0 == "\r" }) {
             text = String(text[..<cut]).trimmingCharacters(in: .whitespaces)
@@ -200,7 +200,7 @@ enum BookMeta {
     }
 
     /// A readable stand-in from a file name, when the book itself did not yield a title.
-    static func titleFromFileName(_ name: String) -> String {
+    public static func titleFromFileName(_ name: String) -> String {
         let base = URL(fileURLWithPath: name).deletingPathExtension().lastPathComponent
         let tokens = base.split { $0 == "_" || $0 == "-" || $0.isWhitespace }.map(String.init)
         var kept: [String] = []
@@ -219,7 +219,7 @@ enum BookMeta {
     // MARK: - Sources
 
     /// Information dictionary, then XMP for fields that dictionary left empty.
-    static func fromPDF(_ url: URL) -> BookRecord {
+    public static func fromPDF(_ url: URL) -> BookRecord {
         PdfWork.sync {
             guard url.pathExtension.lowercased() == "pdf" else { return BookRecord() }
             var record = BookRecord()
@@ -247,7 +247,7 @@ enum BookMeta {
     }
 
     /// Short copyright-page lines in the first two pages of the conversion.
-    static func fromCopyright(_ markdown: String) -> BookRecord {
+    public static func fromCopyright(_ markdown: String) -> BookRecord {
         var record = BookRecord()
         let lines = openingLines(markdown)
         var index = 0
@@ -290,7 +290,7 @@ enum BookMeta {
     }
 
     /// Fill still-empty title, author, publisher, date, and subject from Open Library.
-    static func catalogFill(_ record: BookRecord) -> BookRecord {
+    public static func catalogFill(_ record: BookRecord) -> BookRecord {
         let missing = record.title.isEmpty || record.authors.isEmpty || record.publisher.isEmpty
             || record.date.isEmpty || record.subjects.isEmpty
         guard missing else { return record }
@@ -309,7 +309,7 @@ enum BookMeta {
     }
 
     /// Build a fresh record: PDF, then the copyright page, then a repeating header, then the catalog.
-    static func gather(pdf: URL?, markdown: String, header: BookRecord = BookRecord()) -> BookRecord {
+    public static func gather(pdf: URL?, markdown: String, header: BookRecord = BookRecord()) -> BookRecord {
         var record = pdf.map { fromPDF($0) } ?? BookRecord()
         record.fillEmpty(from: fromCopyright(markdown))
         record.fillEmpty(from: header)
@@ -317,7 +317,7 @@ enum BookMeta {
     }
 
     /// YAML wins. The PDF fills whatever the block left empty. The catalog is not called.
-    static func mergeForEPUB(markdown: String, pdf: URL?) -> BookRecord {
+    public static func mergeForEPUB(markdown: String, pdf: URL?) -> BookRecord {
         let peeled = peel(markdown)
         var record = peeled.record ?? BookRecord()
         if let pdf {
@@ -329,7 +329,7 @@ enum BookMeta {
         return record
     }
 
-    static func opfMetadata(_ record: BookRecord, uid: String, modified: String, hasCover: Bool) -> String {
+    public static func opfMetadata(_ record: BookRecord, uid: String, modified: String, hasCover: Bool) -> String {
         var lines: [String] = []
         lines.append("<dc:identifier id=\"uid\">\(xml(uid))</dc:identifier>")
         if let isbn = validISBN(record.isbn) {
@@ -368,7 +368,7 @@ enum BookMeta {
 
     // MARK: - Checks
 
-    static func validISBN(_ raw: String) -> String? {
+    public static func validISBN(_ raw: String) -> String? {
         var chars: [Character] = []
         for ch in raw.uppercased() {
             if ch.isNumber { chars.append(ch) }
@@ -381,7 +381,7 @@ enum BookMeta {
     }
 
     /// A publication year, or a calendar day. A PDF file date is not accepted here.
-    static func publicationDate(_ raw: String) -> String? {
+    public static func publicationDate(_ raw: String) -> String? {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         if text.range(of: #"^\d{4}$"#, options: .regularExpression) != nil { return text }
@@ -394,7 +394,7 @@ enum BookMeta {
     }
 
     /// A BCP 47 tag such as `en` or `en-US`. `und` and a guessed language stay out.
-    static func languageTag(_ raw: String) -> String? {
+    public static func languageTag(_ raw: String) -> String? {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard text != "und", !text.isEmpty else { return nil }
         guard text.range(of: #"^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$"#, options: .regularExpression) != nil else {

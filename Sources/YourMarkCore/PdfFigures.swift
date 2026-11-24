@@ -8,12 +8,12 @@ import UniformTypeIdentifiers
 /// MarkItDown/pdfminer keeps words, not pictures. After convert, pull every
 /// embedded raster and, where the page is a vector diagram with no photo,
 /// draw that page so the figure still appears in the Markdown.
-enum PdfFigures {
-    static let folderSuffix = "-figures"
-    static let folderName = "figures"
+public enum PdfFigures {
+    public static let folderSuffix = "-figures"
+    public static let folderName = "figures"
 
     /// The front page of the PDF, as a JPEG. That is the book’s own cover art.
-    static func coverJPEG(at url: URL) -> Data? {
+    public static func coverJPEG(at url: URL) -> Data? {
         guard url.pathExtension.lowercased() == "pdf",
               FileManager.default.isReadableFile(atPath: url.path) else { return nil }
         return PdfWork.sync { drawCover(url) }
@@ -52,7 +52,7 @@ enum PdfFigures {
     }
 
     @discardableResult
-    static func embed(
+    public static func embed(
         markdownURL: URL,
         sourcePDF: URL,
         stripChrome: Bool = true,
@@ -289,7 +289,7 @@ enum PdfFigures {
     /// Turn data-URI pictures into files in figures/, so the Markdown stays
     /// small for the reader and for AI. Returns how many files were written.
     @discardableResult
-    static func materializeEmbedded(markdownURL: URL) async -> Int {
+    public static func materializeEmbedded(markdownURL: URL) async -> Int {
         await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .utility).async {
                 cont.resume(returning: materializeLocked(markdownURL))
@@ -337,7 +337,7 @@ enum PdfFigures {
     /// Small pictures that share a size at least ten times are ornaments.
     /// The files and the Markdown lines that point at them are removed.
     /// A picture that appears once, and a large figure, stay.
-    static func dropRepeatedSmallArt(markdown: String, directory: URL) -> (PageNumberHide, [URL]) {
+    public static func dropRepeatedSmallArt(markdown: String, directory: URL) -> (PageNumberHide, [URL]) {
         let figDir = directory.appendingPathComponent(folderName, isDirectory: true)
         let files = (try? FileManager.default.contentsOfDirectory(
             at: figDir,
@@ -379,7 +379,7 @@ enum PdfFigures {
     /// Rewrite the Markdown and delete the ornament files. Used after pictures are saved.
     /// The map is nil when no line moved, so bookmarks stay where they are.
     @discardableResult
-    static func stripRepeatedSmallArt(at markdownURL: URL) -> PageNumberHide? {
+    public static func stripRepeatedSmallArt(at markdownURL: URL) -> PageNumberHide? {
         guard let text = try? String(contentsOf: markdownURL, encoding: .utf8) else { return nil }
         let result = dropRepeatedSmallArt(
             markdown: text,
