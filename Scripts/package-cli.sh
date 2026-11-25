@@ -10,30 +10,59 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-echo "→ Building yourmark-cli (release, arm64 + x86_64, no -DAPPSTORE)…"
-swift build -c release --product yourmark-cli --arch arm64 --arch x86_64
+# One --arch per invocation. Passing both arches together uses the Xcode
+# build graph, which on Xcode 16 leaves SWIFT_VERSION empty and fails.
+echo "→ Building yourmark-cli per architecture (release, no -DAPPSTORE)…"
 
-typeset -a candidates
-candidates=(
-  "$ROOT/.build/out/Products/Release/yourmark-cli"
-  "$ROOT/.build/apple/Products/Release/yourmark-cli"
-  "$ROOT/.build/release/yourmark-cli"
-)
+find_cli() {
+  local scratch="$1"
+  local candidate
+  for candidate in \
+    "$scratch/out/Products/Release/yourmark-cli" \
+    "$scratch/Products/Release/yourmark-cli" \
+    "$scratch/apple/Products/Release/yourmark-cli" \
+    "$scratch/release/yourmark-cli"
+  do
+    if [[ -f "$candidate" ]]; then
+      print -r -- "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
 
-BIN=""
-for candidate in "${candidates[@]}"; do
-  [[ -f "$candidate" ]] || continue
-  info=$(lipo -info "$candidate" 2>/dev/null || true)
-  if [[ "$info" == *"arm64"* && "$info" == *"x86_64"* ]]; then
-    BIN="$candidate"
-    break
+build_arch() {
+  local arch="$1"
+  local scratch="$ROOT/.build/cli-$arch"
+  rm -rf "$scratch"
+  echo "→ swift build -c release --product yourmark-cli --arch $arch --scratch-path .build/cli-$arch"
+  swift build -c release --product yourmark-cli --arch "$arch" --scratch-path "$scratch"
+  local bin info
+  if ! bin=$(find_cli "$scratch"); then
+    echo "yourmark-cli for $arch was not produced under $scratch" >&2
+    exit 1
   fi
-done
+  info=$(lipo -info "$bin" 2>/dev/null || true)
+  if [[ "$info" != *"$arch"* ]]; then
+    echo "$bin is not an $arch binary ($info)" >&2
+    exit 1
+  fi
+  BUILT="$bin"
+}
 
-if [[ -z "$BIN" ]]; then
-  echo "Universal yourmark-cli was not produced." >&2
-  echo "swift build --arch arm64 --arch x86_64 did not leave an arm64+x86_64 binary in:" >&2
-  printf '  %s\n' "${candidates[@]}" >&2
+BUILT=""
+build_arch arm64
+ARM_BIN="$BUILT"
+build_arch x86_64
+X64_BIN="$BUILT"
+
+mkdir -p "$ROOT/.build/cli-universal"
+BIN="$ROOT/.build/cli-universal/yourmark-cli"
+rm -f "$BIN"
+lipo -create "$ARM_BIN" "$X64_BIN" -output "$BIN"
+info=$(lipo -info "$BIN" 2>/dev/null || true)
+if [[ "$info" != *"arm64"* || "$info" != *"x86_64"* ]]; then
+  echo "lipo did not produce an arm64+x86_64 yourmark-cli ($info)" >&2
   exit 1
 fi
 
