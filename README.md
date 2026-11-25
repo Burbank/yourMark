@@ -4,44 +4,62 @@
   <img src="docs/icon.jpg" width="112" height="112" alt="yourMark">
 </p>
 
-A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, ask about, translate, and share with an AI. The file never leaves this computer unless you press Ask or Translate. You can export that Markdown as an EPUB.
-
 ## Downloads
 
-**yourMark (Mac app)**
+These are three different downloads.
 
-[Download yourMark-0.6.4.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.6.4.dmg) · [yourMark AI on the Mac App Store](https://apps.apple.com/us/app/yourmark-ai/id6811011164?mt=12)
+**yourMark (GitHub, Mac app)**
 
-**yourMark CLI**
+[Download yourMark-0.6.4.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.6.4.dmg)
 
-[Download yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip)
+Signed with Apple Developer ID and notarized by Apple. Gatekeeper checks the ticket. The first open can still ask you to click Open. It does not block the disk as an unidentified developer.
 
-yourMark CLI is a separate download. It is not inside the app or the App Store version.
+**yourMark AI (App Store)**
+
+[yourMark AI on the Mac App Store](https://apps.apple.com/us/app/yourmark-ai/id6811011164?mt=12)
+
+A different build from the GitHub disk. Apple distributes it through the App Store.
+
+**yourMark CLI (GitHub)**
+
+[Download yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip) · [SHA-256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256)
+
+A separate download. Not inside yourMark and not inside yourMark AI. Signed with Apple Developer ID and notarized by Apple. Gatekeeper checks the ticket. Check the zip with the SHA-256 file before you unzip it.
 
 [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
 
+A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, ask about, translate, and share with an AI. The file never leaves this computer unless you press Ask or Translate. You can export that Markdown as an EPUB.
+
 [Test a simpler version in your browser](https://burbank.github.io/yourMark/) (preview only — no OCR)
 
-The GitHub disk is named **yourMark**. The Mac App Store listing is **yourMark AI** (the short name was taken). Same app, two channels.
+The GitHub disk is named **yourMark**. The Mac App Store listing is **yourMark AI**. They are different builds.
 
 The window is **US English**, **Spanish**, or **Dutch**. Lock an Ask AI key in Settings if you want more interface languages.
 
 ## yourMark and yourMark CLI
 
-**yourMark** is the Mac app. It is on the Mac App Store as **yourMark AI**, and it is a direct download on the GitHub disk. Drop in a PDF, Word file, slides, or a spreadsheet. The words become Markdown on this Mac.
+**yourMark AI** is the App Store build. **yourMark** is the GitHub Mac app. **yourMark CLI** is the Terminal download. They are not one product.
 
-**yourMark CLI** is the same converter, for Terminal. It belongs to the direct download. The App Store app is sandboxed, so it cannot run OCRmyPDF, Tesseract, Docling, or other programs you installed on the Mac. In that build yourMark CLI prints `yourmark CLI is not available in the App Store build.` and exits 4.
-
-| | App Store app | GitHub disk | yourMark CLI |
+| | yourMark AI (App Store) | yourMark (GitHub, Mac app) | yourMark CLI (GitHub) |
 | --- | --- | --- | --- |
-| Name | yourMark AI | yourMark | `yourmark` |
-| What you get | The window | The window | `convert`, `probe`, `doctor` |
-| Sandbox | Yes. yourMark CLI exits 4 | No | No |
-| Scan OCR | Apple Live Text | Optional Docling and OCRmyPDF | Vision, or OCRmyPDF + Tesseract |
+| Sandbox | On | Off | Off |
+| Converter | Included MarkItDown | MarkItDown from PyPI | MarkItDown if installed |
+| Scans | Apple Live Text | Live Text or Docling | Vision or OCRmyPDF |
+| Extra tools | Cannot install | Docling, OCRmyPDF | Uses what is installed |
+| Updates | App Store | GitHub and PyPI | No updater |
+| yourMark CLI | Exits 4 | Not in the disk | This download |
+| Output folder | On this Mac | Beside the file | `--out` you choose |
+
+- yourMark AI uses the App Sandbox. The GitHub app does not. yourMark CLI is not inside either app.
+- yourMark AI ships Microsoft MarkItDown inside the app and does not install software after purchase. The GitHub app installs MarkItDown from PyPI and can upgrade it. yourMark CLI uses a MarkItDown already on the Mac.
+- yourMark AI reads scans with Apple Live Text. The GitHub app can also use Docling, and OCRmyPDF with Tesseract for a searchable PDF. yourMark CLI can use Apple Vision, or OCRmyPDF and Tesseract when those programs are installed.
+- yourMark AI updates from the App Store. The GitHub app checks GitHub for a newer app and PyPI for MarkItDown. yourMark CLI has no updater.
+- An App Store build of yourMark CLI prints `yourmark CLI is not available in the App Store build.` and exits 4. The GitHub disk does not include yourMark CLI.
+- yourMark AI saves into its library folder unless you pick a folder. The GitHub app can save beside the original. yourMark CLI writes under the `--out` folder.
 
 ### Download and install yourMark CLI
 
-yourMark CLI is a separate download. It is not inside the app or the App Store version. You need macOS 14 or later. The zip is a universal binary (Apple silicon and Intel).
+yourMark CLI is a separate download. It is not inside yourMark and not inside yourMark AI. You need macOS 14 or later. The zip is a universal binary (Apple silicon and Intel), signed with Apple Developer ID and notarized by Apple.
 
 1. Download [yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip).
 2. Check the SHA-256 against [yourmark-cli-0.6.4-macos.sha256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256).
@@ -159,13 +177,13 @@ Keep the original PDF. Markdown is the working copy.
 - **Hunter-Gatherer / FORAGE** — select text, press Enter, keep clips on a dated note beside the reader. Headings and tables match the rendered reader. A drag across cells keeps the table.
 - **Settings** — choose the folder once (iCloud if you want). New Markdown in that folder appears in the library. Interface language is US English, Spanish, or Dutch — an Ask AI key can add more. Bright, Dim, or System in the header; your keys; extra help for scanned pages.
 
-yourMark is the window. [Microsoft MarkItDown](https://github.com/microsoft/markitdown) does the converting, on this Mac. If Microsoft publishes an update, yourMark can install it for you.
+yourMark is the window. [Microsoft MarkItDown](https://github.com/microsoft/markitdown) does the converting, on this Mac. The GitHub app can install a newer MarkItDown. yourMark AI does not.
 
-Needs **macOS 14** or later. Open the disk and **drag yourMark onto Applications** (follow the arrow). Do not keep working from the disk — if you do, yourMark will copy itself into Applications so ejecting is safe. The first launch installs MarkItDown if it is missing. The first window asks where converted files should live.
+Needs **macOS 14** or later. Open the GitHub disk and **drag yourMark onto Applications** (follow the arrow). Do not keep working from the disk — the GitHub app copies itself into Applications so ejecting is safe. On that disk, the first launch installs MarkItDown if it is missing. The first window asks where converted files should live.
 
-This Mac disk is signed and notarized by Apple. Open yourMark from Applications.
+The GitHub disk is signed with Apple Developer ID and notarized by Apple. Open yourMark from Applications.
 
-[Privacy](https://burbank.github.io/yourMark/privacy.html) · [Apple distribution](docs/apple-distribution.md) (notarized GitHub disk and Mac App Store)
+[Privacy](https://burbank.github.io/yourMark/privacy.html) · [Apple distribution](docs/apple-distribution.md)
 
 ## Pictures of the window
 
@@ -259,7 +277,7 @@ Download the disk image, drag **yourMark** onto **Applications** (follow the arr
   <img src="docs/shots/intro-first-open.jpg" width="273" alt="macOS: yourMark.app is an app downloaded from the internet. Are you sure you want to open it? Apple checked it for malicious software and none was detected. Cancel or Open.">
 </p>
 
-The first open may show this. That is normal. Click **Open**. The dim line is Apple saying it already scanned the disk — yourMark is notarized.
+The first open of the GitHub disk may show this. That is normal. Click **Open**. The dim line is Apple saying it already scanned the disk. The disk is signed with Apple Developer ID and notarized by Apple.
 
 **Homebrew (optional):**
 
@@ -268,7 +286,11 @@ brew tap Burbank/yourMark
 brew install --cask yourmark
 ```
 
-**From source:** `./Scripts/Install.command`
+**From source** (this builds the GitHub app, not yourMark CLI):
+
+```sh
+./Scripts/Install.command
+```
 
 ### Windows (early)
 

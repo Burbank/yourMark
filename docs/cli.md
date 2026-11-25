@@ -1,10 +1,10 @@
 # yourMark CLI
 
-yourMark CLI converts documents to Markdown using the same conversion pipeline as the yourMark app. It is a separate download. It is not inside `yourMark.app` or the App Store version.
+yourMark CLI is a separate GitHub download for Terminal. It is not inside the GitHub app **yourMark**, and it is not inside **yourMark AI**. Those two apps are different builds.
 
 ## Download and install yourMark CLI
 
-You need macOS 14 or later. The zip is a signed, notarized universal binary (Apple silicon and Intel).
+You need macOS 14 or later. The zip on the GitHub release is a universal binary (Apple silicon and Intel). It is signed with Apple Developer ID and notarized by Apple. Gatekeeper checks the ticket. Check the SHA-256 file before you unzip it. A build from source is not notarized.
 
 1. Download [yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip).
 2. Check the SHA-256 against [yourmark-cli-0.6.4-macos.sha256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256).
@@ -37,7 +37,24 @@ swift build -c release --product yourmark-cli
 
 The product file is named `yourmark-cli` (`.build/release/yourmark-cli`, or `.build/out/Products/Release/yourmark-cli` on a newer toolchain). Copy it to `yourmark` on your PATH so the file you run matches `yourmark --help`.
 
-## Commands
+| | yourMark AI (App Store) | yourMark (GitHub, Mac app) | yourMark CLI (GitHub) |
+| --- | --- | --- | --- |
+| Sandbox | On | Off | Off |
+| Converter | Included MarkItDown | MarkItDown from PyPI | MarkItDown if installed |
+| Scans | Apple Live Text | Live Text or Docling | Vision or OCRmyPDF |
+| Extra tools | Cannot install | Docling, OCRmyPDF | Uses what is installed |
+| Updates | App Store | GitHub and PyPI | No updater |
+| yourMark CLI | Exits 4 | Not in the disk | This download |
+| Output folder | On this Mac | Beside the file | `--out` you choose |
+
+- yourMark AI uses the App Sandbox. The GitHub app does not. yourMark CLI is not inside either app.
+- yourMark AI ships Microsoft MarkItDown inside the app and does not install software after purchase. The GitHub app installs MarkItDown from PyPI and can upgrade it. yourMark CLI uses a MarkItDown already on the Mac.
+- yourMark AI reads scans with Apple Live Text. The GitHub app can also use Docling, and OCRmyPDF with Tesseract for a searchable PDF. yourMark CLI can use Apple Vision, or OCRmyPDF and Tesseract when those programs are installed.
+- yourMark AI updates from the App Store. The GitHub app checks GitHub for a newer app and PyPI for MarkItDown. yourMark CLI has no updater.
+- An App Store build of yourMark CLI prints `yourmark CLI is not available in the App Store build.` and exits 4. The GitHub disk does not include yourMark CLI.
+- yourMark AI saves into its library folder unless you pick a folder. The GitHub app can save beside the original. yourMark CLI writes under the `--out` folder.
+
+## What yourMark CLI runs
 
 ### convert
 
