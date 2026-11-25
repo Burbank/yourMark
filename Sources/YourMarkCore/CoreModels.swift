@@ -103,6 +103,10 @@ public struct ConvertOptions: Sendable {
     public var askBaseURL: String
     public var askModel: String
     public var timeoutSeconds: Int?
+    /// `auto`, `vision`, or `tesseract`.
+    public var ocrEngineChoice: String
+    /// `auto`, `docling`, or `off`.
+    public var layoutMode: String
     
     public enum KeepOriginal: String, Sendable {
         case auto, always, never
@@ -119,7 +123,9 @@ public struct ConvertOptions: Sendable {
         askHasKey: Bool = false,
         askBaseURL: String = "",
         askModel: String = "",
-        timeoutSeconds: Int? = nil
+        timeoutSeconds: Int? = nil,
+        ocrEngineChoice: String = "auto",
+        layoutMode: String = "auto"
     ) {
         self.ocrEnabled = ocrEnabled
         self.ocrLanguage = ocrLanguage
@@ -132,7 +138,16 @@ public struct ConvertOptions: Sendable {
         self.askBaseURL = askBaseURL
         self.askModel = askModel
         self.timeoutSeconds = timeoutSeconds
+        self.ocrEngineChoice = ocrEngineChoice
+        self.layoutMode = layoutMode
     }
+}
+
+/// Weak OCR when the text is short or the engine's mean confidence is under 0.6.
+public func isWeakOCR(charsPerPage: Int, meanConfidence: Double?) -> Bool {
+    if charsPerPage < OCRQuality.minCharsPerOCRPage { return true }
+    if let meanConfidence, meanConfidence < OCRQuality.weakConfidenceThreshold { return true }
+    return false
 }
 
 /// Result of a conversion
@@ -145,6 +160,7 @@ public struct ConvertResult: Sendable {
     public var warnings: [String]
     public var elapsedSeconds: Double
     public var weakOCR: Bool
+    public var meanConfidence: Double?
     
     public init(
         markdownURL: URL,
@@ -154,7 +170,8 @@ public struct ConvertResult: Sendable {
         pictures: Int = 0,
         warnings: [String] = [],
         elapsedSeconds: Double = 0,
-        weakOCR: Bool = false
+        weakOCR: Bool = false,
+        meanConfidence: Double? = nil
     ) {
         self.markdownURL = markdownURL
         self.originalKept = originalKept
@@ -164,5 +181,6 @@ public struct ConvertResult: Sendable {
         self.warnings = warnings
         self.elapsedSeconds = elapsedSeconds
         self.weakOCR = weakOCR
+        self.meanConfidence = meanConfidence
     }
 }

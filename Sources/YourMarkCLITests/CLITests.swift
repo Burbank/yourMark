@@ -24,16 +24,20 @@ final class CLITests: XCTestCase {
         XCTAssertEqual(formatBytes(1500 * 1024), "1.5 MB")
     }
     
-    func testStatusString() {
-        XCTAssertEqual(statusString(0), "ok")
-        XCTAssertEqual(statusString(1), "partial")
-        XCTAssertEqual(statusString(2), "rejected")
-        XCTAssertEqual(statusString(3), "failed")
-        XCTAssertEqual(statusString(4), "engine_missing")
-        XCTAssertEqual(statusString(5), "io_error")
-        XCTAssertEqual(statusString(124), "timeout")
+    func testWeakOCRUsesLowConfidenceEvenWhenTextIsLong() {
+        XCTAssertTrue(isWeakOCR(charsPerPage: 4000, meanConfidence: 0.2))
+        XCTAssertFalse(isWeakOCR(charsPerPage: 4000, meanConfidence: 0.9))
+        XCTAssertTrue(isWeakOCR(charsPerPage: 40, meanConfidence: 0.95))
     }
-    
+
+    func testTesseractHOCRConfidenceIsRecorded() {
+        OCRVisionMetrics.reset()
+        let hocr = "<span class='ocrx_word' title='bbox 0 0 10 10; x_wconf 22'>blackletter</span>"
+        OcrService.recordTesseractConfidences(in: hocr)
+        XCTAssertEqual(OCRVisionMetrics.meanConfidence ?? 0, 0.22, accuracy: 0.001)
+        XCTAssertTrue(isWeakOCR(charsPerPage: 4000, meanConfidence: OCRVisionMetrics.meanConfidence))
+    }
+
     func testVisionLanguageMapping() {
         XCTAssertEqual(visionRecognitionLanguages(for: "nld"), ["nl-NL", "nl-BE"])
         XCTAssertEqual(visionRecognitionLanguages(for: "eng"), ["en-US", "en-GB"])

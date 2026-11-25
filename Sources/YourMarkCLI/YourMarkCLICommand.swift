@@ -72,6 +72,12 @@ struct Convert: AsyncParsableCommand {
     
     @Option(name: .long, help: "OCR language: auto|eng|nld|spa|hun (default: auto)")
     var ocrLang: String = "auto"
+
+    @Option(name: .long, help: "OCR engine: auto|vision|tesseract (default: auto). auto uses OCRmyPDF when it is installed, otherwise Apple Vision.")
+    var ocrEngine: String = "auto"
+
+    @Option(name: .long, help: "Reading order: auto|docling|off (default: auto). auto puts the body first and sidebars after it.")
+    var layout: String = "auto"
     
     @Flag(name: .long, help: "Output JSON instead of human-readable text")
     var json: Bool = false
@@ -188,12 +194,23 @@ struct Convert: AsyncParsableCommand {
         }
         
         // Create conversion options
-        var options = ConvertOptions(
+        guard ["auto", "vision", "tesseract"].contains(ocrEngine.lowercased()) else {
+            reportError(json: json, code: 2, message: "Invalid OCR engine: \(ocrEngine). Use auto, vision, or tesseract.")
+            throw ExitCode(2)
+        }
+        guard ["auto", "docling", "off"].contains(layout.lowercased()) else {
+            reportError(json: json, code: 2, message: "Invalid layout: \(layout). Use auto, docling, or off.")
+            throw ExitCode(2)
+        }
+        let options = ConvertOptions(
             ocrEnabled: ocrMode != .off,
             ocrLanguage: ocrLang,
             extractImages: extractImages,
             keepOriginalPDF: keepMode,
-            timeoutSeconds: timeoutSeconds
+            prefersDocling: layout.lowercased() == "docling",
+            timeoutSeconds: timeoutSeconds,
+            ocrEngineChoice: ocrEngine.lowercased(),
+            layoutMode: layout.lowercased()
         )
         
         // Set up progress reporting
@@ -221,6 +238,7 @@ struct Convert: AsyncParsableCommand {
                     "pages": probeInfo.pages,
                     "ocr_pages": result.usedOCR ? probeInfo.scannedPages : 0,
                     "ocr_engine": result.ocrEngine ?? "",
+                    "mean_confidence": result.meanConfidence ?? NSNull(),
                     "weak_ocr": result.weakOCR,
                     "images": result.pictures,
                     "original_kept": result.originalKept,

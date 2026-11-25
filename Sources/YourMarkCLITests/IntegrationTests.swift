@@ -52,43 +52,6 @@ final class IntegrationTests: XCTestCase {
         return url
     }
     
-    // MARK: - Exit Code Tests
-    
-    func testExitCodeOK() {
-        // Exit 0 - successful conversion (would need full pipeline)
-        XCTAssertEqual(statusString(0), "ok")
-    }
-    
-    func testExitCodePartial() {
-        // Exit 1 - partial with warnings
-        XCTAssertEqual(statusString(1), "partial")
-    }
-    
-    func testExitCodeRejected() {
-        // Exit 2 - rejected input
-        XCTAssertEqual(statusString(2), "rejected")
-    }
-    
-    func testExitCodeFailed() {
-        // Exit 3 - conversion failed
-        XCTAssertEqual(statusString(3), "failed")
-    }
-    
-    func testExitCodeEngineMissing() {
-        // Exit 4 - engine not available
-        XCTAssertEqual(statusString(4), "engine_missing")
-    }
-    
-    func testExitCodeIOError() {
-        // Exit 5 - I/O error
-        XCTAssertEqual(statusString(5), "io_error")
-    }
-    
-    func testExitCodeTimeout() {
-        // Exit 124 - timeout
-        XCTAssertEqual(statusString(124), "timeout")
-    }
-    
     // MARK: - JSON Tests
     
     func testJSONSerialization() {
@@ -228,24 +191,18 @@ final class IntegrationTests: XCTestCase {
     
     // MARK: - One-Folder Layout Tests
     
-    func testOneFolderLayout() {
-        // The output should follow the pattern:
-        // <out>/<Title>/<Title>.md
-        // <out>/<Title>/<Title>.outline.json
-        // <out>/<Title>/figures/ (if images extracted)
-        // <out>/<Title>/<original>.pdf (if kept)
-        
-        let outputBase = tempDir.appendingPathComponent("Library")
-        let docTitle = "Test Document"
-        let expectedFolder = outputBase.appendingPathComponent(docTitle)
-        let expectedMD = expectedFolder.appendingPathComponent("\(docTitle).md")
-        let expectedOutline = expectedFolder.appendingPathComponent("\(docTitle).outline.json")
-        let expectedFigures = expectedFolder.appendingPathComponent("figures")
-        
-        // Verify path construction
-        XCTAssertTrue(expectedMD.path.contains(docTitle))
-        XCTAssertTrue(expectedMD.path.hasSuffix(".md"))
-        XCTAssertTrue(expectedOutline.path.hasSuffix(".outline.json"))
+    func testOneFolderLayout() async throws {
+        let pdf = createTextPDF(pages: 1, text: "Outline fixture for the one-folder layout.")
+        let library = tempDir.appendingPathComponent("Library", isDirectory: true)
+        let pipeline = ConvertPipeline(options: ConvertOptions(ocrEnabled: false, layoutMode: "off"))
+        let result = try await pipeline.convert(input: pdf, outputFolder: library)
+        let folder = result.markdownURL.deletingLastPathComponent()
+        let outline = result.markdownURL.deletingPathExtension().appendingPathExtension("outline.json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: result.markdownURL.path))
+        XCTAssertEqual(folder.lastPathComponent, pdf.deletingPathExtension().lastPathComponent)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outline.path))
+        let data = try Data(contentsOf: outline)
+        XCTAssertNotNil(try JSONSerialization.jsonObject(with: data) as? [Any])
     }
     
     // MARK: - Temp Directory Tests

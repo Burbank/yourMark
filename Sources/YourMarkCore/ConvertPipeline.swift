@@ -18,12 +18,17 @@ public actor ConvertPipeline {
     
     /// Convert one document from input to the output folder.
     public func convert(input: URL, outputFolder: URL) async throws -> ConvertResult {
+        let result: ConvertResult
         if let seconds = options.timeoutSeconds {
-            return try await Self.withTimeout(seconds: seconds) {
+            result = try await Self.withTimeout(seconds: seconds) {
                 try await self.convertWork(input: input, outputFolder: outputFolder)
             }
+        } else {
+            result = try await convertWork(input: input, outputFolder: outputFolder)
         }
-        return try await convertWork(input: input, outputFolder: outputFolder)
+        var stamped = result
+        stamped.meanConfidence = OCRVisionMetrics.meanConfidence
+        return stamped
     }
 
     /// First of `operation` or a timeout. Used by `convert` and by tests.
@@ -81,6 +86,7 @@ public actor ConvertPipeline {
             
             if isPDF {
                 await tidyPDFMarkdown(markdownURL, pdf: input)
+                await applyLayout(markdownURL, pdf: input)
                 let bookmarks = await loadBookmarks(input)
                 let (final, _) = await finalizeMarkdown(markdownURL, original: input, bookmarks: bookmarks)
                 pictures = await PdfFigures.embed(
@@ -157,6 +163,7 @@ public actor ConvertPipeline {
             let prepared = try await OcrService.searchablePDF(
                 from: input,
                 ocrLanguage: lang,
+                ocrEngine: options.ocrEngineChoice,
                 onStatus: { [weak self] msg in self?.onStatus?(msg) }
             )
             inputForConvert = prepared.url
@@ -192,6 +199,7 @@ public actor ConvertPipeline {
                         from: input,
                         force: true,
                         ocrLanguage: lang,
+                        ocrEngine: options.ocrEngineChoice,
                         onStatus: { [weak self] msg in self?.onStatus?(msg) }
                     )
                     usedOCR = true
@@ -221,6 +229,7 @@ public actor ConvertPipeline {
             
             reportStatus("Cleaning headers and headings")
             await tidyPDFMarkdown(markdownURL, pdf: input)
+            await applyLayout(markdownURL, pdf: input)
             
             let bookmarks = await loadBookmarks(input)
             let (final, _) = await finalizeMarkdown(markdownURL, original: input, bookmarks: bookmarks)
@@ -332,6 +341,17 @@ public actor ConvertPipeline {
         header: BookRecord? = nil
     ) async -> (URL, [ManualBookmark]) {
         _ = header
+        let outline = bookmarks.map { item in
+            [
+                "title": item.title,
+                "level": item.level,
+                "page": item.pageIndex ?? -1
+            ] as [String: Any]
+        }
+        let outlineURL = url.deletingPathExtension().appendingPathExtension("outline.json")
+        if let data = try? JSONSerialization.data(withJSONObject: outline, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: outlineURL)
+        }
         return (url, bookmarks)
     }
     
@@ -340,11 +360,21 @@ public actor ConvertPipeline {
         guard let content = try? String(contentsOf: markdownURL) else { return false }
         let chars = content.trimmingCharacters(in: .whitespacesAndNewlines).count
         let charsPerPage = chars / max(pages, 1)
-        if charsPerPage < OCRQuality.minCharsPerOCRPage { return true }
-        if let mean = OCRVisionMetrics.meanConfidence, mean < OCRQuality.weakConfidenceThreshold {
-            return true
+        return isWeakOCR(charsPerPage: charsPerPage, meanConfidence: OCRVisionMetrics.meanConfidence)
+    }
+
+    private func applyLayout(_ markdown: URL, pdf: URL) async {
+        guard options.layoutMode != "off" else { return }
+        if options.layoutMode == "docling" {
+            _ = await OcrService.layoutMarkdown(
+                from: pdf,
+                to: markdown,
+                ocr: false,
+                ocrLanguage: options.ocrLanguage,
+                onStatus: { [weak self] msg in self?.onStatus?(msg) }
+            )
         }
-        return false
+        _ = await PdfWork.runAsync { LayoutOrder.apply(to: markdown, pdf: pdf) }
     }
     
     private func shouldKeepOriginal(usedOCR: Bool, weakOCR: Bool, input: URL, outputFolder: URL) -> Bool {

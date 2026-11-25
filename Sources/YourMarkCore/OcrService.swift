@@ -270,18 +270,25 @@ except Exception:
         from url: URL,
         force: Bool = false,
         ocrLanguage: String = "auto",
+        ocrEngine: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
     ) async throws -> (url: URL, didOCR: Bool) {
         guard force || needsOCR(url) else { return (url, false) }
+        if ocrEngine == "vision" {
+            onStatus("OCR with Apple Live Text…")
+            return (url, false)
+        }
         if let exe = ocrmypdfPath() {
             onStatus("OCR with OCRmyPDF (Tesseract)…")
             let out = FileManager.default.temporaryDirectory
                 .appendingPathComponent("yourMark-ocr-\(UUID().uuidString).pdf")
             let tessLang = tesseractLanguageCode(for: ocrLanguage)
+            let sidecar = out.deletingPathExtension().appendingPathExtension("hocr")
             let args = [
                 force ? "--force-ocr" : "--skip-text",
                 "--optimize", "0",
                 "--output-type", "pdf",
+                "--sidecar", sidecar.path,
                 "-l", tessLang,
                 url.path,
                 out.path,
@@ -289,6 +296,9 @@ except Exception:
             do {
                 _ = try await run(exe, args, cancellable: true)
                 if FileManager.default.fileExists(atPath: out.path) {
+                    if let hocr = try? String(contentsOf: sidecar, encoding: .utf8) {
+                        recordTesseractConfidences(in: hocr)
+                    }
                     return (out, true)
                 }
             } catch is ProcessRun.ConvertCancel {
@@ -300,6 +310,17 @@ except Exception:
             onStatus("OCR with Apple Live Text…")
         }
         return (url, true)
+    }
+
+    /// Tesseract hOCR stores word confidence as `x_wconf` from 0 to 100.
+    public static func recordTesseractConfidences(in hocr: String) {
+        guard let regex = try? NSRegularExpression(pattern: #"x_wconf ['"]?(\d+)"#) else { return }
+        let range = NSRange(hocr.startIndex..., in: hocr)
+        for match in regex.matches(in: hocr, range: range) {
+            guard let span = Range(match.range(at: 1), in: hocr),
+                  let value = Double(hocr[span]) else { continue }
+            OCRVisionMetrics.record(confidence: value / 100)
+        }
     }
 
     /// Last resort when the Markdown is still empty after convert.
