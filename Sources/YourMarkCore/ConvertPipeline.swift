@@ -57,6 +57,7 @@ public actor ConvertPipeline {
         var warnings: [String] = []
         var usedOCR = false
         var ocrEngine: String? = nil
+        var keptDoclingMarkdown = false
         var pictures = 0
         var originalKept = false
         let lang = options.ocrLanguage
@@ -200,6 +201,7 @@ public actor ConvertPipeline {
                 if layoutResult {
                     usedOCR = true
                     ocrEngine = "Docling"
+                    keptDoclingMarkdown = true
                 } else {
                     let prepared = try await OcrService.searchablePDF(
                         from: input,
@@ -235,7 +237,7 @@ public actor ConvertPipeline {
             
             reportStatus("Cleaning headers and headings")
             await tidyPDFMarkdown(markdownURL, pdf: input)
-            await applyLayout(markdownURL, pdf: input)
+            await applyLayout(markdownURL, pdf: input, keepDocling: keptDoclingMarkdown)
             
             let bookmarks = await loadBookmarks(input)
             let (final, _) = await finalizeMarkdown(markdownURL, original: input, bookmarks: bookmarks)
@@ -369,8 +371,10 @@ public actor ConvertPipeline {
         return isWeakOCR(charsPerPage: charsPerPage, meanConfidence: OCRVisionMetrics.meanConfidence)
     }
 
-    private func applyLayout(_ markdown: URL, pdf: URL) async {
+    private func applyLayout(_ markdown: URL, pdf: URL, keepDocling: Bool = false) async {
         guard options.layoutMode != "off" else { return }
+        // A successful Docling write already has reading order. Do not replace it with PDFKit.
+        if keepDocling { return }
         let engineLocked = options.ocrEngineChoice == "vision" || options.ocrEngineChoice == "tesseract"
         if options.layoutMode == "docling", !engineLocked {
             let wrote = await OcrService.layoutMarkdown(

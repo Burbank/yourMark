@@ -150,12 +150,28 @@ public func probeFile(_ url: URL) async throws -> ProbeInfo {
 public enum OCRVisionMetrics {
     private static let lock = NSLock()
     private static var samples: [Double] = []
+    private static var visionPageStorage: [String] = []
 
     public static func reset() {
         lock.lock()
         samples = []
         languages = []
+        visionPageStorage = []
         lock.unlock()
+    }
+
+    /// Page text from the Vision pass already run for this convert.
+    /// `enrichMarkdown` reuses it instead of recognizing every page again.
+    public static func setVisionPages(_ pages: [String]) {
+        lock.lock()
+        visionPageStorage = pages
+        lock.unlock()
+    }
+
+    public static var visionPages: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return visionPageStorage
     }
 
     private static var languages: [String] = []

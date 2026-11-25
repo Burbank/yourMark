@@ -1,3 +1,5 @@
+import CoreGraphics
+import CoreText
 import PDFKit
 import XCTest
 @testable import YourMarkCore
@@ -64,49 +66,60 @@ final class LayoutOrderTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: markdown), original)
     }
 
+    func testPipelineAutoDoesNotFragmentTokenOrAbout() async throws {
+        let pdf = try makeColumnPDF()
+        let out = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layout-auto-\(UUID().uuidString)", isDirectory: true)
+        let pipeline = ConvertPipeline(options: ConvertOptions(ocrEnabled: false, layoutMode: "auto"))
+        let result = try await pipeline.convert(input: pdf, outputFolder: out)
+        let markdown = try String(contentsOf: result.markdownURL)
+        XCTAssertTrue(markdown.contains("## Page 1"))
+        XCTAssertTrue(markdown.contains("TOKENIZATION"))
+        XCTAssertFalse(markdown.contains("TOKENIZAT\n"))
+        let contents = try XCTUnwrap(markdown.range(of: "Contents"))
+        let about = try XCTUnwrap(markdown.range(of: "About Bitwise"))
+        XCTAssertLessThan(contents.lowerBound, about.lowerBound)
+        XCTAssertTrue(markdown.contains("> **Sidebar**"))
+        XCTAssertLessThan(markdown.range(of: "> **Sidebar**")!.lowerBound, about.lowerBound)
+    }
+
+    func testPipelineDoclingKeepsDoclingMarkdown() async throws {
+        let pdf = try makeColumnPDF()
+        let out = FileManager.default.temporaryDirectory
+            .appendingPathComponent("layout-docling-\(UUID().uuidString)", isDirectory: true)
+        let pipeline = ConvertPipeline(options: ConvertOptions(
+            ocrEnabled: false,
+            prefersDocling: true,
+            layoutMode: "docling"
+        ))
+        let result = try await pipeline.convert(input: pdf, outputFolder: out)
+        let markdown = try String(contentsOf: result.markdownURL)
+        XCTAssertFalse(markdown.contains("> **Sidebar**"), "PDFKit rewrite must not replace Docling or MarkItDown")
+        XCTAssertTrue(markdown.localizedCaseInsensitiveContains("tokenization"))
+        XCTAssertTrue(markdown.localizedCaseInsensitiveContains("about bitwise"))
+    }
+
+    /// Two columns drawn with Core Text so PDFKit can measure line bounds.
     private func makeColumnPDF() throws -> URL {
-        let stream = """
-        BT
-        /F1 12 Tf
-        72 720 Td
-        (TOKENIZATION) Tj
-        0 -24 Td
-        (Contents of the report) Tj
-        ET
-        BT
-        /F1 12 Tf
-        360 720 Td
-        (About Bitwise) Tj
-        0 -24 Td
-        (Important information) Tj
-        ET
-        """
-        let streamData = Data(stream.utf8)
-        let objects: [Data] = [
-            Data("<< /Type /Catalog /Pages 2 0 R >>".utf8),
-            Data("<< /Type /Pages /Count 1 /Kids [3 0 R] >>".utf8),
-            Data("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>".utf8),
-            Data("<< /Length \(streamData.count) >>\nstream\n".utf8) + streamData + Data("\nendstream".utf8),
-            Data("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".utf8)
-        ]
-        var body = Data("%PDF-1.4\n".utf8)
-        var offsets: [Int] = [0]
-        for (index, object) in objects.enumerated() {
-            offsets.append(body.count)
-            body.append(Data("\(index + 1) 0 obj\n".utf8))
-            body.append(object)
-            body.append(Data("\nendobj\n".utf8))
-        }
-        let xrefAt = body.count
-        var xref = "xref\n0 \(objects.count + 1)\n"
-        xref += "0000000000 65535 f \n"
-        for offset in offsets.dropFirst() {
-            xref += String(format: "%010d 00000 n \n", offset)
-        }
-        body.append(Data(xref.utf8))
-        body.append(Data("trailer << /Size \(objects.count + 1) /Root 1 0 R >>\nstartxref\n\(xrefAt)\n%%EOF\n".utf8))
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("columns-\(UUID().uuidString).pdf")
-        try body.write(to: url)
+        var box = CGRect(x: 0, y: 0, width: 612, height: 792)
+        guard let ctx = CGContext(url as CFURL, mediaBox: &box, nil) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        ctx.beginPDFPage(nil)
+        let font = CTFontCreateWithName("Helvetica" as CFString, 12, nil)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        func draw(_ text: String, _ x: CGFloat, _ y: CGFloat) {
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+            ctx.textPosition = CGPoint(x: x, y: y)
+            CTLineDraw(line, ctx)
+        }
+        draw("TOKENIZATION", 72, 720)
+        draw("Contents of the report", 72, 696)
+        draw("About Bitwise", 360, 720)
+        draw("Important information", 360, 696)
+        ctx.endPDFPage()
+        ctx.closePDF()
         return url
     }
 }

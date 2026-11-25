@@ -283,6 +283,7 @@ except Exception:
             let work = FileManager.default.temporaryDirectory
                 .appendingPathComponent("yourMark-ocrwork-\(UUID().uuidString)", isDirectory: true)
             try? FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: work) }
             let tessLang = tesseractLanguageCode(for: ocrLanguage)
             let args = [
                 "-k",
@@ -297,14 +298,11 @@ except Exception:
                 _ = try await run(exe, args, extraEnv: ["TMPDIR": work.path], cancellable: true)
                 if FileManager.default.fileExists(atPath: out.path) {
                     recordTesseractHOCR(in: work)
-                    try? FileManager.default.removeItem(at: work)
                     return (out, true, "OCRmyPDF + Tesseract")
                 }
             } catch is ProcessRun.ConvertCancel {
-                try? FileManager.default.removeItem(at: work)
                 throw ProcessRun.ConvertCancel.stopped
             } catch {
-                try? FileManager.default.removeItem(at: work)
                 onStatus("OCRmyPDF failed — using Apple Live Text…")
             }
         }
@@ -343,9 +341,11 @@ except Exception:
             let text = await recognizeText(snap?.image, fallback: snap?.kit ?? "", ocrLanguage: ocrLanguage)
             pages.append(text)
         }
+        OCRVisionMetrics.setVisionPages(pages)
+        let snapshot = pages
         let out = FileManager.default.temporaryDirectory
             .appendingPathComponent("yourMark-vision-\(UUID().uuidString).pdf")
-        let wrote = await PdfWork.runAsync { writeVisionPDF(pages, to: out) }
+        let wrote = await PdfWork.runAsync { writeVisionPDF(snapshot, to: out) }
         guard wrote else {
             throw YourMarkError.processFailed("Apple Vision did not write a searchable PDF")
         }
@@ -357,26 +357,26 @@ except Exception:
         guard let consumer = CGDataConsumer(data: data as CFMutableData) else { return false }
         var box = CGRect(x: 0, y: 0, width: 612, height: 792)
         guard let ctx = CGContext(consumer: consumer, mediaBox: &box, nil) else { return false }
-        let font = CTFontCreateWithName("Helvetica" as CFString, 11, nil)
-        let attributes: [NSAttributedString.Key: Any] = [.font: font]
         for text in pages {
             ctx.beginPDFPage(nil)
-            var y: CGFloat = 760
             let lines = text.isEmpty ? [" "] : text.components(separatedBy: "\n")
+            let fontSize: CGFloat = lines.count > 70 ? 8 : 11
+            let leading = fontSize + 3
+            let font = CTFontCreateWithName("Helvetica" as CFString, fontSize, nil)
+            let attributes: [NSAttributedString.Key: Any] = [.font: font]
+            var y = box.height - 36
             for line in lines {
-                if y < 36 { break }
                 let drawn = line.isEmpty ? " " : line
-                let attributed = NSAttributedString(string: drawn, attributes: attributes)
-                let ctLine = CTLineCreateWithAttributedString(attributed)
+                let ctLine = CTLineCreateWithAttributedString(NSAttributedString(string: drawn, attributes: attributes))
                 ctx.textPosition = CGPoint(x: 36, y: y)
                 CTLineDraw(ctLine, ctx)
-                y -= 14
+                y -= leading
             }
             ctx.endPDFPage()
         }
         ctx.closePDF()
         do {
-            try data.write(to: dest)
+            try (data as Data).write(to: dest, options: .atomic)
             return true
         } catch {
             return false
@@ -394,6 +394,28 @@ except Exception:
         }
     }
 
+    private static func visionPagesHaveWords(_ pages: [String]) -> Bool {
+        let letters = pages.joined(separator: "\n").unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
+        return letters >= 60
+    }
+
+    private static func markdownFromVisionPages(_ pages: [String]) -> String {
+        var parts: [String] = [
+            "> This PDF was a scan (no text layer). yourMark ran OCR. Page photographs are not added — the words are the file.",
+            "",
+        ]
+        for (index, text) in pages.enumerated() {
+            parts.append("## Page \(index + 1)")
+            parts.append("")
+            let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !body.isEmpty {
+                parts.append(body)
+                parts.append("")
+            }
+        }
+        return parts.joined(separator: "\n")
+    }
+
     /// Last resort when the Markdown is still empty after convert.
     /// Does not append full-page pictures onto a file that already has text
     /// (that doubled huge manuals and froze the preview).
@@ -407,6 +429,14 @@ except Exception:
         let thin = markdownLooksThin(markdownURL, pageCount: max(count, 1))
         guard thin else { return }
         guard count > 0 else { return }
+        let cached = OCRVisionMetrics.visionPages
+        if visionPagesHaveWords(cached) {
+            let body = markdownFromVisionPages(cached)
+            await PdfWork.runAsync {
+                try? body.write(to: markdownURL, atomically: true, encoding: .utf8)
+            }
+            return
+        }
         onStatus("Reading the words on each page with Live Text…")
 
         var parts: [String] = [
