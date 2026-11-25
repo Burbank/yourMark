@@ -5,6 +5,12 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build, sign, and notarize without uploading a GitHub Release"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -19,8 +25,21 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode_16.app || true
           xcodebuild -version
           swift --version
+      # secrets are not a valid context in `if`. Map the p12 into env and
+      # record a plain output the later steps can test.
+      - name: Signing certificate is configured
+        id: signing
+        env:
+          APPLE_DEVELOPER_ID_P12: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${APPLE_DEVELOPER_ID_P12:-}" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Import Developer ID
-        if: ${{ secrets.APPLE_DEVELOPER_ID_P12 != '' }}
+        if: steps.signing.outputs.enabled == 'true'
         env:
           P12_B64: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
           P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
@@ -43,33 +62,57 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           chmod +x Scripts/*.sh Scripts/*.command || true
           ./Scripts/package-dmg.sh
           ls -lh dist/*.dmg
+      - name: Package CLI zip
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          REQUIRE_NOTARIZATION: "1"
+        run: |
+          chmod +x Scripts/package-cli.sh
+          ./Scripts/package-cli.sh
+          ls -lh dist/yourmark-cli-*-macos.zip dist/yourmark-cli-*-macos.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: yourMark-dmg
           path: |
             dist/yourMark-*.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yourmark-cli
+          path: |
+            dist/yourmark-cli-*-macos.zip
+            dist/yourmark-cli-*-macos.sha256
+          if-no-files-found: error
       - name: Attach to GitHub Release
+        if: ${{ github.ref_type == 'tag' && inputs.dry_run != true }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
+          if [[ "${DRY_RUN:-}" == "true" ]]; then
+            echo "Dry run: not uploading to a GitHub Release"
+            exit 0
+          fi
           if [[ "$GITHUB_REF" != refs/tags/* ]]; then
             echo "Not a tag; skipping release upload"
             exit 0
           fi
           NOTES="$(cat docs/release-notes.md)"
+          assets=(dist/yourMark-*.dmg dist/yourmark-cli-*-macos.zip dist/yourmark-cli-*-macos.sha256)
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/yourMark-*.dmg --clobber
+            gh release upload "$TAG" "${assets[@]}" --clobber
           else
-            gh release create "$TAG" dist/yourMark-*.dmg --title "yourMark $TAG" --notes "$NOTES"
+            gh release create "$TAG" "${assets[@]}" --title "yourMark $TAG" --notes "$NOTES"
           fi
           gh release edit "$TAG" --latest
           bash Scripts/prune-releases.sh
+      - name: Dry run does not upload
+        if: ${{ inputs.dry_run == true }}
+        run: 'echo "Dry run: signed and notarized artifacts stay on this workflow run. No GitHub Release upload."'
