@@ -157,10 +157,6 @@ Also from `yourmark convert --help`: `--ocr-lang` is `auto`, `eng`, `nld`, `spa`
 | 5 | File or output error |
 | 124 | Timed out |
 
-### Old type
-
-Blackletter and other very old type is flagged as weak OCR rather than accepted as a clean reading. The Markdown is still written. Weak means the average confidence is under 0.6, or the OCR text has fewer than 200 characters per page. The warning is `OCR quality is below the threshold`, the exit code is 1, and `--keep-original auto` keeps the original PDF in the folder.
-
 ## Why Markdown?
 
 A PDF is a picture of a page. Markdown is the words, in order.
