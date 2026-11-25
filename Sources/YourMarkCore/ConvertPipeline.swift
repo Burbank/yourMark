@@ -18,6 +18,7 @@ public actor ConvertPipeline {
     
     /// Convert one document from input to the output folder.
     public func convert(input: URL, outputFolder: URL) async throws -> ConvertResult {
+        OCRVisionMetrics.reset()
         let result: ConvertResult
         if let seconds = options.timeoutSeconds {
             result = try await Self.withTimeout(seconds: seconds) {
@@ -124,7 +125,8 @@ public actor ConvertPipeline {
             if let temp = ocrTempPDF { try? FileManager.default.removeItem(at: temp) }
         }
         
-        let layoutFirst = options.prefersDocling && isPDF && needsOCR
+        let engineLocked = options.ocrEngineChoice == "vision" || options.ocrEngineChoice == "tesseract"
+        let layoutFirst = options.layoutMode == "docling" && !engineLocked && isPDF && needsOCR
         if layoutFirst {
             reportStatus("Layout OCR first — this takes a little longer")
             let layoutResult = await OcrService.layoutMarkdown(
@@ -169,7 +171,7 @@ public actor ConvertPipeline {
             inputForConvert = prepared.url
             usedOCR = prepared.didOCR
             if prepared.url != input { ocrTempPDF = prepared.url }
-            if usedOCR { ocrEngine = "OCRmyPDF + Tesseract" }
+            if usedOCR { ocrEngine = prepared.engine }
         }
         
         reportStatus("Converting with MarkItDown")
@@ -183,13 +185,17 @@ public actor ConvertPipeline {
             
             if options.ocrEnabled, thin, !usedOCR {
                 reportStatus("Scan detected — running OCR")
-                let layoutResult = await OcrService.layoutMarkdown(
-                    from: input,
-                    to: markdownURL,
-                    ocr: true,
-                    ocrLanguage: lang,
-                    onStatus: { [weak self] msg in self?.onStatus?(msg) }
-                )
+                let allowDocling = options.layoutMode != "off" && !engineLocked
+                var layoutResult = false
+                if allowDocling {
+                    layoutResult = await OcrService.layoutMarkdown(
+                        from: input,
+                        to: markdownURL,
+                        ocr: true,
+                        ocrLanguage: lang,
+                        onStatus: { [weak self] msg in self?.onStatus?(msg) }
+                    )
+                }
                 
                 if layoutResult {
                     usedOCR = true
@@ -202,10 +208,10 @@ public actor ConvertPipeline {
                         ocrEngine: options.ocrEngineChoice,
                         onStatus: { [weak self] msg in self?.onStatus?(msg) }
                     )
-                    usedOCR = true
-                    ocrEngine = "OCRmyPDF + Tesseract"
+                    usedOCR = prepared.didOCR
+                    if usedOCR { ocrEngine = prepared.engine }
                     if prepared.url != input { ocrTempPDF = prepared.url }
-                    if prepared.didOCR || prepared.url != input {
+                    if prepared.url != input {
                         try await convertWithMarkItDownOrNative(input: prepared.url, markdownURL: markdownURL, script: script)
                     }
                 }
@@ -365,15 +371,18 @@ public actor ConvertPipeline {
 
     private func applyLayout(_ markdown: URL, pdf: URL) async {
         guard options.layoutMode != "off" else { return }
-        if options.layoutMode == "docling" {
-            _ = await OcrService.layoutMarkdown(
+        let engineLocked = options.ocrEngineChoice == "vision" || options.ocrEngineChoice == "tesseract"
+        if options.layoutMode == "docling", !engineLocked {
+            let wrote = await OcrService.layoutMarkdown(
                 from: pdf,
                 to: markdown,
                 ocr: false,
                 ocrLanguage: options.ocrLanguage,
                 onStatus: { [weak self] msg in self?.onStatus?(msg) }
             )
+            if wrote { return }
         }
+        guard options.layoutMode == "auto" else { return }
         _ = await PdfWork.runAsync { LayoutOrder.apply(to: markdown, pdf: pdf) }
     }
     

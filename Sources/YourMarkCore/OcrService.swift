@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import CoreText
 import Foundation
 import PDFKit
 import Vision
@@ -266,50 +267,120 @@ except Exception:
 """#
 
     /// Returns a PDF MarkItDown can read. Original file is never overwritten.
+    /// `engine` is `Apple Vision` or `OCRmyPDF + Tesseract` when `didOCR` is true.
     public static func searchablePDF(
         from url: URL,
         force: Bool = false,
         ocrLanguage: String = "auto",
         ocrEngine: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
-    ) async throws -> (url: URL, didOCR: Bool) {
-        guard force || needsOCR(url) else { return (url, false) }
-        if ocrEngine == "vision" {
-            onStatus("OCR with Apple Live Text…")
-            return (url, false)
-        }
-        if let exe = ocrmypdfPath() {
+    ) async throws -> (url: URL, didOCR: Bool, engine: String) {
+        guard force || needsOCR(url) else { return (url, false, "") }
+        if ocrEngine != "vision", let exe = ocrmypdfPath() {
             onStatus("OCR with OCRmyPDF (Tesseract)…")
             let out = FileManager.default.temporaryDirectory
                 .appendingPathComponent("yourMark-ocr-\(UUID().uuidString).pdf")
+            let work = FileManager.default.temporaryDirectory
+                .appendingPathComponent("yourMark-ocrwork-\(UUID().uuidString)", isDirectory: true)
+            try? FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
             let tessLang = tesseractLanguageCode(for: ocrLanguage)
-            let sidecar = out.deletingPathExtension().appendingPathExtension("hocr")
             let args = [
+                "-k",
                 force ? "--force-ocr" : "--skip-text",
                 "--optimize", "0",
                 "--output-type", "pdf",
-                "--sidecar", sidecar.path,
                 "-l", tessLang,
                 url.path,
                 out.path,
             ]
             do {
-                _ = try await run(exe, args, cancellable: true)
+                _ = try await run(exe, args, extraEnv: ["TMPDIR": work.path], cancellable: true)
                 if FileManager.default.fileExists(atPath: out.path) {
-                    if let hocr = try? String(contentsOf: sidecar, encoding: .utf8) {
-                        recordTesseractConfidences(in: hocr)
-                    }
-                    return (out, true)
+                    recordTesseractHOCR(in: work)
+                    try? FileManager.default.removeItem(at: work)
+                    return (out, true, "OCRmyPDF + Tesseract")
                 }
             } catch is ProcessRun.ConvertCancel {
+                try? FileManager.default.removeItem(at: work)
                 throw ProcessRun.ConvertCancel.stopped
             } catch {
+                try? FileManager.default.removeItem(at: work)
                 onStatus("OCRmyPDF failed — using Apple Live Text…")
             }
-        } else {
-            onStatus("OCR with Apple Live Text…")
         }
-        return (url, true)
+        onStatus("OCR with Apple Live Text…")
+        let written = try await visionSearchablePDF(from: url, ocrLanguage: ocrLanguage, onStatus: onStatus)
+        return (written, true, "Apple Vision")
+    }
+
+    /// OCRmyPDF `--sidecar` is plain text. Confidence lives in the hOCR it keeps with `-k`.
+    private static func recordTesseractHOCR(in directory: URL) {
+        guard let names = try? FileManager.default.subpathsOfDirectory(atPath: directory.path) else { return }
+        for name in names where name.hasSuffix(".hocr") {
+            let file = directory.appendingPathComponent(name)
+            if let hocr = try? String(contentsOf: file, encoding: .utf8) {
+                recordTesseractConfidences(in: hocr)
+            }
+        }
+    }
+
+    /// Live Text on every page, written as a text PDF MarkItDown can read.
+    private static func visionSearchablePDF(
+        from url: URL,
+        ocrLanguage: String,
+        onStatus: @escaping @Sendable (String) -> Void
+    ) async throws -> URL {
+        let count = await PdfWork.runAsync { PDFDocument(url: url)?.pageCount ?? 0 }
+        guard count > 0 else {
+            throw YourMarkError.invalidInput("That PDF could not be opened.")
+        }
+        var pages: [String] = []
+        pages.reserveCapacity(count)
+        for index in 0..<count {
+            if ProcessRun.convertWasCancelled { throw ProcessRun.ConvertCancel.stopped }
+            onStatus("Live Text page \(index + 1) of \(count)…")
+            let snap = await PdfWork.runAsync { pageSnapshot(url, index: index, wantImage: true) }
+            let text = await recognizeText(snap?.image, fallback: snap?.kit ?? "", ocrLanguage: ocrLanguage)
+            pages.append(text)
+        }
+        let out = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yourMark-vision-\(UUID().uuidString).pdf")
+        let wrote = await PdfWork.runAsync { writeVisionPDF(pages, to: out) }
+        guard wrote else {
+            throw YourMarkError.processFailed("Apple Vision did not write a searchable PDF")
+        }
+        return out
+    }
+
+    private static func writeVisionPDF(_ pages: [String], to dest: URL) -> Bool {
+        let data = NSMutableData()
+        guard let consumer = CGDataConsumer(data: data as CFMutableData) else { return false }
+        var box = CGRect(x: 0, y: 0, width: 612, height: 792)
+        guard let ctx = CGContext(consumer: consumer, mediaBox: &box, nil) else { return false }
+        let font = CTFontCreateWithName("Helvetica" as CFString, 11, nil)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        for text in pages {
+            ctx.beginPDFPage(nil)
+            var y: CGFloat = 760
+            let lines = text.isEmpty ? [" "] : text.components(separatedBy: "\n")
+            for line in lines {
+                if y < 36 { break }
+                let drawn = line.isEmpty ? " " : line
+                let attributed = NSAttributedString(string: drawn, attributes: attributes)
+                let ctLine = CTLineCreateWithAttributedString(attributed)
+                ctx.textPosition = CGPoint(x: 36, y: y)
+                CTLineDraw(ctLine, ctx)
+                y -= 14
+            }
+            ctx.endPDFPage()
+        }
+        ctx.closePDF()
+        do {
+            try data.write(to: dest)
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// Tesseract hOCR stores word confidence as `x_wconf` from 0 to 100.
@@ -332,9 +403,9 @@ except Exception:
         ocrLanguage: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
     ) async {
-        let empty = await PdfWork.runAsync { markdownLooksEmpty(markdownURL) }
-        guard empty else { return }
         let count = await PdfWork.runAsync { PDFDocument(url: sourcePDF)?.pageCount ?? 0 }
+        let thin = markdownLooksThin(markdownURL, pageCount: max(count, 1))
+        guard thin else { return }
         guard count > 0 else { return }
         onStatus("Reading the words on each page with Live Text…")
 
@@ -512,13 +583,19 @@ except Exception:
     }
 
     @discardableResult
-    private static func run(_ exe: String, _ args: [String], cancellable: Bool = false) async throws -> String {
+    private static func run(
+        _ exe: String,
+        _ args: [String],
+        extraEnv: [String: String] = [:],
+        cancellable: Bool = false
+    ) async throws -> String {
         try await withCheckedThrowingContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     let result = try ProcessRun.run(
                         executable: exe,
                         arguments: args,
+                        extraEnv: extraEnv,
                         captureStdout: true,
                         cancellable: cancellable
                     )

@@ -76,7 +76,7 @@ struct Convert: AsyncParsableCommand {
     @Option(name: .long, help: "OCR engine: auto|vision|tesseract (default: auto). auto uses OCRmyPDF when it is installed, otherwise Apple Vision.")
     var ocrEngine: String = "auto"
 
-    @Option(name: .long, help: "Reading order: auto|docling|off (default: auto). auto puts the body first and sidebars after it.")
+    @Option(name: .long, help: "Reading order: auto|docling|off (default: auto). auto puts the body first and sidebars after it, without splitting words. off leaves the converter's own order.")
     var layout: String = "auto"
     
     @Flag(name: .long, help: "Output JSON instead of human-readable text")
