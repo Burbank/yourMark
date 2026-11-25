@@ -1,18 +1,32 @@
 # yourMark CLI
 
-The `yourmark` command-line tool converts documents to Markdown using the same conversion pipeline as the yourMark GUI app.
+The `yourmark` command-line tool converts documents to Markdown using the same conversion pipeline as the yourMark GUI app. It is not inside `yourMark.app`.
 
 ## Installation
 
-The CLI is included in the yourMark app bundle. Add it to your PATH:
+Download the signed, notarized command from the latest GitHub release. You need macOS 14 or later. The zip holds one universal binary (Apple silicon and Intel) named `yourmark`.
+
+[yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip) · [SHA-256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256)
 
 ```bash
-# If yourMark.app is in /Applications
-export PATH="/Applications/yourMark.app/Contents/MacOS:$PATH"
-
-# Or create a symlink
-ln -s /Applications/yourMark.app/Contents/MacOS/yourmark /usr/local/bin/yourmark
+unzip yourmark-cli-0.6.4-macos.zip
+mkdir -p "$HOME/.local/bin"
+mv yourmark "$HOME/.local/bin/yourmark"
 ```
+
+Put `$HOME/.local/bin` on your PATH, then run `yourmark doctor`.
+
+The Mac App Store build is sandboxed. That copy of the command prints `yourmark CLI is not available in the App Store build.` and exits 4.
+
+### Build from source
+
+Swift 6 (Xcode) builds the same command. A source build is not notarized.
+
+```bash
+swift build -c release --product yourmark-cli
+```
+
+The product file is named `yourmark-cli` (`.build/release/yourmark-cli`, or `.build/out/Products/Release/yourmark-cli` on a newer toolchain). Copy it to `yourmark` on your PATH so the command name matches `yourmark --help`.
 
 ## Commands
 
@@ -36,6 +50,8 @@ yourmark convert <file.pdf|https-url> --out <library-dir> [options]
 - `--max-pages <count>` - Maximum pages (default: 1500)
 - `--timeout <seconds>` - Timeout in seconds, or `auto` (default: `auto`)
 - `--ocr-lang <lang>` - OCR language: `auto` (default), `eng`, `nld`, `spa`, or `hun`
+- `--ocr-engine <engine>` - OCR engine: `auto` (default), `vision`, or `tesseract`. `auto` uses OCRmyPDF when it is installed, otherwise Apple Vision.
+- `--layout <mode>` - Reading order: `auto` (default), `docling`, or `off`. `auto` puts the body first and sidebars after it, without splitting words. `off` leaves the converter's own order. `docling` asks Docling for the reading order.
 - `--json` - Output JSON instead of human-readable text
 - `--dry-run` - Check inputs without converting
 
@@ -63,6 +79,9 @@ yourmark convert paper.pdf --out ~/Library --images on
 
 # Dutch OCR
 yourmark convert scan.pdf --out ~/Library --ocr-lang nld
+
+# Apple Vision, and leave the converter's own reading order
+yourmark convert scan.pdf --out ~/Library --ocr on --ocr-engine vision --layout off
 
 # JSON output
 yourmark convert paper.pdf --out ~/Library --json
@@ -200,6 +219,22 @@ When `--json` is passed, the CLI outputs a single JSON object on stdout and logs
 - `on` - Force OCR for all PDFs
 - `off` - Disable OCR, use MarkItDown only
 
+## OCR engine
+
+`--ocr-engine` chooses who reads a scan. From `yourmark convert --help`:
+
+- `auto` - OCRmyPDF when it is installed, otherwise Apple Vision (default)
+- `vision` - Apple Vision
+- `tesseract` - OCRmyPDF + Tesseract when `ocrmypdf` is installed, otherwise Apple Vision
+
+## Layout
+
+`--layout` chooses reading order. From `yourmark convert --help`:
+
+- `auto` - Body first, then sidebars, without splitting words (default)
+- `docling` - Ask Docling for the reading order
+- `off` - Leave the converter's own order
+
 ## OCR Languages
 
 The CLI supports multilingual OCR via Apple Vision:
@@ -239,4 +274,4 @@ The `--keep-original` option controls when the original PDF is copied into the o
 - The CLI never deletes or moves the input file
 - URLs are stripped of query parameters and fragments before logging
 - No repository secrets are used
-- The App Store build (`APPSTORE`) does not include the CLI
+- The App Store build's command prints `yourmark CLI is not available in the App Store build.` and exits 4

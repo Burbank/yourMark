@@ -29,7 +29,19 @@ The window is **US English**, **Spanish**, or **Dutch**. Lock an Ask AI key in S
 
 ### Install the command
 
-The GitHub disk is the Mac app. Build the command from this repository. You need macOS 14 or later and Swift 6 (Xcode).
+Download the signed, notarized command. You need macOS 14 or later. It is a universal binary (Apple silicon and Intel), and it is not inside the app.
+
+**[yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip)** · [SHA-256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256)
+
+Unzip it. The file inside is `yourmark`. Put that on your PATH, then run `yourmark doctor`.
+
+```sh
+unzip yourmark-cli-0.6.4-macos.zip
+mkdir -p "$HOME/.local/bin"
+mv yourmark "$HOME/.local/bin/yourmark"
+```
+
+To build it from this repository instead, you need Swift 6 (Xcode). That copy is not notarized.
 
 ```sh
 swift build -c release --product yourmark-cli
@@ -37,7 +49,7 @@ mkdir -p "$HOME/.local/bin"
 cp .build/release/yourmark-cli "$HOME/.local/bin/yourmark"
 ```
 
-Put `$HOME/.local/bin` on your PATH, then run `yourmark doctor`. The built file is named `yourmark-cli`. Copying it to `yourmark` matches the help text (`yourmark --help`).
+The built file is named `yourmark-cli`. Copying it to `yourmark` matches the help text (`yourmark --help`). If `.build/release/yourmark-cli` is not there, use `.build/out/Products/Release/yourmark-cli`.
 
 ### Requirements
 
