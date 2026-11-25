@@ -1,4 +1,4 @@
-# yourMark
+# yourMark and yourMark CLI
 
 <p align="center">
   <img src="docs/icon.jpg" width="112" height="112" alt="yourMark">
