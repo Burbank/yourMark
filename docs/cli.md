@@ -6,17 +6,17 @@ yourMark CLI is a separate GitHub download for Terminal. It is not inside the Gi
 
 You need macOS 14 or later. The zip on the GitHub release is a universal binary (Apple silicon and Intel). It is signed with Apple Developer ID and notarized by Apple. Gatekeeper checks the ticket. Check the SHA-256 file before you unzip it. A build from source is not notarized.
 
-1. Download [yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip).
-2. Check the SHA-256 against [yourmark-cli-0.6.4-macos.sha256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256).
+1. Download [yourmark-cli-0.6.5-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.5-macos.zip).
+2. Check the SHA-256 against [yourmark-cli-0.6.5-macos.sha256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.5-macos.sha256).
 3. Unzip the archive. The file inside is `yourmark`.
 4. Move `yourmark` to `~/.local/bin` or `/usr/local/bin`.
 5. Run `yourmark doctor`.
 
 ```bash
-curl -fsSL -o yourmark-cli-0.6.4-macos.zip https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip
-curl -fsSL -o yourmark-cli-0.6.4-macos.sha256 https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256
-shasum -a 256 -c yourmark-cli-0.6.4-macos.sha256
-unzip yourmark-cli-0.6.4-macos.zip
+curl -fsSL -o yourmark-cli-0.6.5-macos.zip https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.5-macos.zip
+curl -fsSL -o yourmark-cli-0.6.5-macos.sha256 https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.5-macos.sha256
+shasum -a 256 -c yourmark-cli-0.6.5-macos.sha256
+unzip yourmark-cli-0.6.5-macos.zip
 mkdir -p "$HOME/.local/bin"
 mv yourmark "$HOME/.local/bin/yourmark"
 # or: sudo mv yourmark /usr/local/bin/yourmark
@@ -209,7 +209,7 @@ When `--json` is passed, yourMark CLI outputs a single JSON object on stdout and
 ```json
 {
   "status": "ok",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "source_url": "https://example.com/paper.pdf",
   "sha256": "abc123...",
   "pages": 42,

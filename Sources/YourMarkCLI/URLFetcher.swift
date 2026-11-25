@@ -88,7 +88,7 @@ public actor URLFetcher: URLFetcherProtocol {
         while redirectCount <= maxRedirects {
             var request = URLRequest(url: currentURL, timeoutInterval: connectTimeout)
             request.httpMethod = "GET"
-            request.setValue("yourmark/0.6.4", forHTTPHeaderField: "User-Agent")
+            request.setValue("yourmark/0.6.5", forHTTPHeaderField: "User-Agent")
             
             // Get headers first to check content length and type
             var headRequest = request

@@ -10,7 +10,7 @@ These are three different downloads.
 
 **yourMark (GitHub, Mac app)**
 
-[Download yourMark-0.6.4.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.6.4.dmg)
+[Download yourMark-0.6.5.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.6.5.dmg)
 
 Signed with Apple Developer ID and notarized by Apple. Gatekeeper checks the ticket. The first open can still ask you to click Open. It does not block the disk as an unidentified developer.
 
@@ -22,7 +22,7 @@ A different build from the GitHub disk. Apple distributes it through the App Sto
 
 **yourMark CLI (GitHub)**
 
-[Download yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip) · [SHA-256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256)
+[Download yourmark-cli-0.6.5-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.5-macos.zip) · [SHA-256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.5-macos.sha256)
 
 A separate download. Not inside yourMark and not inside yourMark AI. Signed with Apple Developer ID and notarized by Apple. Gatekeeper checks the ticket. Check the zip with the SHA-256 file before you unzip it.
 
@@ -59,17 +59,17 @@ The window is **US English**, **Spanish**, or **Dutch**. Lock an Ask AI key in S
 
 yourMark CLI is a separate download. It is not inside yourMark and not inside yourMark AI. You need macOS 14 or later. The zip is a universal binary (Apple silicon and Intel), signed with Apple Developer ID and notarized by Apple.
 
-1. Download [yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip).
-2. Check the SHA-256 against [yourmark-cli-0.6.4-macos.sha256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256).
+1. Download [yourmark-cli-0.6.5-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.5-macos.zip).
+2. Check the SHA-256 against [yourmark-cli-0.6.5-macos.sha256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.5-macos.sha256).
 3. Unzip the archive. The file inside is `yourmark`.
 4. Move `yourmark` to `~/.local/bin` or `/usr/local/bin`.
 5. Run `yourmark doctor`.
 
 ```sh
-curl -fsSL -o yourmark-cli-0.6.4-macos.zip https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip
-curl -fsSL -o yourmark-cli-0.6.4-macos.sha256 https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256
-shasum -a 256 -c yourmark-cli-0.6.4-macos.sha256
-unzip yourmark-cli-0.6.4-macos.zip
+curl -fsSL -o yourmark-cli-0.6.5-macos.zip https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.5-macos.zip
+curl -fsSL -o yourmark-cli-0.6.5-macos.sha256 https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.5-macos.sha256
+shasum -a 256 -c yourmark-cli-0.6.5-macos.sha256
+unzip yourmark-cli-0.6.5-macos.zip
 mkdir -p "$HOME/.local/bin"
 mv yourmark "$HOME/.local/bin/yourmark"
 # or: sudo mv yourmark /usr/local/bin/yourmark

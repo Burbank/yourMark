@@ -8,7 +8,7 @@ struct YourMarkCLICommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "yourmark",
         abstract: "yourMark document converter",
-        version: "0.6.4"
+        version: "0.6.5"
     )
     
     func run() async throws {
@@ -23,7 +23,7 @@ struct YourMarkCLICommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "yourmark",
         abstract: "yourMark document converter",
-        version: "0.6.4",
+        version: "0.6.5",
         subcommands: [Convert.self, Fetch.self, Probe.self, Doctor.self],
         defaultSubcommand: Convert.self
     )
@@ -159,7 +159,7 @@ struct Convert: AsyncParsableCommand {
             if json {
                 let result: [String: Any] = [
                     "status": "ok",
-                    "version": "0.6.4",
+                    "version": "0.6.5",
                     "source_url": input.hasPrefix("https://") ? stripQuery(input) : "",
                     "sha256": probeInfo.sha256,
                     "pages": probeInfo.pages,
@@ -232,7 +232,7 @@ struct Convert: AsyncParsableCommand {
             if json {
                 let jsonResult: [String: Any] = [
                     "status": partial ? "partial" : "ok",
-                    "version": "0.6.4",
+                    "version": "0.6.5",
                     "source_url": input.hasPrefix("https://") ? stripQuery(input) : "",
                     "sha256": probeInfo.sha256,
                     "pages": probeInfo.pages,
@@ -473,7 +473,7 @@ struct Doctor: AsyncParsableCommand {
             ]
             print(jsonString(result))
         } else {
-            print("yourMark v0.6.4")
+            print("yourMark v0.6.5")
             print("Channel: \(channel)")
             print("")
             print("MarkItDown:")
