@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import CoreText
 import Foundation
 import PDFKit
 import Vision
@@ -11,16 +12,21 @@ import Vision
 ///   3. Fall back to OCRmyPDF (words only) then MarkItDown.
 ///   4. Last resort: Apple Live Text + page pictures (empty markdown only).
 /// Digital PDFs with figures go through MarkItDown once, then PdfFigures.
-enum OcrService {
-    struct PdfProfile: Equatable, Sendable {
-        var needsOCR: Bool
-        var looksGraphic: Bool
+public enum OcrService {
+    public struct PdfProfile: Equatable, Sendable {
+        public var needsOCR: Bool
+        public var looksGraphic: Bool
+        
+        public init(needsOCR: Bool, looksGraphic: Bool) {
+            self.needsOCR = needsOCR
+            self.looksGraphic = looksGraphic
+        }
     }
 
     private static let cacheLock = NSLock()
     nonisolated(unsafe) private static var profileCache: [String: (mtime: TimeInterval, value: PdfProfile)] = [:]
 
-    static func profile(_ url: URL) -> PdfProfile {
+    public static func profile(_ url: URL) -> PdfProfile {
         guard url.pathExtension.lowercased() == "pdf" else {
             return PdfProfile(needsOCR: false, looksGraphic: false)
         }
@@ -39,7 +45,7 @@ enum OcrService {
         return value
     }
 
-    static func needsOCR(_ url: URL) -> Bool { profile(url).needsOCR }
+    public static func needsOCR(_ url: URL) -> Bool { profile(url).needsOCR }
 
     private static func profileUncached(_ url: URL) -> PdfProfile {
         guard let doc = PDFDocument(url: url), doc.pageCount > 0 else {
@@ -100,7 +106,7 @@ enum OcrService {
     }
 
     /// After MarkItDown: almost no real words for the number of pages.
-    static func markdownLooksThin(_ url: URL, pageCount: Int) -> Bool {
+    public static func markdownLooksThin(_ url: URL, pageCount: Int) -> Bool {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return true }
         var body = text
         body = body.replacingOccurrences(of: #"!\[[^\]]*\]\([^)]*\)"#, with: " ", options: .regularExpression)
@@ -110,11 +116,11 @@ enum OcrService {
         return letters < max(60, pageCount * 25)
     }
 
-    static func pageCount(of url: URL) -> Int {
+    public static func pageCount(of url: URL) -> Int {
         PDFDocument(url: url)?.pageCount ?? 0
     }
 
-    static func ocrmypdfPath() -> String? {
+    public static func ocrmypdfPath() -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let candidates = [
             "/opt/homebrew/bin/ocrmypdf",
@@ -124,9 +130,10 @@ enum OcrService {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    static func doclingPath() -> String? {
+    public static func doclingPath() -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let candidates = [
+            "\(home)/.local/share/uv/tools/docling/bin/docling",
             "\(home)/.local/bin/docling",
             "/opt/homebrew/bin/docling",
             "/usr/local/bin/docling",
@@ -134,7 +141,7 @@ enum OcrService {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
-    static func uvPath() -> String? {
+    public static func uvPath() -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return [
             "\(home)/.local/bin/uv",
@@ -146,10 +153,11 @@ enum OcrService {
     /// Layout-aware convert for scans. Docling (IBM, MIT) does tables, columns,
     /// reading order, and figures. MarkItDown cannot — it only reads a text layer.
     /// `ocr: false` when the PDF already has a text layer (faster, no double OCR).
-    static func layoutMarkdown(
+    public static func layoutMarkdown(
         from pdf: URL,
         to markdown: URL,
         ocr: Bool = true,
+        ocrLanguage: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
     ) async -> Bool {
         onStatus("Layout OCR with Docling — tables and columns. This takes a little longer.")
@@ -158,10 +166,11 @@ enum OcrService {
             onStatus("Docling is not installed yet")
             return false
         }
+        let doclingLang = visionRecognitionLanguages(for: ocrLanguage).first ?? "en-US"
         do {
             _ = try await run(
                 pythonCmd.exe,
-                pythonCmd.args + [script.path, pdf.path, markdown.path, ocr ? "ocr" : "text"],
+                pythonCmd.args + [script.path, pdf.path, markdown.path, ocr ? "ocr" : "text", doclingLang],
                 cancellable: true
             )
             return FileManager.default.fileExists(atPath: markdown.path)
@@ -174,7 +183,7 @@ enum OcrService {
         }
     }
 
-    static func installDocling() async throws -> String {
+    public static func installDocling() async throws -> String {
         guard let uv = uvPath() else {
             throw NSError(
                 domain: "OcrService",
@@ -206,6 +215,7 @@ from pathlib import Path
 
 src, dst = Path(sys.argv[1]), Path(sys.argv[2])
 want_ocr = len(sys.argv) < 4 or sys.argv[3] != "text"
+lang = sys.argv[4] if len(sys.argv) > 4 else "en-US"
 
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
@@ -227,7 +237,10 @@ except Exception:
 if want_ocr:
     try:
         from docling.datamodel.pipeline_options import OcrMacOptions
-        opts.ocr_options = OcrMacOptions()
+        try:
+            opts.ocr_options = OcrMacOptions(lang=[lang])
+        except TypeError:
+            opts.ocr_options = OcrMacOptions()
     except Exception:
         pass
 
@@ -254,52 +267,176 @@ except Exception:
 """#
 
     /// Returns a PDF MarkItDown can read. Original file is never overwritten.
-    static func searchablePDF(
+    /// `engine` is `Apple Vision` or `OCRmyPDF + Tesseract` when `didOCR` is true.
+    public static func searchablePDF(
         from url: URL,
         force: Bool = false,
+        ocrLanguage: String = "auto",
+        ocrEngine: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
-    ) async throws -> (url: URL, didOCR: Bool) {
-        guard force || needsOCR(url) else { return (url, false) }
-        if let exe = ocrmypdfPath() {
+    ) async throws -> (url: URL, didOCR: Bool, engine: String) {
+        guard force || needsOCR(url) else { return (url, false, "") }
+        if ocrEngine != "vision", let exe = ocrmypdfPath() {
             onStatus("OCR with OCRmyPDF (Tesseract)…")
             let out = FileManager.default.temporaryDirectory
                 .appendingPathComponent("yourMark-ocr-\(UUID().uuidString).pdf")
+            let work = FileManager.default.temporaryDirectory
+                .appendingPathComponent("yourMark-ocrwork-\(UUID().uuidString)", isDirectory: true)
+            try? FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: work) }
+            let tessLang = tesseractLanguageCode(for: ocrLanguage)
             let args = [
+                "-k",
                 force ? "--force-ocr" : "--skip-text",
                 "--optimize", "0",
                 "--output-type", "pdf",
-                "-l", "eng",
+                "-l", tessLang,
                 url.path,
                 out.path,
             ]
             do {
-                _ = try await run(exe, args, cancellable: true)
+                _ = try await run(exe, args, extraEnv: ["TMPDIR": work.path], cancellable: true)
                 if FileManager.default.fileExists(atPath: out.path) {
-                    return (out, true)
+                    recordTesseractHOCR(in: work)
+                    return (out, true, "OCRmyPDF + Tesseract")
                 }
             } catch is ProcessRun.ConvertCancel {
                 throw ProcessRun.ConvertCancel.stopped
             } catch {
                 onStatus("OCRmyPDF failed — using Apple Live Text…")
             }
-        } else {
-            onStatus("OCR with Apple Live Text…")
         }
-        return (url, true)
+        onStatus("OCR with Apple Live Text…")
+        let written = try await visionSearchablePDF(from: url, ocrLanguage: ocrLanguage, onStatus: onStatus)
+        return (written, true, "Apple Vision")
+    }
+
+    /// OCRmyPDF `--sidecar` is plain text. Confidence lives in the hOCR it keeps with `-k`.
+    private static func recordTesseractHOCR(in directory: URL) {
+        guard let names = try? FileManager.default.subpathsOfDirectory(atPath: directory.path) else { return }
+        for name in names where name.hasSuffix(".hocr") {
+            let file = directory.appendingPathComponent(name)
+            if let hocr = try? String(contentsOf: file, encoding: .utf8) {
+                recordTesseractConfidences(in: hocr)
+            }
+        }
+    }
+
+    /// Live Text on every page, written as a text PDF MarkItDown can read.
+    private static func visionSearchablePDF(
+        from url: URL,
+        ocrLanguage: String,
+        onStatus: @escaping @Sendable (String) -> Void
+    ) async throws -> URL {
+        let count = await PdfWork.runAsync { PDFDocument(url: url)?.pageCount ?? 0 }
+        guard count > 0 else {
+            throw YourMarkError.invalidInput("That PDF could not be opened.")
+        }
+        var pages: [String] = []
+        pages.reserveCapacity(count)
+        for index in 0..<count {
+            if ProcessRun.convertWasCancelled { throw ProcessRun.ConvertCancel.stopped }
+            onStatus("Live Text page \(index + 1) of \(count)…")
+            let snap = await PdfWork.runAsync { pageSnapshot(url, index: index, wantImage: true) }
+            let text = await recognizeText(snap?.image, fallback: snap?.kit ?? "", ocrLanguage: ocrLanguage)
+            pages.append(text)
+        }
+        OCRVisionMetrics.setVisionPages(pages)
+        let snapshot = pages
+        let out = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yourMark-vision-\(UUID().uuidString).pdf")
+        let wrote = await PdfWork.runAsync { writeVisionPDF(snapshot, to: out) }
+        guard wrote else {
+            throw YourMarkError.processFailed("Apple Vision did not write a searchable PDF")
+        }
+        return out
+    }
+
+    private static func writeVisionPDF(_ pages: [String], to dest: URL) -> Bool {
+        let data = NSMutableData()
+        guard let consumer = CGDataConsumer(data: data as CFMutableData) else { return false }
+        var box = CGRect(x: 0, y: 0, width: 612, height: 792)
+        guard let ctx = CGContext(consumer: consumer, mediaBox: &box, nil) else { return false }
+        for text in pages {
+            ctx.beginPDFPage(nil)
+            let lines = text.isEmpty ? [" "] : text.components(separatedBy: "\n")
+            let fontSize: CGFloat = lines.count > 70 ? 8 : 11
+            let leading = fontSize + 3
+            let font = CTFontCreateWithName("Helvetica" as CFString, fontSize, nil)
+            let attributes: [NSAttributedString.Key: Any] = [.font: font]
+            var y = box.height - 36
+            for line in lines {
+                let drawn = line.isEmpty ? " " : line
+                let ctLine = CTLineCreateWithAttributedString(NSAttributedString(string: drawn, attributes: attributes))
+                ctx.textPosition = CGPoint(x: 36, y: y)
+                CTLineDraw(ctLine, ctx)
+                y -= leading
+            }
+            ctx.endPDFPage()
+        }
+        ctx.closePDF()
+        do {
+            try (data as Data).write(to: dest, options: .atomic)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Tesseract hOCR stores word confidence as `x_wconf` from 0 to 100.
+    public static func recordTesseractConfidences(in hocr: String) {
+        guard let regex = try? NSRegularExpression(pattern: #"x_wconf ['"]?(\d+)"#) else { return }
+        let range = NSRange(hocr.startIndex..., in: hocr)
+        for match in regex.matches(in: hocr, range: range) {
+            guard let span = Range(match.range(at: 1), in: hocr),
+                  let value = Double(hocr[span]) else { continue }
+            OCRVisionMetrics.record(confidence: value / 100)
+        }
+    }
+
+    private static func visionPagesHaveWords(_ pages: [String]) -> Bool {
+        let letters = pages.joined(separator: "\n").unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
+        return letters >= 60
+    }
+
+    private static func markdownFromVisionPages(_ pages: [String]) -> String {
+        var parts: [String] = [
+            "> This PDF was a scan (no text layer). yourMark ran OCR. Page photographs are not added — the words are the file.",
+            "",
+        ]
+        for (index, text) in pages.enumerated() {
+            parts.append("## Page \(index + 1)")
+            parts.append("")
+            let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !body.isEmpty {
+                parts.append(body)
+                parts.append("")
+            }
+        }
+        return parts.joined(separator: "\n")
     }
 
     /// Last resort when the Markdown is still empty after convert.
     /// Does not append full-page pictures onto a file that already has text
     /// (that doubled huge manuals and froze the preview).
-    static func enrichMarkdown(
+    public static func enrichMarkdown(
         markdownURL: URL,
         sourcePDF: URL,
+        ocrLanguage: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
     ) async {
-        let empty = await PdfWork.runAsync { markdownLooksEmpty(markdownURL) }
-        guard empty else { return }
         let count = await PdfWork.runAsync { PDFDocument(url: sourcePDF)?.pageCount ?? 0 }
+        let thin = markdownLooksThin(markdownURL, pageCount: max(count, 1))
+        guard thin else { return }
         guard count > 0 else { return }
+        let cached = OCRVisionMetrics.visionPages
+        if visionPagesHaveWords(cached) {
+            let body = markdownFromVisionPages(cached)
+            await PdfWork.runAsync {
+                try? body.write(to: markdownURL, atomically: true, encoding: .utf8)
+            }
+            return
+        }
         onStatus("Reading the words on each page with Live Text…")
 
         var parts: [String] = [
@@ -312,7 +449,7 @@ except Exception:
             onStatus("OCR page \(i + 1) of \(count)…")
             let snap = await PdfWork.runAsync { pageSnapshot(sourcePDF, index: i, wantImage: true) }
             guard let snap else { continue }
-            let text = await recognizeText(snap.image, fallback: snap.kit)
+            let text = await recognizeText(snap.image, fallback: snap.kit, ocrLanguage: ocrLanguage)
             parts.append("## \(snap.heading)")
             parts.append("")
             if !text.isEmpty {
@@ -328,12 +465,14 @@ except Exception:
     }
 
     /// Full convert with PDFKit text, or Live Text on scans. No Python.
-    static func writeAppleMarkdown(
+    public static func writeAppleMarkdown(
         from url: URL,
         to dest: URL,
         ocr: Bool,
+        ocrLanguage: String = "auto",
         onStatus: @escaping @Sendable (String) -> Void
     ) async throws {
+        OCRVisionMetrics.reset()
         let opened = await PdfWork.runAsync { () -> (count: Int, useOCR: Bool)? in
             guard let doc = PDFDocument(url: url), doc.pageCount > 0 else { return nil }
             return (doc.pageCount, ocr || needsOCR(url))
@@ -363,7 +502,7 @@ except Exception:
             guard let snap else { continue }
             let text: String
             if useOCR && (snap.kit.count < 48 || snap.operators < 2) {
-                text = await recognizeText(snap.image, fallback: snap.kit)
+                text = await recognizeText(snap.image, fallback: snap.kit, ocrLanguage: ocrLanguage)
             } else {
                 text = snap.kit
             }
@@ -377,7 +516,7 @@ except Exception:
         try parts.joined(separator: "\n").write(to: dest, atomically: true, encoding: .utf8)
     }
 
-    static func markdownLooksEmpty(_ url: URL) -> Bool {
+    public static func markdownLooksEmpty(_ url: URL) -> Bool {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return true }
         let body = text
             .replacingOccurrences(of: #"[>#*\-\[\]\(\)`]"#, with: " ", options: .regularExpression)
@@ -429,19 +568,27 @@ except Exception:
         return PageSnap(heading: heading, kit: kit, operators: operators, image: image)
     }
 
-    private static func recognizeText(_ image: CGImage?, fallback: String) async -> String {
+    private static func recognizeText(_ image: CGImage?, fallback: String, ocrLanguage: String) async -> String {
         guard let image else { return fallback }
+        let languages = visionRecognitionLanguages(for: ocrLanguage)
         return await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
                 let request = VNRecognizeTextRequest()
                 request.recognitionLevel = .accurate
                 request.usesLanguageCorrection = true
-                request.recognitionLanguages = ["en-US"]
+                OCRVisionMetrics.recordLanguages(languages)
+                request.recognitionLanguages = languages
                 let handler = VNImageRequestHandler(cgImage: image, options: [:])
                 let text: String
                 do {
                     try handler.perform([request])
-                    text = (request.results as? [VNRecognizedTextObservation] ?? [])
+                    let observations = request.results ?? []
+                    for obs in observations {
+                        if let conf = obs.topCandidates(1).first?.confidence {
+                            OCRVisionMetrics.record(confidence: Double(conf))
+                        }
+                    }
+                    text = observations
                         .compactMap { $0.topCandidates(1).first?.string }
                         .joined(separator: "\n")
                 } catch {
@@ -452,7 +599,7 @@ except Exception:
         }
     }
 
-    static func installViaHomebrew() async throws -> String {
+    public static func installViaHomebrew() async throws -> String {
         let brew = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
             .first { FileManager.default.isExecutableFile(atPath: $0) }
         guard let brew else {
@@ -466,13 +613,19 @@ except Exception:
     }
 
     @discardableResult
-    private static func run(_ exe: String, _ args: [String], cancellable: Bool = false) async throws -> String {
+    private static func run(
+        _ exe: String,
+        _ args: [String],
+        extraEnv: [String: String] = [:],
+        cancellable: Bool = false
+    ) async throws -> String {
         try await withCheckedThrowingContinuation { cont in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     let result = try ProcessRun.run(
                         executable: exe,
                         arguments: args,
+                        extraEnv: extraEnv,
                         captureStdout: true,
                         cancellable: cancellable
                     )

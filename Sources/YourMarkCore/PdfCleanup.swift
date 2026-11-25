@@ -7,8 +7,8 @@ import PDFKit
 /// and turn 8.1 / 8.1.1 titles into Markdown headings.
 ///
 /// PDFKit is used only on `PdfWork.queue` — never Task.detached / main init.
-enum PdfCleanup {
-    static func tidyAsync(markdown: String, pdf: URL?, stripChrome: Bool) async -> String {
+public enum PdfCleanup {
+    public static func tidyAsync(markdown: String, pdf: URL?, stripChrome: Bool) async -> String {
         guard let pdf, pdf.pathExtension.lowercased() == "pdf" else { return markdown }
         let original = markdown
         let cleaned = await PdfWork.runAsync {
@@ -313,7 +313,7 @@ enum PdfCleanup {
     /// A glyph the converter could not read is U+FFFD (the � mark). Drop it,
     /// and the other characters that are not letters, marks, or punctuation.
     /// A gap those marks left is closed. Fenced code is left alone.
-    static func dropUnrecognizedCharacters(_ markdown: String) -> String {
+    public static func dropUnrecognizedCharacters(_ markdown: String) -> String {
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var out: [String] = []
         out.reserveCapacity(lines.count)
@@ -381,7 +381,7 @@ enum PdfCleanup {
     /// A styled initial on its own line, `T` then `he final…`, becomes `The final…`.
     /// A quote in front of the letter stays: `“A` then `ll roads` becomes `“All roads`.
     /// The next line must begin with a lowercase letter, so a chapter number before a heading stays.
-    static func joinDropCaps(_ markdown: String) -> String {
+    public static func joinDropCaps(_ markdown: String) -> String {
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var out: [String] = []
         var fence = false
@@ -435,7 +435,7 @@ enum PdfCleanup {
 
     /// `king-` at the end of a line, then `dom`, becomes `kingdom`.
     /// A hyphen that already sits between words on one line is left alone.
-    static func joinLineEndHyphens(_ markdown: String) -> String {
+    public static func joinLineEndHyphens(_ markdown: String) -> String {
         let lines = joinDropCaps(dropUnrecognizedCharacters(markdown))
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init)
@@ -473,7 +473,7 @@ enum PdfCleanup {
     /// Keep the first `<!-- page N -->`. A later copy of the same number is
     /// dropped, and so is a chapter title repeated as the first line of a page.
     /// The sentence join that follows can then close the gap.
-    static func dropRepeatedPageMarks(_ markdown: String) -> PageNumberHide {
+    public static func dropRepeatedPageMarks(_ markdown: String) -> PageNumberHide {
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var out: [String] = []
         var resolved = Array(repeating: -1, count: lines.count)
@@ -560,7 +560,7 @@ enum PdfCleanup {
         return folded.count >= 2 && seen.contains(folded)
     }
 
-    static func fillUnresolved(_ resolved: inout [Int], count: Int) {
+    public static func fillUnresolved(_ resolved: inout [Int], count: Int) {
         let fallback = count == 0 ? 0 : count - 1
         var next = fallback
         if !resolved.isEmpty {
@@ -578,7 +578,7 @@ enum PdfCleanup {
     /// is a header or footer. `stripLines` is the header switch. An empty page
     /// marker is always dropped, so the sentence join can close the gap.
     /// Page numbers are not renumbered.
-    static func dropRepeatingChrome(_ markdown: String, stripLines: Bool) -> PageNumberHide {
+    public static func dropRepeatingChrome(_ markdown: String, stripLines: Bool) -> PageNumberHide {
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var counts: [String: Int] = [:]
         if stripLines {
@@ -744,7 +744,7 @@ enum PdfCleanup {
     /// that wrapped so the last words became their own heading.
     /// "Why Life Is Not Working—and Why Religion" / "Cannot Fix It"
     /// becomes one heading.
-    static func repairHeadingLayout(_ markdown: String) -> PageNumberHide {
+    public static func repairHeadingLayout(_ markdown: String) -> PageNumberHide {
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var out: [String] = []
         var resolved = Array(repeating: -1, count: lines.count)
@@ -870,7 +870,7 @@ enum PdfCleanup {
     /// heading is what the reader shows. A heading that stopped mid-phrase
     /// (“…and”, “…of the”) takes the next short line. A long sentence that was
     /// marked as a heading goes back to body text.
-    static func tidyDisplayedHeadings(_ markdown: String) -> PageNumberHide {
+    public static func tidyDisplayedHeadings(_ markdown: String) -> PageNumberHide {
         let original = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         let joined = joinSplitHeadings(original)
         let absorbed = absorbRomanTitles(joined.text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))
@@ -1089,7 +1089,7 @@ enum PdfCleanup {
     /// the next heading, moves to the later line where its title actually starts.
     /// Two outline entries often share one PDF page. The body that follows belongs
     /// to whichever title shows up first.
-    static func relocateStolenHeadings(_ markdown: String) -> PageNumberHide {
+    public static func relocateStolenHeadings(_ markdown: String) -> PageNumberHide {
         let original = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var text = markdown
         var combined = Array(original.indices)
@@ -1171,7 +1171,7 @@ enum PdfCleanup {
     /// A title set with a space between every letter is written the way the PDF
     /// stores it. "Y O U R G I F T" becomes "YOUR GIFT", with the word spaces
     /// the PDF already has. The line count does not change.
-    static func closeTrackedLetters(_ markdown: String, pdf: URL?) -> String {
+    public static func closeTrackedLetters(_ markdown: String, pdf: URL?) -> String {
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var fence = false
         var needs = false
@@ -1334,7 +1334,7 @@ enum PdfCleanup {
 
     /// A line much longer than the file’s usual line is wrapped at a period or a comma,
     /// so it no longer jumps past the lines around it.
-    static func wrapLongLines(_ markdown: String) -> PageNumberHide {
+    public static func wrapLongLines(_ markdown: String) -> PageNumberHide {
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         let usual = usualLineLength(lines)
         let limit = max(usual + 28, Int((Double(usual) * 1.45).rounded()))
@@ -1464,7 +1464,7 @@ enum PdfCleanup {
 
     /// After bookmarks are placed: `## Page N` becomes `<!-- page N -->`,
     /// and a line that is only a page number is dropped.
-    static func hidePageNumbers(_ markdown: String) -> PageNumberHide {
+    public static func hidePageNumbers(_ markdown: String) -> PageNumberHide {
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var out: [String] = []
         var resolved = Array(repeating: -1, count: lines.count)
@@ -1504,7 +1504,7 @@ enum PdfCleanup {
 
     /// Drop a blank line that splits a sentence, and keep a single blank line
     /// between real paragraphs. `to` then a gap then `accept` becomes one paragraph.
-    static func collapseEmptyLines(_ markdown: String) -> PageNumberHide {
+    public static func collapseEmptyLines(_ markdown: String) -> PageNumberHide {
         let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var out: [String] = []
         var resolved = Array(repeating: -1, count: lines.count)
@@ -1584,7 +1584,7 @@ enum PdfCleanup {
 
     /// A title sitting in the body, such as "Shifting from Religion to the Kingdom",
     /// becomes a Markdown heading so the reader draws it as a subheading.
-    static func promoteSubheadings(_ markdown: String) -> String {
+    public static func promoteSubheadings(_ markdown: String) -> String {
         var lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var fence = false
         for i in lines.indices {
@@ -1720,7 +1720,7 @@ enum PdfCleanup {
     /// Then drop a later plain-text copy of that table, including one whose
     /// columns were mixed together by line wraps. `oldToNew` maps the lines
     /// from before this pass.
-    static func dropEmptyTableColumns(_ markdown: String) -> PageNumberHide {
+    public static func dropEmptyTableColumns(_ markdown: String) -> PageNumberHide {
         var lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var fence = false
         var i = 0
@@ -1895,11 +1895,11 @@ enum PdfCleanup {
         return tables
     }
 
-    static func isTableRowLine(_ line: String) -> Bool {
+    public static func isTableRowLine(_ line: String) -> Bool {
         line.contains("|")
     }
 
-    static func isTableSeparatorLine(_ line: String) -> Bool {
+    public static func isTableSeparatorLine(_ line: String) -> Bool {
         let cells = tableCells(line)
         guard !cells.isEmpty else { return false }
         return cells.allSatisfy { cell in
@@ -1908,7 +1908,7 @@ enum PdfCleanup {
         }
     }
 
-    static func tableCells(_ line: String) -> [String] {
+    public static func tableCells(_ line: String) -> [String] {
         var s = line.trimmingCharacters(in: .whitespaces)
         if s.hasPrefix("|") { s.removeFirst() }
         if s.hasSuffix("|") { s.removeLast() }
@@ -1918,7 +1918,7 @@ enum PdfCleanup {
     }
 
     /// Header plus body, with blank columns removed and a left gutter folded into the heading beside it.
-    static func compactTable(header: [String], rows: [[String]]) -> (header: [String], rows: [[String]]) {
+    public static func compactTable(header: [String], rows: [[String]]) -> (header: [String], rows: [[String]]) {
         let width = max(header.count, rows.map(\.count).max() ?? 0)
         guard width > 0 else { return (header, rows) }
         func pad(_ cells: [String]) -> [String] {
@@ -1950,7 +1950,7 @@ enum PdfCleanup {
         return (newHeader, newRows)
     }
 
-    static func tableEnd(_ lines: [String], from start: Int) -> Int? {
+    public static func tableEnd(_ lines: [String], from start: Int) -> Int? {
         guard start + 1 < lines.count,
               isTableRowLine(lines[start]),
               isTableSeparatorLine(lines[start + 1]) else { return nil }
@@ -2125,11 +2125,16 @@ enum PdfCleanup {
     }
 }
 
-struct PageNumberHide: Sendable {
-    var text: String
-    var oldToNew: [Int]
+public struct PageNumberHide: Sendable {
+    public var text: String
+    public var oldToNew: [Int]
+    
+    public init(text: String, oldToNew: [Int]) {
+        self.text = text
+        self.oldToNew = oldToNew
+    }
 
-    func lineIndex(_ old: Int) -> Int {
+    public func lineIndex(_ old: Int) -> Int {
         guard !oldToNew.isEmpty else { return 0 }
         if old < 0 { return oldToNew[0] }
         if old >= oldToNew.count { return oldToNew[oldToNew.count - 1] }
@@ -2138,8 +2143,8 @@ struct PageNumberHide: Sendable {
 }
 
 /// A short fragment, a space, another short fragment: `Ma ny`, `Wh en`.
-enum SplitWords {
-    static func suspectIndexes(in lines: [String], range: Range<Int>) -> [Int] {
+public enum SplitWords {
+    public static func suspectIndexes(in lines: [String], range: Range<Int>) -> [Int] {
         var fence = false
         var hits: [Int] = []
         for (i, line) in lines.enumerated() {
@@ -2154,7 +2159,7 @@ enum SplitWords {
         return hits
     }
 
-    static func neighborWords(lines: [String], index: Int) -> (before: String, after: String) {
+    public static func neighborWords(lines: [String], index: Int) -> (before: String, after: String) {
         func take(_ s: String, last: Bool) -> String {
             let parts = s.split { $0.isWhitespace }.map(String.init)
             if last { return parts.suffix(6).joined(separator: " ") }
@@ -2167,7 +2172,7 @@ enum SplitWords {
 
     /// `Wh en` becomes `When` when the two pieces are one real word.
     /// Two real words side by side, such as `in to`, stay apart.
-    static func rejoinKnownWords(_ markdown: String) -> String {
+    public static func rejoinKnownWords(_ markdown: String) -> String {
         var lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var fence = false
         for i in lines.indices {
@@ -2222,7 +2227,7 @@ enum SplitWords {
     }
 
     /// Same letters means the model only removed spaces. Anything else stays.
-    static func accept(original: String, proposed: String) -> String {
+    public static func accept(original: String, proposed: String) -> String {
         let next = proposed.trimmingCharacters(in: .newlines)
         if next == original { return original }
         if original.contains("<!--") { return original }
@@ -2232,7 +2237,7 @@ enum SplitWords {
         return next
     }
 
-    static func isSuspect(_ line: String) -> Bool {
+    public static func isSuspect(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty || trimmed.hasPrefix("#") || trimmed.hasPrefix("<!--") { return false }
         if trimmed.hasPrefix("![") || trimmed.hasPrefix("|") || trimmed.hasPrefix(">") { return false }
@@ -2294,12 +2299,18 @@ enum SplitWords {
 }
 
 /// Repeating margin lines, and a temporary PDF whose crop box hides them.
-struct MarginRead: Sendable {
-    var title = ""
-    var author = ""
-    var cropped: URL?
+public struct MarginRead: Sendable {
+    public var title = ""
+    public var author = ""
+    public var cropped: URL?
+    
+    public init(title: String = "", author: String = "", cropped: URL? = nil) {
+        self.title = title
+        self.author = author
+        self.cropped = cropped
+    }
 
-    var record: BookRecord {
+    public var record: BookRecord {
         var next = BookRecord()
         next.title = title
         if !author.isEmpty { next.authors = [author] }
@@ -2310,7 +2321,7 @@ struct MarginRead: Sendable {
 extension PdfCleanup {
     /// Lines in the top or bottom band that repeat across the book. When `writeCrop`
     /// is set, a temporary PDF hides those lines. The original file is not changed.
-    static func readMargin(_ pdf: URL, writeCrop: Bool) -> MarginRead {
+    public static func readMargin(_ pdf: URL, writeCrop: Bool) -> MarginRead {
         PdfWork.sync { readMarginLocked(pdf, writeCrop: writeCrop) }
     }
 
@@ -2482,20 +2493,20 @@ extension PdfCleanup {
 
 /// PDFKit is not safe from Task.detached or from AppModel.init on the main thread
 /// while SwiftUI is still putting the window up. One serial queue, both sides.
-enum PdfWork {
+public enum PdfWork {
     private static let key = DispatchSpecificKey<UInt8>()
-    static let queue: DispatchQueue = {
+    public static let queue: DispatchQueue = {
         let q = DispatchQueue(label: "com.burbank.yourmark.pdf", qos: .userInitiated)
         q.setSpecific(key: key, value: 1)
         return q
     }()
 
-    static func sync<T>(_ body: () -> T) -> T {
+    public static func sync<T>(_ body: () -> T) -> T {
         if DispatchQueue.getSpecific(key: key) != nil { return body() }
         return queue.sync(execute: body)
     }
 
-    static func runAsync<T: Sendable>(_ body: @escaping @Sendable () -> T) async -> T {
+    public static func runAsync<T: Sendable>(_ body: @escaping @Sendable () -> T) async -> T {
         await withCheckedContinuation { cont in
             queue.async {
                 cont.resume(returning: body())

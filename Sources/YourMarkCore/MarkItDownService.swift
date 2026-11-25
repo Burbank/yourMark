@@ -2,12 +2,19 @@ import Foundation
 
 /// Microsoft MarkItDown. App Store builds use the copy inside the .app.
 /// GitHub builds still find a user install, or install from PyPI.
-actor MarkItDownService {
-    private(set) var enginePath: String?
-    private(set) var versionString: String = "unknown"
-    private(set) var installHint: String = "uv tool install 'markitdown[all]'"
+public actor MarkItDownService {
+    /// The `all` extra on 0.1.6 and later requires a pre-release Azure package.
+    /// uv then refuses those releases and installs 0.1.5 instead. These extras are
+    /// the same set, without that one pre-release, so the latest release resolves.
+    public static let packageSpec = "markitdown[pdf,docx,pptx,xlsx,xls,outlook,audio-transcription,youtube-transcription,az-doc-intel]"
 
-    func refreshStatus() async -> (path: String?, version: String) {
+    public private(set) var enginePath: String?
+    public private(set) var versionString: String = "unknown"
+    public private(set) var installHint: String = "uv tool install --upgrade '\(packageSpec)'"
+    
+    public init() {}
+
+    public func refreshStatus() async -> (path: String?, version: String) {
         do {
             let path = try await resolveEngine()
             return (path, versionString)
@@ -18,7 +25,7 @@ actor MarkItDownService {
         }
     }
 
-    func resolveEngine() async throws -> String {
+    public func resolveEngine() async throws -> String {
         if let enginePath, FileManager.default.isExecutableFile(atPath: enginePath) {
             return enginePath
         }
@@ -60,7 +67,7 @@ actor MarkItDownService {
         throw YourMarkError.engineNotFound
     }
 
-    func convert(
+    public func convert(
         input: URL,
         output: URL,
         script: URL? = nil,
@@ -104,7 +111,8 @@ actor MarkItDownService {
             }
         }
 
-        let asModule = (py != nil) || exe.hasSuffix("/python3") || exe.hasSuffix("/python3.12") || exe.hasSuffix("/python")
+        let runner = py ?? exe
+        let asModule = py != nil || exe.hasSuffix("/python3") || exe.hasSuffix("/python3.12") || exe.hasSuffix("/python")
         func args(_ extra: [String]) -> [String] {
             asModule ? (["-m", "markitdown"] + extra) : extra
         }
@@ -117,7 +125,7 @@ actor MarkItDownService {
         var lastError: Error = YourMarkError.outputMissing(output.path)
         for argv in attempts {
             do {
-                _ = try await run(executable: exe, arguments: argv, captureStdout: false)
+                _ = try await run(executable: runner, arguments: argv, captureStdout: false)
                 if FileManager.default.fileExists(atPath: output.path) {
                     return output
                 }
@@ -130,7 +138,7 @@ actor MarkItDownService {
     }
 
     /// pdfplumber lives in the same uv tool env as markitdown. Best-effort.
-    func enrichPDF(markdown: URL, pdf: URL, script: URL?) async {
+    public func enrichPDF(markdown: URL, pdf: URL, script: URL?) async {
         guard pdf.pathExtension.lowercased() == "pdf" else { return }
         guard let script, FileManager.default.isReadableFile(atPath: script.path) else { return }
         guard let py = await pythonForEngine() else { return }
@@ -179,7 +187,7 @@ actor MarkItDownService {
     }
 
     /// GitHub disk only. App Store copy already contains the converter.
-    func installEngine() async throws -> String {
+    public func installEngine() async throws -> String {
         if Distribution.isAppStore {
             throw YourMarkError.engineNotFound
         }
@@ -210,9 +218,9 @@ actor MarkItDownService {
         guard let uv, FileManager.default.isExecutableFile(atPath: uv) else {
             throw YourMarkError.processFailed("Could not install uv. Connect to the internet and try Install converter again.")
         }
-        log.append("Installing Microsoft MarkItDown from PyPI…")
+        log.append("Installing the latest Microsoft MarkItDown from PyPI…")
         let attempts: [[String]] = [
-            ["tool", "install", "--force", "markitdown[all]"],
+            ["tool", "install", "--upgrade", "--force", Self.packageSpec],
             ["tool", "upgrade", "markitdown"],
         ]
         var last = ""
@@ -250,11 +258,11 @@ actor MarkItDownService {
     }
 
     /// Upgrade the PyPI package — this is how Microsoft updates reach the GUI.
-    func upgradeEngine() async throws -> String {
+    public func upgradeEngine() async throws -> String {
+        let spec = Self.packageSpec
         let commands = [
+            "uv tool install --upgrade --force '\(spec)'",
             "uv tool upgrade markitdown",
-            "uv pip install -U 'markitdown[all]'",
-            "pip3 install -U 'markitdown[all]'",
         ]
         var lastError = "No uv/pip found"
         for command in commands {

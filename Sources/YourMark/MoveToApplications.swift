@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import YourMarkCore
 
 /// Running from the installer disk (or Downloads) dies when that folder goes away.
 /// Copy into Applications and reopen from there before the user can eject.

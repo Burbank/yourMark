@@ -1,6 +1,7 @@
-import AppKit
+@preconcurrency import AppKit
 import ImageIO
 import SwiftUI
+import YourMarkCore
 
 /// Library button height — every toolbar control matches this.
 private enum BarFit {
@@ -2880,13 +2881,16 @@ private struct HoverThumb: View {
                 image = cached
                 return
             }
-            let loaded = await Task.detached(priority: .utility) {
+            let loadedTask = Task.detached(priority: .utility) {
                 PreviewImageCache.thumbnailImage(url, maxPixel: CGFloat(pixel))
-            }.value
+            }
+            let loaded = await loadedTask.value
             guard !Task.isCancelled else { return }
             if let loaded {
-                PreviewImageCache.shared.store(loaded, for: url, pixel: pixel, mtime: mtime)
-                image = loaded
+                await MainActor.run {
+                    PreviewImageCache.shared.store(loaded, for: url, pixel: pixel, mtime: mtime)
+                    image = loaded
+                }
             }
         }
         .onDisappear { image = nil }

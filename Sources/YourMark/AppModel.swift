@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import SwiftUI
 import UniformTypeIdentifiers
+import YourMarkCore
 
 @Observable
 @MainActor
@@ -3897,6 +3898,77 @@ final class AppModel {
         return true
     }
 
+    private func runSharedConvertPipeline(
+        original: URL,
+        workURL: URL,
+        output: URL,
+        jobID: UUID
+    ) async throws {
+        let libraryDir = output.deletingLastPathComponent().deletingLastPathComponent()
+        let isPDF = original.pathExtension.lowercased() == "pdf"
+        var headerFacts = BookRecord()
+        let prepared = await prepareMarkItDownInput(workURL)
+        defer {
+            if let temp = prepared.temporary {
+                try? FileManager.default.removeItem(at: temp)
+            }
+        }
+        if isPDF {
+            headerFacts.fillEmpty(from: prepared.facts)
+        }
+        let onConvert: @Sendable (String) -> Void = { msg in
+            Task { @MainActor in
+                let phase: String
+                if msg.localizedCaseInsensitiveContains("OCR") || msg.localizedCaseInsensitiveContains("Docling") {
+                    phase = "OCR"
+                } else if msg.localizedCaseInsensitiveContains("picture") {
+                    phase = "Pictures"
+                } else {
+                    phase = "Markdown"
+                }
+                _ = self.applyJobStatus(jobID, msg, phase: phase)
+            }
+        }
+        let options = ConvertOptions(
+            ocrEnabled: ocrEnabled,
+            ocrLanguage: "auto",
+            extractImages: askReadPictures,
+            stripChrome: stripChrome,
+            keepOriginalPDF: .auto,
+            prefersDocling: prefersDocling,
+            askReadPictures: askReadPictures,
+            askHasKey: askHasKey,
+            askBaseURL: askBaseURL,
+            askModel: askModel
+        )
+        let pipeline = ConvertPipeline(options: options, onStatus: onConvert)
+        if finishIfStopped(jobID) { throw ProcessRun.ConvertCancel.stopped }
+        let result = try await pipeline.convert(input: prepared.input, outputFolder: libraryDir)
+        if finishIfStopped(jobID) { throw ProcessRun.ConvertCancel.stopped }
+        let markdown = result.markdownURL
+        if isPDF, await markdownNeedsEnrich(markdown) {
+            if let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py") {
+                await service.enrichPDF(markdown: markdown, pdf: workURL, script: script)
+            }
+        }
+        let bookmarks = await loadBookmarks(workURL)
+        let (final, located) = await finalizeMarkdown(
+            markdown,
+            original: original,
+            bookmarks: bookmarks,
+            header: headerFacts
+        )
+        let marked = bookmarksAfterOrnaments(located, markdown: final)
+        await finishJob(
+            jobID: jobID,
+            markdown: final,
+            original: original,
+            usedOCR: result.usedOCR,
+            pictures: result.pictures,
+            bookmarks: marked
+        )
+    }
+
     private func convertOnePass() async {
         let batch = jobs.indices.filter { jobs[$0].status == .queued || jobs[$0].status == .failed }
         let batchCount = batch.count
@@ -3904,7 +3976,7 @@ final class AppModel {
             if convertCancelled { return }
             let original = jobs[index].sourceURL
             let jobID = jobs[index].id
-            let scan = jobs[index].needsOCR
+            _ = jobs[index].needsOCR
             beginConvertJob(index, batchIndex: batchOffset + 1, batchCount: batchCount)
             statusText = "Converting \(original.lastPathComponent)…"
             let output = outputURL(for: original)
@@ -3912,238 +3984,11 @@ final class AppModel {
             defer { Self.removeSandboxCopy(work) }
             do {
                 quietWatch()
-                var input = work.url
-                var usedOCR = false
-                var ocrTempPDF: URL?
-                let isPDF = original.pathExtension.lowercased() == "pdf"
-                var headerFacts = BookRecord()
-                var headerMeasured = !(stripChrome && isPDF)
-                var cropTemp: URL?
-                defer {
-                    if let cropTemp { try? FileManager.default.removeItem(at: cropTemp) }
-                }
-                let pythonReady: Bool
-                if enginePath != nil {
-                    pythonReady = true
-                } else {
-                    pythonReady = (try? await service.resolveEngine()) != nil
-                }
-                if !pythonReady {
-                    let onNative: @Sendable (String) -> Void = { msg in
-                        Task { @MainActor in
-                            let phase = msg.localizedCaseInsensitiveContains("picture")
-                                || msg.localizedCaseInsensitiveContains("page")
-                                ? "Pictures" : "Markdown"
-                            _ = self.applyJobStatus(jobID, msg, phase: phase)
-                        }
-                    }
-                    let url = try await NativeConvert.convert(
-                        input: work.url,
-                        output: output,
-                        ocr: ocrEnabled && scan,
-                        onStatus: onNative
-                    )
-                    if finishIfStopped(jobID) { return }
-                    var pictures = 0
-                    if isPDF {
-                        await tidyPDFMarkdown(url, pdf: work.url)
-                        let bookmarks = await loadBookmarks(work.url)
-                        let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
-                        pictures = await PdfFigures.embed(
-                            markdownURL: final,
-                            sourcePDF: work.url,
-                            stripChrome: stripChrome,
-                            onStatus: onNative
-                        )
-                        let marked = bookmarksAfterOrnaments(located, markdown: final)
-                        await finishJob(
-                            jobID: jobID,
-                            markdown: final,
-                            original: original,
-                            usedOCR: scan,
-                            pictures: pictures,
-                            bookmarks: marked
-                        )
-                    } else {
-                        let bookmarks = await loadBookmarks(work.url)
-                        let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
-                        await finishJob(
-                            jobID: jobID,
-                            markdown: final,
-                            original: original,
-                            usedOCR: false,
-                            pictures: 0,
-                            bookmarks: located
-                        )
-                    }
-                    continue
-                }
-                let layoutFirst = prefersDocling && isPDF && scan
-                if layoutFirst {
-                    jobs[index].needsOCR = true
-                    setJobPhase(jobID, "OCR", detail: "Layout OCR first — this takes a little longer")
-                    statusText = "Layout OCR first — this takes a little longer · \(original.lastPathComponent)"
-                    let onOCR: @Sendable (String) -> Void = { msg in
-                        Task { @MainActor in
-                            let line = "Layout OCR first — this takes a little longer. \(msg)"
-                            _ = self.applyJobStatus(jobID, line, phase: "OCR")
-                        }
-                    }
-                    if finishIfStopped(jobID) { return }
-                    if await OcrService.layoutMarkdown(
-                        from: work.url,
-                        to: output,
-                        ocr: scan,
-                        onStatus: onOCR
-                    ) {
-                        UserDefaults.standard.set(true, forKey: "doclingReady")
-                        if let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py"),
-                           await markdownNeedsEnrich(output) {
-                            await service.enrichPDF(markdown: output, pdf: work.url, script: script)
-                        }
-                        let bookmarks = await loadBookmarks(work.url)
-                        let (url, located) = await finalizeMarkdown(output, original: original, bookmarks: bookmarks)
-                        let pictures = await PdfFigures.materializeEmbedded(markdownURL: url)
-                        let marked = bookmarksAfterOrnaments(located, markdown: url)
-                        await finishJob(jobID: jobID, markdown: url, original: original, usedOCR: true, pictures: pictures, bookmarks: marked)
-                        continue
-                    }
-                    if finishIfStopped(jobID) { return }
-                    let prepared = try await OcrService.searchablePDF(from: work.url, onStatus: onOCR)
-                    input = prepared.url
-                    usedOCR = prepared.didOCR
-                    if prepared.url != work.url { ocrTempPDF = prepared.url }
-                    setJobPhase(jobID, "Markdown", detail: "OCR done — converting with MarkItDown…")
-                    statusText = "OCR done — converting \(original.lastPathComponent)…"
-                }
-                setJobPhase(jobID, "Markdown", detail: "Markdown — converting…")
-                let prepared = await prepareMarkItDownInput(input)
-                if let old = cropTemp { try? FileManager.default.removeItem(at: old) }
-                cropTemp = prepared.temporary
-                headerFacts.fillEmpty(from: prepared.facts)
-                headerMeasured = true
-                let url = try await service.convert(
-                    input: prepared.input,
-                    output: output,
-                    script: Bundle.main.url(forResource: "markitdown_convert", withExtension: "py"),
-                    llmKey: (askReadPictures && askHasKey) ? AskSecrets.load() : "",
-                    llmBase: askBaseURL,
-                    llmModel: askModel
-                )
-                if finishIfStopped(jobID) { return }
-                var pictures = 0
-                if isPDF {
-                    let onFig: @Sendable (String) -> Void = { msg in
-                        Task { @MainActor in
-                            let phase = msg.localizedCaseInsensitiveContains("picture") ? "Pictures" : "OCR"
-                            _ = self.applyJobStatus(jobID, msg, phase: phase)
-                        }
-                    }
-                    let pages = await PdfWork.runAsync { OcrService.pageCount(of: work.url) }
-                    let thin = await PdfWork.runAsync {
-                        OcrService.markdownLooksThin(url, pageCount: max(pages, 1))
-                    }
-                    if ocrEnabled, thin, !usedOCR {
-                        // MarkItDown saw no text layer. OCR first, then convert again.
-                        jobs[index].needsOCR = true
-                        setJobPhase(jobID, "OCR", detail: "Scan detected — OCR first, then convert")
-                        statusText = "This PDF is a scan (picture of the page). Running OCR…"
-                        let onOCR: @Sendable (String) -> Void = { msg in
-                            Task { @MainActor in
-                                _ = self.applyJobStatus(jobID, msg, phase: "OCR")
-                            }
-                        }
-                        if finishIfStopped(jobID) { return }
-                        if await OcrService.layoutMarkdown(
-                            from: work.url,
-                            to: output,
-                            ocr: true,
-                            onStatus: onOCR
-                        ) {
-                            usedOCR = true
-                            UserDefaults.standard.set(true, forKey: "doclingReady")
-                        } else {
-                            let prepared = try await OcrService.searchablePDF(from: work.url, force: true, onStatus: onOCR)
-                            usedOCR = true
-                            if prepared.url != work.url { ocrTempPDF = prepared.url }
-                            if prepared.didOCR || prepared.url != work.url {
-                                let again = await prepareMarkItDownInput(prepared.url)
-                                if let old = cropTemp { try? FileManager.default.removeItem(at: old) }
-                                cropTemp = again.temporary
-                                headerFacts.fillEmpty(from: again.facts)
-                                headerMeasured = true
-                                _ = try await service.convert(
-                                    input: again.input,
-                                    output: output,
-                                    script: Bundle.main.url(forResource: "markitdown_convert", withExtension: "py"),
-                                    llmKey: "",
-                                    llmBase: askBaseURL,
-                                    llmModel: askModel
-                                )
-                            }
-                        }
-                    }
-                    let stillThin: Bool
-                    let stillEmpty: Bool
-                    if usedOCR {
-                        stillThin = await PdfWork.runAsync {
-                            OcrService.markdownLooksThin(url, pageCount: max(pages, 1))
-                        }
-                        stillEmpty = await PdfWork.runAsync {
-                            OcrService.markdownLooksEmpty(url)
-                        }
-                    } else {
-                        stillThin = false
-                        stillEmpty = false
-                    }
-                    if stillThin || stillEmpty {
-                        await OcrService.enrichMarkdown(markdownURL: url, sourcePDF: work.url, onStatus: onFig)
-                    }
-                    statusText = "Cleaning headers and headings…"
-                    await tidyPDFMarkdown(url, pdf: work.url)
-                    if await markdownNeedsEnrich(url) {
-                        let script = Bundle.main.url(forResource: "pdf_enrich", withExtension: "py")
-                        statusText = "Restoring the PDF outline and tables…"
-                        await service.enrichPDF(markdown: url, pdf: work.url, script: script)
-                    }
-                    let bookmarks = await loadBookmarks(work.url)
-                    let (final, located) = await finalizeMarkdown(
-                        url,
-                        original: original,
-                        bookmarks: bookmarks,
-                        header: headerMeasured ? headerFacts : nil
-                    )
-                    keepSearchableIfWanted(temp: ocrTempPDF, original: work.url, markdown: final)
-                    _ = await PdfFigures.materializeEmbedded(markdownURL: final)
-                    pictures = 0
-                    if !usedOCR {
-                        pictures = await PdfFigures.embed(
-                            markdownURL: final,
-                            sourcePDF: work.url,
-                            stripChrome: stripChrome,
-                            onStatus: onFig
-                        )
-                    }
-                    let marked = bookmarksAfterOrnaments(located, markdown: final)
-                    await finishJob(
-                        jobID: jobID,
-                        markdown: final,
-                        original: original,
-                        usedOCR: usedOCR,
-                        pictures: pictures,
-                        bookmarks: marked
-                    )
-                    continue
-                }
-                let bookmarks = await loadBookmarks(work.url)
-                let (final, located) = await finalizeMarkdown(url, original: original, bookmarks: bookmarks)
-                await finishJob(
-                    jobID: jobID,
-                    markdown: final,
+                try await runSharedConvertPipeline(
                     original: original,
-                    usedOCR: usedOCR,
-                    pictures: pictures,
-                    bookmarks: located
+                    workURL: work.url,
+                    output: output,
+                    jobID: jobID
                 )
             } catch is ProcessRun.ConvertCancel {
                 _ = finishIfStopped(jobID)

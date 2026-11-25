@@ -11,6 +11,7 @@ import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# Only app sources for the Xcode project - Core is built via SPM
 SOURCES = sorted((ROOT / "Sources" / "YourMark").glob("*.swift"))
 RESOURCE_NAMES = [
     "pdf_enrich.py",
@@ -19,6 +20,9 @@ RESOURCE_NAMES = [
     "AppIcon.png",
     "AppIcon.icns",
 ]
+
+# Note: YourMarkCore is linked as a local Swift package via Package.swift
+# CLI is in Sources/YourMarkCLI (case-distinct from Sources/YourMark on macOS)
 
 
 def uid(name: str) -> str:
@@ -48,6 +52,8 @@ IDS = {
     "debug_p": uid("cfg:debug-p"),
     "release_p": uid("cfg:release-p"),
     "store_p": uid("cfg:store-p"),
+    "pkg_product": uid("ref:pkg:YourMarkCore"),
+    "pkg_ref": uid("ref:pkg:local"),
 }
 
 file_ids = {p.name: uid(f"ref:{p.name}") for p in SOURCES}
@@ -102,7 +108,7 @@ direct_target = """
 				PRODUCT_NAME = yourMark;
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 """
 
 store_target = """
@@ -123,7 +129,7 @@ store_target = """
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "APPSTORE $(inherited)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 """
 
 engine_script = r"""set -euo pipefail
@@ -162,6 +168,20 @@ pbx = f"""// !$*UTF8*$!
 
 {build_files}
 {res_builds}
+
+/* Begin XCSwiftPackageProductDependency section */
+		{I["pkg_product"]} /* YourMarkCore */ = {{
+			isa = XCSwiftPackageProductDependency;
+			productName = YourMarkCore;
+		}};
+/* End XCSwiftPackageProductDependency section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		{I["pkg_ref"]} /* XCLocalSwiftPackageReference "." */ = {{
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		}};
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		{I["copy_res"]} /* Copy Resources */ = {{
@@ -251,6 +271,9 @@ pbx = f"""// !$*UTF8*$!
 			dependencies = (
 			);
 			name = yourMark;
+			packageProductDependencies = (
+				{I["pkg_product"]} /* YourMarkCore */,
+			);
 			productName = yourMark;
 			productReference = {I["product"]} /* yourMark.app */;
 			productType = "com.apple.product-type.application";
@@ -274,6 +297,9 @@ pbx = f"""// !$*UTF8*$!
 				Base,
 			);
 			mainGroup = {I["group_root"]};
+			packageReferences = (
+				{I["pkg_ref"]} /* XCLocalSwiftPackageReference "." */,
+			);
 			productRefGroup = {I["group_prod"]} /* Products */;
 			projectDirPath = "";
 			projectRoot = "";

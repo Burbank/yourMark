@@ -1,0 +1,186 @@
+import Foundation
+
+/// Models shared between CLI and GUI
+
+/// Translation marker used in Markdown (from TranslateService)
+public let translationMarker = "<!--ym-tr-->"
+
+/// OCR quality thresholds
+public enum OCRQuality {
+    public static let weakConfidenceThreshold = 0.6
+    public static let minCharsPerOCRPage = 200
+}
+
+public struct ConvertJob: Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public var sourceURL: URL
+    public var outputURL: URL?
+    public var status: Status
+    public var detail: String
+    public var needsOCR: Bool = false
+    public var touchedAt: Date = Date()
+    public var phase: String = ""
+    public var startedAt: Date?
+    public var progress: Double?
+    public var page: Int = 0
+    public var pageCount: Int = 0
+    public var fileIndex: Int = 0
+    public var fileCount: Int = 0
+    public var etaSeconds: Int?
+    public var firstTickAt: Date?
+    public var firstTickPage: Int = 0
+
+    public enum Status: String, Sendable {
+        case queued, running, done, failed
+    }
+    
+    public init(
+        id: UUID = UUID(),
+        sourceURL: URL,
+        outputURL: URL?,
+        status: Status,
+        detail: String,
+        needsOCR: Bool = false
+    ) {
+        self.id = id
+        self.sourceURL = sourceURL
+        self.outputURL = outputURL
+        self.status = status
+        self.detail = detail
+        self.needsOCR = needsOCR
+    }
+}
+
+public enum YourMarkError: Error, LocalizedError {
+    case engineNotFound
+    case invalidInput(String)
+    case processFailed(String)
+    case outputMissing(String)
+    case timedOut
+
+    public var errorDescription: String? {
+        switch self {
+        case .timedOut:
+            return "Conversion timed out"
+        case .engineNotFound:
+            return Distribution.isAppStore
+                ? "This App Store build converts with Apple PDFKit and Live Text."
+                : "Microsoft MarkItDown is not installed yet. yourMark installs it from PyPI on first launch — use Install converter if it did not finish."
+        case .invalidInput(let message):
+            return message
+        case .processFailed(let message):
+            return message
+        case .outputMissing(let path):
+            return "No output at \(path)"
+        }
+    }
+}
+
+/// CLI exit-code labels (also used in JSON status fields).
+public func statusString(_ code: Int) -> String {
+    switch code {
+    case 0: return "ok"
+    case 1: return "partial"
+    case 2: return "rejected"
+    case 3: return "failed"
+    case 4: return "engine_missing"
+    case 5: return "io_error"
+    case 124: return "timeout"
+    default: return "failed"
+    }
+}
+
+/// Conversion options for the pipeline
+public struct ConvertOptions: Sendable {
+    public var ocrEnabled: Bool
+    public var ocrLanguage: String
+    public var extractImages: Bool
+    public var stripChrome: Bool
+    public var keepOriginalPDF: KeepOriginal
+    public var prefersDocling: Bool
+    public var askReadPictures: Bool
+    public var askHasKey: Bool
+    public var askBaseURL: String
+    public var askModel: String
+    public var timeoutSeconds: Int?
+    /// `auto`, `vision`, or `tesseract`.
+    public var ocrEngineChoice: String
+    /// `auto`, `docling`, or `off`.
+    public var layoutMode: String
+    
+    public enum KeepOriginal: String, Sendable {
+        case auto, always, never
+    }
+    
+    public init(
+        ocrEnabled: Bool = true,
+        ocrLanguage: String = "auto",
+        extractImages: Bool = false,
+        stripChrome: Bool = true,
+        keepOriginalPDF: KeepOriginal = .auto,
+        prefersDocling: Bool = false,
+        askReadPictures: Bool = false,
+        askHasKey: Bool = false,
+        askBaseURL: String = "",
+        askModel: String = "",
+        timeoutSeconds: Int? = nil,
+        ocrEngineChoice: String = "auto",
+        layoutMode: String = "auto"
+    ) {
+        self.ocrEnabled = ocrEnabled
+        self.ocrLanguage = ocrLanguage
+        self.extractImages = extractImages
+        self.stripChrome = stripChrome
+        self.keepOriginalPDF = keepOriginalPDF
+        self.prefersDocling = prefersDocling
+        self.askReadPictures = askReadPictures
+        self.askHasKey = askHasKey
+        self.askBaseURL = askBaseURL
+        self.askModel = askModel
+        self.timeoutSeconds = timeoutSeconds
+        self.ocrEngineChoice = ocrEngineChoice
+        self.layoutMode = layoutMode
+    }
+}
+
+/// Weak OCR when the text is short or the engine's mean confidence is under 0.6.
+public func isWeakOCR(charsPerPage: Int, meanConfidence: Double?) -> Bool {
+    if charsPerPage < OCRQuality.minCharsPerOCRPage { return true }
+    if let meanConfidence, meanConfidence < OCRQuality.weakConfidenceThreshold { return true }
+    return false
+}
+
+/// Result of a conversion
+public struct ConvertResult: Sendable {
+    public var markdownURL: URL
+    public var originalKept: Bool
+    public var usedOCR: Bool
+    public var ocrEngine: String?
+    public var pictures: Int
+    public var warnings: [String]
+    public var elapsedSeconds: Double
+    public var weakOCR: Bool
+    public var meanConfidence: Double?
+    
+    public init(
+        markdownURL: URL,
+        originalKept: Bool = false,
+        usedOCR: Bool = false,
+        ocrEngine: String? = nil,
+        pictures: Int = 0,
+        warnings: [String] = [],
+        elapsedSeconds: Double = 0,
+        weakOCR: Bool = false,
+        meanConfidence: Double? = nil
+    ) {
+        self.markdownURL = markdownURL
+        self.originalKept = originalKept
+        self.usedOCR = usedOCR
+        self.ocrEngine = ocrEngine
+        self.pictures = pictures
+        self.warnings = warnings
+        self.elapsedSeconds = elapsedSeconds
+        self.weakOCR = weakOCR
+        self.meanConfidence = meanConfidence
+    }
+}

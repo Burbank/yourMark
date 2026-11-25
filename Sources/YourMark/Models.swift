@@ -1,4 +1,5 @@
 import Foundation
+import YourMarkCore
 
 enum LinkPane: String, Equatable, Hashable {
     case main, translate, harvest
@@ -11,29 +12,8 @@ enum AppTool: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-struct ConvertJob: Identifiable, Hashable {
-    let id: UUID
-    var sourceURL: URL
-    var outputURL: URL?
-    var status: Status
-    var detail: String
-    var needsOCR: Bool = false
-    var touchedAt: Date = Date()
-    var phase: String = ""
-    var startedAt: Date?
-    var progress: Double?
-    var page: Int = 0
-    var pageCount: Int = 0
-    var fileIndex: Int = 0
-    var fileCount: Int = 0
-    var etaSeconds: Int?
-    var firstTickAt: Date?
-    var firstTickPage: Int = 0
-
-    enum Status: String {
-        case queued, running, done, failed
-    }
-}
+// ConvertJob is now in YourMarkCore
+typealias ConvertJob = YourMarkCore.ConvertJob
 
 struct ForageMarkSpan: Hashable, Codable {
     var sourcePath: String
@@ -157,27 +137,8 @@ struct LibraryGroup: Identifiable {
     var items: [LibraryItem] { [master] + children }
 }
 
-enum YourMarkError: Error, LocalizedError {
-    case engineNotFound
-    case invalidInput(String)
-    case processFailed(String)
-    case outputMissing(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .engineNotFound:
-            return Distribution.isAppStore
-                ? "This App Store build converts with Apple PDFKit and Live Text."
-                : "Microsoft MarkItDown is not installed yet. yourMark installs it from PyPI on first launch — use Install converter if it did not finish."
-        case .invalidInput(let message):
-            return message
-        case .processFailed(let message):
-            return message
-        case .outputMissing(let path):
-            return "No output at \(path)"
-        }
-    }
-}
+// YourMarkError is now in YourMarkCore
+typealias YourMarkError = YourMarkCore.YourMarkError
 
 struct PreviewLine: Identifiable, Sendable, Hashable {
     let id: Int

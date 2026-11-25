@@ -1,6 +1,7 @@
-import AppKit
+@preconcurrency import AppKit
 import Foundation
 import SwiftUI
+import YourMarkCore
 
 extension AppModel {
     func L(_ english: String) -> String {
@@ -370,13 +371,20 @@ extension AppModel {
         hunterLayout(from: lines).marks
     }
 
+    /// Split out of `hunterLayout` so the release type-checker does not time out on one `&+` chain.
+    private func hunterMemoKey(lineCount: Int, firstID: Int?, lastID: Int?, firstHash: Int?, titleHash: Int) -> Int {
+        var key = lineCount
+        key = key &+ (firstID ?? 0)
+        let lastPart = (lastID ?? 0) &* 1_009
+        key = key &+ lastPart
+        key = key &+ (firstHash ?? 0)
+        key = key &+ titleHash
+        return key
+    }
+
     private func hunterLayout(from lines: [PreviewLine]) -> HunterLayout {
         let title = library.first { $0.id == selectedLibraryID }?.title ?? ""
-        let key = lines.count
-            &+ (lines.first?.id ?? 0)
-            &+ ((lines.last?.id ?? 0) &* 1_009)
-            &+ (lines.first?.text.hashValue ?? 0)
-            &+ title.hashValue
+        let key = hunterMemoKey(lineCount: lines.count, firstID: lines.first?.id, lastID: lines.last?.id, firstHash: lines.first?.text.hashValue, titleHash: title.hashValue)
         if let memo = hunterDocMemo, memo.key == key { return memo.layout }
         let texts = lines.map(\.text)
         var chunks: [String] = []

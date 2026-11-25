@@ -2,36 +2,36 @@ import Foundation
 
 /// Run a helper without filling the stdout/stderr pipe (that deadlock looks like a freeze
 /// after MarkItDown has already written the Markdown file).
-enum ProcessRun {
-    struct Result {
-        var stdout: String
-        var stderr: String
-        var status: Int32
+public enum ProcessRun {
+    public struct Result {
+        public var stdout: String
+        public var stderr: String
+        public var status: Int32
     }
 
-    enum ConvertCancel: Error, LocalizedError {
+    public enum ConvertCancel: Error, LocalizedError {
         case stopped
-        var errorDescription: String? { "Stopped" }
+        public var errorDescription: String? { "Stopped" }
     }
 
-    enum Timeout: Error, LocalizedError {
+    public enum Timeout: Error, LocalizedError {
         case expired
-        var errorDescription: String? { "That step took too long and was stopped." }
+        public var errorDescription: String? { "That step took too long and was stopped." }
     }
 
     private static let convertGate = ConvertGate()
 
-    static var convertWasCancelled: Bool { convertGate.isCancelled }
+    public static var convertWasCancelled: Bool { convertGate.isCancelled }
 
-    static func cancelConvert() {
+    public static func cancelConvert() {
         convertGate.cancel()
     }
 
-    static func resetConvertCancel() {
+    public static func resetConvertCancel() {
         convertGate.reset()
     }
 
-    static func run(
+    public static func run(
         executable: String,
         arguments: [String],
         extraPATH: [String] = [],
