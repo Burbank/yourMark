@@ -39,7 +39,7 @@ export YOURMARK_DMG_OUT="$DMG"
 [[ -f "$DMG" ]] || { echo "DMG was not created" >&2; exit 1; }
 
 if [[ -x "$ROOT/Scripts/sign-and-notarize.sh" ]]; then
-  "$ROOT/Scripts/sign-and-notarize.sh" "$DMG" || true
+  "$ROOT/Scripts/sign-and-notarize.sh" "$DMG"
 fi
 
 echo "✓ DMG: $DMG"

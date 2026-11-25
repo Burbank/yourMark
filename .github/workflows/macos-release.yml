@@ -22,9 +22,31 @@ jobs:
       - uses: actions/checkout@v4
       - name: Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode_16.app || true
+          set -euo pipefail
+          shopt -s nullglob
+          apps=(/Applications/Xcode_2[6-9]*.app /Applications/Xcode_[3-9][0-9]*.app)
+          best=""
+          if ((${#apps[@]})); then
+            while IFS= read -r app; do
+              if [[ -d "$app/Contents/Developer" ]]; then
+                best="$app"
+              fi
+            done < <(printf '%s\n' "${apps[@]}" | sort -V)
+          fi
+          if [[ -z "$best" ]]; then
+            echo "No Xcode 26 or newer on this runner. Package.swift is swift-tools-version 6.0." >&2
+            ls -d /Applications/Xcode*.app >&2 || true
+            exit 1
+          fi
+          sudo xcode-select -s "$best"
+          echo "Selected $best"
           xcodebuild -version
           swift --version
+          major=$(swift --version | awk '/Swift version/{print $4}' | cut -d. -f1)
+          if [[ "${major:-0}" -lt 6 ]]; then
+            echo "Swift $major is older than tools version 6.0." >&2
+            exit 1
+          fi
       # secrets are not a valid context in `if`. Map the p12 into env and
       # record a plain output the later steps can test.
       - name: Signing certificate is configured
@@ -62,6 +84,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          REQUIRE_NOTARIZATION: "1"
         run: |
           chmod +x Scripts/*.sh Scripts/*.command || true
           ./Scripts/package-dmg.sh
