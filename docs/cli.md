@@ -1,32 +1,41 @@
 # yourMark CLI
 
-The `yourmark` command-line tool converts documents to Markdown using the same conversion pipeline as the yourMark GUI app. It is not inside `yourMark.app`.
+yourMark CLI converts documents to Markdown using the same conversion pipeline as the yourMark app. It is a separate download. It is not inside `yourMark.app` or the App Store version.
 
-## Installation
+## Download and install yourMark CLI
 
-Download the signed, notarized command from the latest GitHub release. You need macOS 14 or later. The zip holds one universal binary (Apple silicon and Intel) named `yourmark`.
+You need macOS 14 or later. The zip is a signed, notarized universal binary (Apple silicon and Intel).
 
-[yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip) · [SHA-256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256)
+1. Download [yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip).
+2. Check the SHA-256 against [yourmark-cli-0.6.4-macos.sha256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256).
+3. Unzip the archive. The file inside is `yourmark`.
+4. Move `yourmark` to `~/.local/bin` or `/usr/local/bin`.
+5. Run `yourmark doctor`.
 
 ```bash
+curl -fsSL -o yourmark-cli-0.6.4-macos.zip https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip
+curl -fsSL -o yourmark-cli-0.6.4-macos.sha256 https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256
+shasum -a 256 -c yourmark-cli-0.6.4-macos.sha256
 unzip yourmark-cli-0.6.4-macos.zip
 mkdir -p "$HOME/.local/bin"
 mv yourmark "$HOME/.local/bin/yourmark"
+# or: sudo mv yourmark /usr/local/bin/yourmark
+yourmark doctor
 ```
 
-Put `$HOME/.local/bin` on your PATH, then run `yourmark doctor`.
+Put `$HOME/.local/bin` on your PATH if you use that folder.
 
-The Mac App Store build is sandboxed. That copy of the command prints `yourmark CLI is not available in the App Store build.` and exits 4.
+The Mac App Store build is sandboxed. That copy of yourMark CLI prints `yourmark CLI is not available in the App Store build.` and exits 4.
 
 ### Build from source
 
-Swift 6 (Xcode) builds the same command. A source build is not notarized.
+Swift 6 (Xcode) builds yourMark CLI from this repository. A source build is not notarized.
 
 ```bash
 swift build -c release --product yourmark-cli
 ```
 
-The product file is named `yourmark-cli` (`.build/release/yourmark-cli`, or `.build/out/Products/Release/yourmark-cli` on a newer toolchain). Copy it to `yourmark` on your PATH so the command name matches `yourmark --help`.
+The product file is named `yourmark-cli` (`.build/release/yourmark-cli`, or `.build/out/Products/Release/yourmark-cli` on a newer toolchain). Copy it to `yourmark` on your PATH so the file you run matches `yourmark --help`.
 
 ## Commands
 
@@ -176,7 +185,7 @@ yourmark doctor --json
 
 ## JSON Output
 
-When `--json` is passed, the CLI outputs a single JSON object on stdout and logs to stderr.
+When `--json` is passed, yourMark CLI outputs a single JSON object on stdout and logs to stderr.
 
 ### Success
 
@@ -237,7 +246,7 @@ When `--json` is passed, the CLI outputs a single JSON object on stdout and logs
 
 ## OCR Languages
 
-The CLI supports multilingual OCR via Apple Vision:
+yourMark CLI supports multilingual OCR via Apple Vision:
 
 - `auto` - Detect language automatically (default)
 - `eng` - English
@@ -245,7 +254,7 @@ The CLI supports multilingual OCR via Apple Vision:
 - `spa` - Spanish
 - `hun` - Hungarian
 
-For other languages, the CLI uses Tesseract when available.
+For other languages, yourMark CLI uses Tesseract when available.
 
 ## Timeout Calculation
 
@@ -271,7 +280,7 @@ The `--keep-original` option controls when the original PDF is copied into the o
 
 ## Notes
 
-- The CLI never deletes or moves the input file
+- yourMark CLI never deletes or moves the input file
 - URLs are stripped of query parameters and fragments before logging
 - No repository secrets are used
-- The App Store build's command prints `yourmark CLI is not available in the App Store build.` and exits 4
+- The App Store build of yourMark CLI prints `yourmark CLI is not available in the App Store build.` and exits 4

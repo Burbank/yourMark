@@ -6,7 +6,19 @@
 
 A Mac app that turns PDFs — and Word, slides, or a spreadsheet — into **Markdown**. That is ordinary text you can search, copy, ask about, translate, and share with an AI. The file never leaves this computer unless you press Ask or Translate. You can export that Markdown as an EPUB.
 
-**[Download yourMark-0.6.4.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.6.4.dmg)** · [All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
+## Downloads
+
+**yourMark (Mac app)**
+
+[Download yourMark-0.6.4.dmg](https://github.com/Burbank/yourMark/releases/latest/download/yourMark-0.6.4.dmg) · [yourMark AI on the Mac App Store](https://apps.apple.com/us/app/yourmark-ai/id6811011164?mt=12)
+
+**yourMark CLI**
+
+[Download yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip)
+
+yourMark CLI is a separate download. It is not inside the app or the App Store version.
+
+[All versions](https://github.com/Burbank/yourMark/releases) · [Install notes](INSTALL.md)
 
 [Test a simpler version in your browser](https://burbank.github.io/yourMark/) (preview only — no OCR)
 
@@ -18,30 +30,41 @@ The window is **US English**, **Spanish**, or **Dutch**. Lock an Ask AI key in S
 
 **yourMark** is the Mac app. It is on the Mac App Store as **yourMark AI**, and it is a direct download on the GitHub disk. Drop in a PDF, Word file, slides, or a spreadsheet. The words become Markdown on this Mac.
 
-**yourmark** is the command-line tool for the same converter. It belongs to the direct-download build. The App Store app is sandboxed, so it cannot run OCRmyPDF, Tesseract, Docling, or other programs you installed on the Mac. In that build the command prints `yourmark CLI is not available in the App Store build.` and exits 4.
+**yourMark CLI** is the same converter, for Terminal. It belongs to the direct download. The App Store app is sandboxed, so it cannot run OCRmyPDF, Tesseract, Docling, or other programs you installed on the Mac. In that build yourMark CLI prints `yourmark CLI is not available in the App Store build.` and exits 4.
 
-| | App Store app | GitHub disk | yourmark command |
+| | App Store app | GitHub disk | yourMark CLI |
 | --- | --- | --- | --- |
-| Name | yourMark AI | yourMark | yourmark |
+| Name | yourMark AI | yourMark | `yourmark` |
 | What you get | The window | The window | `convert`, `probe`, `doctor` |
-| Sandbox | Yes. The command exits 4 | No | No |
+| Sandbox | Yes. yourMark CLI exits 4 | No | No |
 | Scan OCR | Apple Live Text | Optional Docling and OCRmyPDF | Vision, or OCRmyPDF + Tesseract |
 
-### Install the command
+### Download and install yourMark CLI
 
-Download the signed, notarized command. You need macOS 14 or later. It is a universal binary (Apple silicon and Intel), and it is not inside the app.
+yourMark CLI is a separate download. It is not inside the app or the App Store version. You need macOS 14 or later. The zip is a universal binary (Apple silicon and Intel).
 
-**[yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip)** · [SHA-256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256)
-
-Unzip it. The file inside is `yourmark`. Put that on your PATH, then run `yourmark doctor`.
+1. Download [yourmark-cli-0.6.4-macos.zip](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip).
+2. Check the SHA-256 against [yourmark-cli-0.6.4-macos.sha256](https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256).
+3. Unzip the archive. The file inside is `yourmark`.
+4. Move `yourmark` to `~/.local/bin` or `/usr/local/bin`.
+5. Run `yourmark doctor`.
 
 ```sh
+curl -fsSL -o yourmark-cli-0.6.4-macos.zip https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.zip
+curl -fsSL -o yourmark-cli-0.6.4-macos.sha256 https://github.com/Burbank/yourMark/releases/latest/download/yourmark-cli-0.6.4-macos.sha256
+shasum -a 256 -c yourmark-cli-0.6.4-macos.sha256
 unzip yourmark-cli-0.6.4-macos.zip
 mkdir -p "$HOME/.local/bin"
 mv yourmark "$HOME/.local/bin/yourmark"
+# or: sudo mv yourmark /usr/local/bin/yourmark
+yourmark doctor
 ```
 
-To build it from this repository instead, you need Swift 6 (Xcode). That copy is not notarized.
+Put `$HOME/.local/bin` on your PATH if you use that folder.
+
+### Build from source
+
+To build yourMark CLI from this repository instead, you need Swift 6 (Xcode). That copy is not notarized.
 
 ```sh
 swift build -c release --product yourmark-cli
@@ -71,7 +94,7 @@ yourmark convert paper.pdf --out ~/Documents/yourMark --images on --json --timeo
 
 `yourmark fetch https://example.com/paper.pdf --out ~/Downloads` downloads an HTTPS file. An `http://` address is rejected.
 
-`--out` is required for `convert`. It is the library folder. The command makes one folder inside it, named after the file.
+`--out` is required for `convert`. It is the library folder. yourMark CLI makes one folder inside it, named after the file.
 
 ### Flags
 
