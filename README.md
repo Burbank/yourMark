@@ -14,6 +14,100 @@ The GitHub disk is named **yourMark**. The Mac App Store listing is **yourMark A
 
 The window is **US English**, **Spanish**, or **Dutch**. Lock an Ask AI key in Settings if you want more interface languages.
 
+## yourMark and yourMark CLI
+
+**yourMark** is the Mac app. It is on the Mac App Store as **yourMark AI**, and it is a direct download on the GitHub disk. Drop in a PDF, Word file, slides, or a spreadsheet. The words become Markdown on this Mac.
+
+**yourmark** is the command-line tool for the same converter. It belongs to the direct-download build. The App Store app is sandboxed, so it cannot run OCRmyPDF, Tesseract, Docling, or other programs you installed on the Mac. In that build the command prints `yourmark CLI is not available in the App Store build.` and exits 4.
+
+| | App Store app | GitHub disk | yourmark command |
+| --- | --- | --- | --- |
+| Name | yourMark AI | yourMark | yourmark |
+| What you get | The window | The window | `convert`, `probe`, `doctor` |
+| Sandbox | Yes. The command exits 4 | No | No |
+| Scan OCR | Apple Live Text | Optional Docling and OCRmyPDF | Vision, or OCRmyPDF + Tesseract |
+
+### Install the command
+
+The GitHub disk is the Mac app. Build the command from this repository. You need macOS 14 or later and Swift 6 (Xcode).
+
+```sh
+swift build -c release --product yourmark-cli
+mkdir -p "$HOME/.local/bin"
+cp .build/release/yourmark-cli "$HOME/.local/bin/yourmark"
+```
+
+Put `$HOME/.local/bin` on your PATH, then run `yourmark doctor`. The built file is named `yourmark-cli`. Copying it to `yourmark` matches the help text (`yourmark --help`).
+
+### Requirements
+
+- **macOS 14** or later. Apple Vision is part of that system. `yourmark doctor` reports it as available.
+- **OCRmyPDF and Tesseract** are optional, from Homebrew. OCRmyPDF is what runs Tesseract: `brew install ocrmypdf`
+- **Docling** is optional, through uv: `uv tool install docling`
+
+`--ocr-engine auto` uses OCRmyPDF when that program is installed, and Apple Vision otherwise. `--ocr-engine vision` stays on Apple Vision. `--ocr-engine tesseract` uses OCRmyPDF + Tesseract when `ocrmypdf` is installed, and Apple Vision when it is not.
+
+### Examples
+
+```sh
+yourmark convert paper.pdf --out ~/Documents/yourMark
+yourmark probe paper.pdf
+yourmark doctor
+yourmark convert scan.pdf --out ~/Documents/yourMark --ocr on --ocr-engine tesseract --layout off
+yourmark convert paper.pdf --out ~/Documents/yourMark --images on --json --timeout auto --max-pages 1500 --max-mb 100
+```
+
+`yourmark fetch https://example.com/paper.pdf --out ~/Downloads` downloads an HTTPS file. An `http://` address is rejected.
+
+`--out` is required for `convert`. It is the library folder. The command makes one folder inside it, named after the file.
+
+### Flags
+
+| Flag | Values | Default |
+| --- | --- | --- |
+| `--ocr` | `auto`, `on`, `off` | `auto` |
+| `--ocr-engine` | `auto`, `vision`, `tesseract` | `auto` |
+| `--layout` | `auto`, `docling`, `off` | `auto` |
+| `--images` | `on`, `off` | `off` |
+| `--json` | on/off flag | off |
+| `--timeout` | seconds, or `auto` | `auto` |
+| `--max-pages` | a page count | 1500 |
+| `--max-mb` | megabytes | 100 |
+
+`--layout auto` puts the body first and sidebars after it, without splitting words. `--layout off` leaves the converter's own order. `--layout docling` asks Docling for the reading order.
+
+`--timeout auto` waits 120 seconds, plus 3 seconds per page, plus 20 seconds per page that needs OCR. It is never under 120 seconds and never over 3600.
+
+Also from `yourmark convert --help`: `--ocr-lang` is `auto`, `eng`, `nld`, `spa`, or `hun` (default `auto`). `--keep-original` is `auto`, `always`, or `never` (default `auto`). `--dry-run` checks the file and does not convert.
+
+### One folder
+
+```text
+~/Documents/yourMark/paper/
+  paper.md
+  paper.outline.json
+  figures/figure-001.jpg
+  paper.pdf
+```
+
+`paper.md` is the Markdown. `paper.outline.json` is the outline. `figures/` holds pictures when they are extracted (`figure-001.jpg` and so on; the extension follows the picture). `--images` defaults to off. A photograph of a whole scanned page is not stored as a figure. `paper.pdf` is the original file, copied in when `--keep-original` is `always`, or when it is `auto` and OCR was weak.
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Success |
+| 1 | Partial. The Markdown was written, with warnings. Weak OCR is one of those warnings. |
+| 2 | Rejected input: size, page count, encryption, an `http://` URL, or a bad flag |
+| 3 | Conversion failed |
+| 4 | Engine missing. The App Store stub also exits 4. |
+| 5 | File or output error |
+| 124 | Timed out |
+
+### Old type
+
+Blackletter and other very old type is flagged as weak OCR rather than accepted as a clean reading. The Markdown is still written. Weak means the average confidence is under 0.6, or the OCR text has fewer than 200 characters per page. The warning is `OCR quality is below the threshold`, the exit code is 1, and `--keep-original auto` keeps the original PDF in the folder.
+
 ## Why Markdown?
 
 A PDF is a picture of a page. Markdown is the words, in order.
